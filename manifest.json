@@ -1,0 +1,71 @@
+{
+  "name": "drone-mesh-mapper-web",
+  "displayName": "Drone Mesh Mapper Web Frontend",
+  "description": "Web-Frontend für Echtzeit-Visualisierung von Drohnen auf interaktiver Karte basierend auf dem drone-mesh-mapper GitHub-Projekt. Python-Backend wrapper um den Tester mit React-Frontend für Live-Updates.",
+  "version": "1.0.0",
+  "type": "project",
+  "category": "web",
+  "icon": "radar",
+  "status": "development",
+  "techStack": ["react", "typescript", "python", "flask", "leaflet-js", "vite"],
+  "services": [
+    {
+      "id": "server",
+      "name": "Drone Mesh Mapper Server",
+      "command": "cd backend && ./venv/bin/python3 app.py",
+      "cwd": "./",
+      "port": 3020,
+      "healthCheck": "http://localhost:3020/health"
+    }
+  ],
+  "actions": [
+    {
+      "id": "install",
+      "name": "Dependencies installieren",
+      "description": "Frontend (npm) und Backend (pip) Dependencies installieren",
+      "command": "cd frontend && npm install && cd ../backend && python3 -m venv venv && ./venv/bin/pip install -r requirements.txt",
+      "icon": "download"
+    },
+    {
+      "id": "build",
+      "name": "Frontend bauen",
+      "description": "React Frontend build erstellen (dist/)",
+      "command": "cd frontend && npm run build",
+      "icon": "package"
+    },
+    {
+      "id": "lint",
+      "name": "TypeScript prüfen",
+      "description": "TypeScript Typen prüfen",
+      "command": "cd frontend && npm run lint",
+      "icon": "check"
+    },
+    {
+      "id": "test",
+      "name": "Tests ausführen",
+      "description": "Backend (pytest) und Frontend (Vitest + Playwright) Tests ausführen",
+      "command": "cd backend && ./venv/bin/python -m pytest tests/ -v && cd ../frontend && NODE_ENV=test npx vitest run && npx playwright test --config e2e/playwright.config.ts",
+      "icon": "test-tube"
+    }
+  ],
+  "conversationLog": "./CONVERSATION-LOG.md",
+  "readme": "./README.md",
+  "paths": {
+    "root": "/media/labcore/Daten/Projekte/drone-mesh-mapper-web"
+  },
+  "k8sDeployment": {
+    "enabled": false,
+    "namespace": "default",
+    "replicas": 1,
+    "nodePort": null
+  },
+  "verification": {
+    "endpoints": [
+      { "path": "/", "expectedStatus": 200, "description": "Frontend" },
+      { "path": "/api/drones", "expectedStatus": 200, "description": "Drones API" },
+      { "path": "/health", "expectedStatus": 200, "description": "Health Check" }
+    ]
+  },
+  "created": "2026-03-04T00:00:00Z",
+  "lastModified": "2026-03-04T08:45:00Z"
+}
