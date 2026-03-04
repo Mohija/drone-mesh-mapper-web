@@ -3,6 +3,10 @@ import L from 'leaflet';
 import type { Drone, UserLocation } from '../types/drone';
 import { useNavigate } from 'react-router-dom';
 
+// Persist map view across remounts (route navigation)
+let savedCenter: [number, number] = [50.1109, 8.6821];
+let savedZoom = 13;
+
 const STATUS_COLORS: Record<string, string> = {
   active: '#22c55e',
   idle: '#eab308',
@@ -102,8 +106,8 @@ export default function MapComponent({ drones, selectedDrone, userLocation, onDr
     if (!mapContainerRef.current || mapRef.current) return;
 
     const map = L.map(mapContainerRef.current, {
-      center: [50.1109, 8.6821],
-      zoom: 13,
+      center: savedCenter,
+      zoom: savedZoom,
       zoomControl: true,
       attributionControl: true,
     });
@@ -118,6 +122,9 @@ export default function MapComponent({ drones, selectedDrone, userLocation, onDr
     mapRef.current = map;
 
     return () => {
+      const c = map.getCenter();
+      savedCenter = [c.lat, c.lng];
+      savedZoom = map.getZoom();
       map.remove();
       mapRef.current = null;
     };

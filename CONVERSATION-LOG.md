@@ -91,6 +91,16 @@
 - `frontend/e2e/map-page.spec.ts` - Map E2E Tests
 - `frontend/e2e/drone-detail.spec.ts` - Detail E2E Tests
 
+### 2026-03-04 - Bugfix: Map-Position nach Drohnen-Detail Navigation
+**Änderungen:**
+- **Bug:** Beim Öffnen der Drohnen-Detailseite und Zurückkehren wurde die Karte auf Frankfurt (Initialposition) zurückgesetzt statt die aktuelle Position beizubehalten
+- **Ursache:** MapPage wird beim Routenwechsel unmounted, MapComponent initialisiert beim Remount mit hardcoded `[50.1109, 8.6821]`
+- **Fix:** Module-level Variablen `savedCenter`/`savedZoom` speichern die Map-Position beim Unmount und stellen sie beim Remount wieder her
+
+**Dateien:**
+- `frontend/src/components/MapComponent.tsx` - Map-Position persistieren über Remounts
+- `frontend/dist/` - Rebuild
+
 ## Offene Aufgaben
 - [ ] WebSocket-Integration für echte Push-Updates statt Polling
 - [ ] ESP 8266 MicroPython-Anpassung
