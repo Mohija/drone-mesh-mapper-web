@@ -8,6 +8,8 @@ Serves React frontend dist/ as static files (Production Server Pattern).
 import os
 import json
 import logging
+import time
+import threading
 import requests as http_requests
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
@@ -144,6 +146,195 @@ def get_status():
 def health():
     """Health check endpoint."""
     return jsonify({"status": "ok"})
+
+
+# ─── Aircraft Lookup (adsbdb.com + OpenSky) ─────────────────
+
+lookup_logger = logging.getLogger("lookup")
+
+# In-memory cache: basic_id -> { data, timestamp }
+_aircraft_cache: dict[str, dict] = {}
+_cache_lock = threading.Lock()
+LOOKUP_CACHE_TTL = 3600  # 1 hour
+LOOKUP_TIMEOUT = 10  # seconds
+
+
+def _cached_lookup(key: str) -> dict | None:
+    with _cache_lock:
+        entry = _aircraft_cache.get(key)
+        if entry and (time.time() - entry["timestamp"]) < LOOKUP_CACHE_TTL:
+            return entry["data"]
+    return None
+
+
+def _store_cache(key: str, data: dict):
+    with _cache_lock:
+        _aircraft_cache[key] = {"data": data, "timestamp": time.time()}
+
+
+def _lookup_adsbdb(identifier: str) -> dict | None:
+    """Query adsbdb.com for aircraft info by hex code or registration."""
+    try:
+        resp = http_requests.get(
+            f"https://api.adsbdb.com/v0/aircraft/{identifier}",
+            timeout=LOOKUP_TIMEOUT,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            aircraft = data.get("response", {}).get("aircraft")
+            if aircraft:
+                return aircraft
+    except Exception as e:
+        lookup_logger.debug("adsbdb lookup failed for %s: %s", identifier, e)
+    return None
+
+
+def _lookup_adsbdb_callsign(callsign: str) -> dict | None:
+    """Query adsbdb.com for flight route info by callsign."""
+    try:
+        resp = http_requests.get(
+            f"https://api.adsbdb.com/v0/callsign/{callsign}",
+            timeout=LOOKUP_TIMEOUT,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            flightroute = data.get("response", {}).get("flightroute")
+            if flightroute:
+                return flightroute
+    except Exception as e:
+        lookup_logger.debug("adsbdb callsign lookup failed for %s: %s", callsign, e)
+    return None
+
+
+def _lookup_opensky_metadata(hex_code: str) -> dict | None:
+    """Query OpenSky Network metadata API for aircraft info."""
+    try:
+        resp = http_requests.get(
+            f"https://opensky-network.org/api/metadata/aircraft/icao/{hex_code.lower()}",
+            timeout=LOOKUP_TIMEOUT,
+        )
+        if resp.status_code == 200:
+            return resp.json()
+    except Exception as e:
+        lookup_logger.debug("OpenSky metadata lookup failed for %s: %s", hex_code, e)
+    return None
+
+
+def _lookup_planespotters_photo(hex_code: str) -> str | None:
+    """Get aircraft thumbnail from planespotters.net."""
+    try:
+        resp = http_requests.get(
+            f"https://api.planespotters.net/pub/photos/hex/{hex_code}",
+            timeout=LOOKUP_TIMEOUT,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            photos = data.get("photos", [])
+            if photos:
+                thumb = photos[0].get("thumbnail_large", {}).get("src") or \
+                        photos[0].get("thumbnail", {}).get("src")
+                return thumb
+    except Exception as e:
+        lookup_logger.debug("Planespotters lookup failed for %s: %s", hex_code, e)
+    return None
+
+
+@app.route("/api/aircraft/lookup/<identifier>", methods=["GET"])
+def lookup_aircraft(identifier: str):
+    """Lookup aircraft info by hex code, registration, or callsign.
+    Queries adsbdb.com (free, no API key) + OpenSky metadata + planespotters.net.
+    Results are cached for 1 hour.
+    """
+    identifier = identifier.strip().upper()
+    callsign = request.args.get("callsign", "").strip().upper()
+
+    lookup_logger.info("GET /api/aircraft/lookup/%s callsign=%s", identifier, callsign or "-")
+
+    # Check cache
+    cache_key = f"{identifier}_{callsign}"
+    cached = _cached_lookup(cache_key)
+    if cached:
+        lookup_logger.debug("Cache hit for %s", cache_key)
+        return jsonify(cached)
+
+    result: dict = {"identifier": identifier, "found": False}
+
+    # 1. adsbdb.com aircraft lookup (by hex or registration)
+    adsbdb = _lookup_adsbdb(identifier)
+    if adsbdb:
+        result["found"] = True
+        result["type"] = adsbdb.get("type") or adsbdb.get("icao_type")
+        result["icao_type"] = adsbdb.get("icao_type")
+        result["manufacturer"] = adsbdb.get("manufacturer")
+        result["registration"] = adsbdb.get("registration")
+        result["owner"] = adsbdb.get("registered_owner")
+        result["owner_country"] = adsbdb.get("registered_owner_country_name")
+        result["operator_flag"] = adsbdb.get("registered_owner_operator_flag_code")
+        result["photo_url"] = adsbdb.get("url_photo_thumbnail") or adsbdb.get("url_photo")
+        result["source_db"] = "adsbdb"
+
+    # 2. OpenSky metadata (supplements adsbdb or used as fallback)
+    opensky = _lookup_opensky_metadata(identifier)
+    if opensky:
+        result["found"] = True
+        if not result.get("type"):
+            result["type"] = opensky.get("model") or opensky.get("typecode")
+        if not result.get("icao_type"):
+            result["icao_type"] = opensky.get("typecode")
+        if not result.get("manufacturer"):
+            result["manufacturer"] = opensky.get("manufacturer")
+        if not result.get("registration"):
+            result["registration"] = opensky.get("registration")
+        if not result.get("owner"):
+            result["owner"] = opensky.get("owner") or opensky.get("operator")
+        result["operator"] = opensky.get("operator")
+        result["operator_callsign"] = opensky.get("operatorCallsign")
+        result["operator_icao"] = opensky.get("operatorIcao")
+        result["serial_number"] = opensky.get("serialNumber")
+        result["icao_aircraft_class"] = opensky.get("icaoAircraftClass")
+        result["country"] = opensky.get("country") or result.get("owner_country")
+        if not result.get("source_db"):
+            result["source_db"] = "opensky"
+
+    # 3. Callsign route lookup
+    if callsign:
+        route = _lookup_adsbdb_callsign(callsign)
+        if route:
+            result["callsign"] = callsign
+            airline = route.get("airline", {})
+            if airline:
+                result["airline"] = airline.get("name")
+                result["airline_icao"] = airline.get("icao")
+                result["airline_country"] = airline.get("country_name")
+            origin = route.get("origin", {})
+            if origin:
+                result["origin"] = {
+                    "name": origin.get("name"),
+                    "icao": origin.get("icao_code"),
+                    "iata": origin.get("iata_code"),
+                    "city": origin.get("municipality"),
+                }
+            destination = route.get("destination", {})
+            if destination:
+                result["destination"] = {
+                    "name": destination.get("name"),
+                    "icao": destination.get("icao_code"),
+                    "iata": destination.get("iata_code"),
+                    "city": destination.get("municipality"),
+                }
+
+    # 4. Photo (if not already from adsbdb)
+    if not result.get("photo_url"):
+        photo = _lookup_planespotters_photo(identifier)
+        if photo:
+            result["photo_url"] = photo
+
+    _store_cache(cache_key, result)
+    lookup_logger.info(
+        "Lookup result for %s: found=%s type=%s owner=%s",
+        identifier, result["found"], result.get("type"), result.get("owner"),
+    )
+    return jsonify(result)
 
 
 # ─── No-Fly Zone (DIPUL WMS) Routes ────────────────────────

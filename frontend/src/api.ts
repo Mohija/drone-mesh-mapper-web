@@ -1,4 +1,4 @@
-import type { DronesResponse, Drone, DroneHistoryEntry, DataSourceSettings } from './types/drone';
+import type { DronesResponse, Drone, DroneHistoryEntry, DataSourceSettings, AircraftLookup } from './types/drone';
 
 function getApiBase(): string {
   const path = window.location.pathname;
@@ -60,6 +60,20 @@ export async function updateSettings(settings: Partial<DataSourceSettings>): Pro
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(settings),
   });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function lookupAircraft(
+  identifier: string,
+  callsign?: string,
+): Promise<AircraftLookup> {
+  const params = new URLSearchParams();
+  if (callsign) params.set('callsign', callsign);
+  const query = params.toString();
+  const res = await fetch(
+    `${API_BASE}/aircraft/lookup/${encodeURIComponent(identifier)}${query ? `?${query}` : ''}`,
+  );
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }

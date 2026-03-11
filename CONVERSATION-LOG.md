@@ -276,6 +276,34 @@
 - `frontend/src/components/MapPage.tsx` - droneRadiusCenter/droneRadiusMeters Props
 - `frontend/dist/` - Rebuild
 
+### 2026-03-11 - Höhenfilter + NFZ-Warnung + Aircraft Lookup
+**Änderungen:**
+- **Höhenfilter (Altitude Zones):** Dropdown basierend auf EU/DE Drohnen-Vorschriften
+  - 0-50m (Kontrollzone/CTR), 0-100m (Naturschutz), 0-120m (Open Category), 120-300m (Specific), 300m+ (Certified)
+  - Filtert Drohnen nach Flughöhe, zeigt "gefiltert/gesamt" Zähler
+- **NFZ-Warnung im StatusPanel:** Beim Klick auf eine Drohne wird geprüft ob sie in einer Flugverbotszone ist
+  - Direkte DIPUL WMS GetFeatureInfo Abfrage an der Drohnen-Position
+  - Rote Warnbox mit Zonennamen und Typ (z.B. Kontrollzone, Naturschutzgebiet)
+- **Aircraft Lookup (async):** Beim Klick auf externe Drohnen werden Zusatzinfos asynchron geladen
+  - Backend: `/api/aircraft/lookup/<hex>` Endpoint mit 3 Quellen:
+    - adsbdb.com (kostenlos, kein API-Key) — Typ, Hersteller, Kennzeichen, Halter, Foto
+    - OpenSky Network Metadata API — Betreiber, Seriennr., ICAO-Klasse, Land
+    - planespotters.net — Foto-Thumbnail als Fallback
+  - Callsign-Lookup: Airline, Flugroute (Herkunft/Ziel) via adsbdb.com
+  - 1h Cache im Backend (Thread-safe)
+  - Frontend: Spinner während Laden, Foto-Anzeige, Flugrouten-Sektion
+  - ICAO Aircraft Class Labels (L2J = "Zweimotorig Jet", H1T = "Helikopter" etc.)
+- **Spinner-Animation:** CSS `@keyframes spin` für Lade-Indikatoren
+
+**Dateien:**
+- `backend/app.py` - Aircraft Lookup Endpoint mit adsbdb/OpenSky/Planespotters + Caching
+- `frontend/src/types/drone.ts` - AircraftLookup Interface
+- `frontend/src/api.ts` - lookupAircraft() API-Funktion
+- `frontend/src/components/StatusPanel.tsx` - NFZ-Warnung, Aircraft Lookup, Spinner
+- `frontend/src/components/MapPage.tsx` - Höhenfilter, enabledNoFlyLayers an StatusPanel
+- `frontend/src/index.css` - Spinner Animation
+- `frontend/dist/` - Rebuild
+
 ## Offene Aufgaben
 - [ ] WebSocket-Integration für echte Push-Updates statt Polling
 - [ ] ESP 8266 MicroPython-Anpassung

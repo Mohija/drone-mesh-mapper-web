@@ -513,7 +513,7 @@ export default function MapPage() {
 
       {/* Status panel */}
       {selectedDrone && (
-        <StatusPanel drone={selectedDrone} onClose={handlePanelClose} />
+        <StatusPanel drone={selectedDrone} onClose={handlePanelClose} enabledNoFlyLayers={noFlyEnabled ? enabledNoFlyLayers : undefined} />
       )}
     </div>
   );

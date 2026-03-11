@@ -57,6 +57,32 @@ export interface DronesResponse {
   sources?: string[];
 }
 
+export interface AircraftLookup {
+  identifier: string;
+  found: boolean;
+  type?: string;
+  icao_type?: string;
+  manufacturer?: string;
+  registration?: string;
+  owner?: string;
+  owner_country?: string;
+  operator?: string;
+  operator_callsign?: string;
+  operator_icao?: string;
+  operator_flag?: string;
+  serial_number?: string;
+  icao_aircraft_class?: string;
+  country?: string;
+  photo_url?: string;
+  source_db?: string;
+  callsign?: string;
+  airline?: string;
+  airline_icao?: string;
+  airline_country?: string;
+  origin?: { name?: string; icao?: string; iata?: string; city?: string };
+  destination?: { name?: string; icao?: string; iata?: string; city?: string };
+}
+
 export interface DataSourceConfig {
   enabled: boolean;
   label: string;

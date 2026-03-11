@@ -114,6 +114,11 @@ body,
   }
 }
 
+/* Spinner animation */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
