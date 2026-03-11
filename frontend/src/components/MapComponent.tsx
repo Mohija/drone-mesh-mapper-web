@@ -602,12 +602,21 @@ export default function MapComponent({ drones, selectedDrone, userLocation, onDr
     const map = mapRef.current;
     if (!map) return;
 
+    // Filter drones to only those within the radius circle
+    const visibleDrones = (droneRadiusCenter && droneRadiusMeters)
+      ? drones.filter(d => {
+          const dist = L.latLng(droneRadiusCenter.lat, droneRadiusCenter.lon)
+            .distanceTo(L.latLng(d.latitude, d.longitude));
+          return dist <= droneRadiusMeters;
+        })
+      : drones;
+
     // Update drone data map for event handlers
-    droneDataMap = new Map(drones.map(d => [d.id, d]));
+    droneDataMap = new Map(visibleDrones.map(d => [d.id, d]));
 
-    const currentIds = new Set(drones.map((d) => d.id));
+    const currentIds = new Set(visibleDrones.map((d) => d.id));
 
-    // Remove markers for drones no longer in the list
+    // Remove markers for drones no longer in the list (or outside radius)
     droneMarkersRef.current.forEach((marker, id) => {
       if (!currentIds.has(id)) {
         marker.remove();
@@ -616,7 +625,7 @@ export default function MapComponent({ drones, selectedDrone, userLocation, onDr
     });
 
     // Update or create drone markers
-    drones.forEach((drone) => {
+    visibleDrones.forEach((drone) => {
       const isSelected = selectedDrone?.id === drone.id;
       const color = getColor(drone);
       const r = isSelected ? 10 : 6;
@@ -701,7 +710,7 @@ export default function MapComponent({ drones, selectedDrone, userLocation, onDr
         pilotMarkerRef.current = null;
       }
     }
-  }, [drones, selectedDrone, onDroneClick, navigate]);
+  }, [drones, selectedDrone, onDroneClick, navigate, droneRadiusCenter, droneRadiusMeters]);
 
   return (
     <div
