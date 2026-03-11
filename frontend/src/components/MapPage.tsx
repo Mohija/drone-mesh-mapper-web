@@ -17,6 +17,16 @@ import {
 const DEFAULT_RADIUS = 50000; // 50km
 const DEFAULT_CENTER = { lat: 52.0302, lon: 8.5325 }; // Bielefeld
 
+// Altitude zones based on EU/German drone regulations (EASA 2019/947, LuftVO §21h)
+const ALTITUDE_ZONES = [
+  { id: 'all', label: 'Alle Höhen', min: 0, max: Infinity, color: 'var(--text-secondary)', description: 'Kein Höhenfilter' },
+  { id: 'ctr', label: '0–50m (Kontrollzone)', min: 0, max: 50, color: '#ef4444', description: 'CTR / Kontrollzone bei Flughäfen – max. 50m mit ATC-Freigabe' },
+  { id: 'nature', label: '0–100m (Naturschutz)', min: 0, max: 100, color: '#22c55e', description: 'Naturschutzgebiete / Nationalparks ohne Genehmigung – max. 100m' },
+  { id: 'open', label: '0–120m (Open)', min: 0, max: 120, color: '#3b82f6', description: 'EU Open Category (A1/A2/A3) – Standard-Flughöhe für alle Klassen (C0–C4)' },
+  { id: 'above120', label: '120–300m (Specific)', min: 120, max: 300, color: '#f59e0b', description: 'Specific Category (STS/SORA) – Sondergenehmigung erforderlich' },
+  { id: 'high', label: '300m+ (Certified)', min: 300, max: Infinity, color: '#8b5cf6', description: 'Certified Category – Zulassung wie bemannte Luftfahrt' },
+] as const;
+
 export default function MapPage() {
   const navigate = useNavigate();
   const [drones, setDrones] = useState<Drone[]>([]);
@@ -30,6 +40,7 @@ export default function MapPage() {
   const [noFlyPanelOpen, setNoFlyPanelOpen] = useState(false);
   const [nfzRadiusEnabled, setNfzRadiusEnabled] = useState(false);
   const [nfzRadius, setNfzRadius] = useState(50000); // 50km default
+  const [altitudeZone, setAltitudeZone] = useState('all');
   const [enabledNoFlyLayers, setEnabledNoFlyLayers] = useState<string[]>(() => {
     try {
       const stored = localStorage.getItem('nofly-layers');
@@ -133,6 +144,12 @@ export default function MapPage() {
     );
   }, [nfzRadiusEnabled, noFlyEnabled, nfzCenter.lat, nfzCenter.lon, nfzRadius]);
 
+  // Filter drones by selected altitude zone
+  const activeZone = ALTITUDE_ZONES.find(z => z.id === altitudeZone) || ALTITUDE_ZONES[0];
+  const filteredDrones = activeZone.id === 'all'
+    ? drones
+    : drones.filter(d => d.altitude >= activeZone.min && d.altitude < activeZone.max);
+
   // Shared center for radii (GPS position or Bielefeld default)
   const currentCenter = userLocation
     ? { lat: userLocation.latitude, lon: userLocation.longitude }
@@ -141,7 +158,7 @@ export default function MapPage() {
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <MapComponent
-        drones={drones}
+        drones={filteredDrones}
         selectedDrone={selectedDrone}
         userLocation={userLocation}
         onDroneClick={handleDroneClick}
@@ -184,7 +201,7 @@ export default function MapPage() {
             fontSize: 12,
             color: 'var(--text-secondary)',
           }}>
-            {droneCount} Drohne{droneCount !== 1 ? 'n' : ''}
+            {altitudeZone !== 'all' ? `${filteredDrones.length}/` : ''}{droneCount} Drohne{droneCount !== 1 ? 'n' : ''}
           </span>
         </div>
 
@@ -253,6 +270,46 @@ export default function MapPage() {
             </>
           ) : (
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Alle</span>
+          )}
+        </div>
+
+        {/* Altitude zone filter */}
+        <div style={{
+          background: altitudeZone !== 'all' ? 'rgba(59, 130, 246, 0.1)' : 'var(--bg-secondary)',
+          border: `1px solid ${altitudeZone !== 'all' ? 'var(--accent)' : 'var(--border)'}`,
+          borderRadius: 8,
+          padding: '6px 12px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          whiteSpace: 'nowrap',
+          position: 'relative',
+        }}>
+          <span style={{ fontSize: 14 }}>&#9650;</span>
+          <select
+            value={altitudeZone}
+            onChange={(e) => setAltitudeZone(e.target.value)}
+            title={activeZone.description}
+            data-testid="altitude-zone-select"
+            style={{
+              background: 'var(--bg-tertiary)',
+              border: '1px solid var(--border)',
+              borderRadius: 4,
+              padding: '2px 4px',
+              color: activeZone.color,
+              fontSize: 12,
+              cursor: 'pointer',
+              fontWeight: altitudeZone !== 'all' ? 600 : 400,
+            }}
+          >
+            {ALTITUDE_ZONES.map(z => (
+              <option key={z.id} value={z.id}>{z.label}</option>
+            ))}
+          </select>
+          {altitudeZone !== 'all' && (
+            <span style={{ fontSize: 10, color: 'var(--text-muted)', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {activeZone.description.split('–')[0].trim()}
+            </span>
           )}
         </div>
 
