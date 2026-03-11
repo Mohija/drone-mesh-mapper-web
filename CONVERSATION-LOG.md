@@ -304,6 +304,179 @@
 - `frontend/src/index.css` - Spinner Animation
 - `frontend/dist/` - Rebuild
 
+### 2026-03-11 - Erweiterte Aircraft-Lookup auf DroneDetailPage + Neue Quellen
+**Änderungen:**
+- **DroneDetailPage Aircraft Lookup:** Alle Lookup-Daten (Typ, Hersteller, Kennzeichen, Halter, Foto, Flugroute) werden jetzt auch auf der Detailseite asynchron geladen — nicht mehr nur im StatusPanel
+- **NFZ-Warnung auf DroneDetailPage:** Banner unter Header zeigt Flugverbotszonen mit Chip-Tags
+- **OGN Provider erweitert:** ICAO Hex (Mode-S Transponder, Feld 12) und Aircraft Type Code (Feld 10, 16 Kategorien) werden jetzt aus den OGN-Rohdaten extrahiert
+  - OGN Aircraft Type Labels: Segelflugzeug, Helikopter, Motorflugzeug, Jet, UAV/Drohne, etc.
+  - ICAO Hex wird für Aircraft Lookup verwendet (D-HDAL → 3DDA97 → adsbdb/OpenSky)
+- **OGN Device Database (DDB):** 34.538 Einträge als 5. Lookup-Quelle
+  - Download von `http://ddb.glidernet.org/download/`, 24h Cache
+  - Liefert Modell, Kennzeichen, Wettbewerbsnummer für FLARM-Geräte
+- **hexdb.io als Fallback:** 6. Lookup-Quelle wenn adsbdb keine Daten hat
+- **airport-data.com:** 7. Lookup-Quelle für Fotos als Fallback nach planespotters.net
+- **Base Provider erweitert:** Extra-Felder (icao_hex, ogn_aircraft_type, ogn_aircraft_type_label) werden durch Normalisierung durchgereicht
+- **Lookup-Kette (7 Quellen):** adsbdb → OpenSky → hexdb.io → OGN DDB → Callsign-Route → Planespotters → airport-data.com
+- **Frontend `lookupAircraft()`:** Neuer `icaoHex` Parameter für OGN-Drohnen mit Transponder
+- **OGN Typ-Karte:** Eigene Card auf DroneDetailPage und Section im StatusPanel mit OGN-Kategorie
+
+**Dateien:**
+- `backend/app.py` - OGN DDB Loader, hexdb.io + airport-data.com Lookup, icao_hex Parameter
+- `backend/providers/ogn_provider.py` - ICAO Hex + Aircraft Type Code Extraktion, OGN_AIRCRAFT_TYPES Labels
+- `backend/providers/base_provider.py` - Extra-Felder Pass-through in _normalize()
+- `frontend/src/types/drone.ts` - icao_hex, ogn_aircraft_type, ogn_aircraft_type_label auf Drone; ogn_cn, ogn_device_type auf AircraftLookup
+- `frontend/src/api.ts` - lookupAircraft() mit icaoHex Parameter
+- `frontend/src/components/DroneDetailPage.tsx` - Aircraft Lookup, NFZ-Warnung, OGN Typ Card, Spinner
+- `frontend/src/components/StatusPanel.tsx` - icao_hex an Lookup, OGN Typ Section
+- `frontend/dist/` - Rebuild
+
+### 2026-03-11 - Shared Cache + Light/Dark Theme + Loading Indicator
+**Änderungen:**
+- **Shared Lookup/NFZ Cache (`lookupCache.ts`):** Modul-Level Cache persistiert Aircraft-Lookup und NFZ-Daten über Component-Lebenszyklen hinweg. Daten verschwinden nicht mehr beim Re-Mount
+- **Cache Pruning:** `pruneCache()` wird aus MapPage aufgerufen — entfernt Cache-Einträge für Drohnen die nicht mehr sichtbar sind. NFZ-Cache wird erst bei >200 Einträgen getrimmt
+- **Resilientes Polling (DroneDetailPage):** Behält letzte bekannte Drohnen-Daten bei temporären 404s. Zeigt "Signal verloren" erst nach 5 aufeinanderfolgenden Fehlern (10s)
+- **Light/Dark Theme:** Vollständiges Theme-System mit CSS Custom Properties
+  - `ThemeContext.tsx`: React Context für Theme-State, persistiert in localStorage
+  - CSS: `:root`/`[data-theme="dark"]` und `[data-theme="light"]` Variablen
+  - Karten-Tiles: Automatischer Wechsel zwischen CartoDB Dark/Light
+  - NFZ WMS Filter: Inversion nur im Dark Mode, normale Farben im Light Mode
+  - Popups, Tooltips, Leaflet Controls: Alle theme-aware
+  - Flash-Prevention: Inline-Script im HTML setzt Theme vor React-Hydration
+- **Theme-Toggle in Einstellungen:** Hell/Dunkel-Umschalter auf der SettingsPage, Seite umbenannt zu "Einstellungen"
+- **Loading Indicator (DroneDetailPage):** Animierte Progress-Bar unter dem Header während Lookup/NFZ-Daten laden
+
+**Dateien:**
+- `frontend/src/ThemeContext.tsx` - NEU: Theme Context + Provider
+- `frontend/src/index.css` - Light/Dark CSS Variables, Popup-Styling, Loading-Animation
+- `frontend/src/main.tsx` - ThemeProvider Wrapper
+- `frontend/index.html` - Inline Theme-Script (Flash-Prevention)
+- `frontend/src/components/MapComponent.tsx` - Theme-aware Tile Layer, CSS Variable Popups/Tooltips
+- `frontend/src/components/MapPage.tsx` - pruneCache() Integration
+- `frontend/src/components/SettingsPage.tsx` - Theme-Toggle, "Einstellungen" Header
+- `frontend/src/components/DroneDetailPage.tsx` - Loading Progress Bar
+- `frontend/src/lookupCache.ts` - NEU: Shared Cache für Lookup + NFZ
+- `frontend/dist/` - Rebuild
+
+### 2026-03-11 - Flugverlauf-Tracking + Archivierung
+**Änderungen:**
+- **Tracking-System:** Beliebiges Luftfahrzeug per Klick tracken — Flugverlauf wird als Polyline auf der Karte angezeigt
+  - Tracking starten/stoppen über StatusPanel-Buttons
+  - Trail bleibt sichtbar auch nach Stopp, solange Drohne im Gebiet
+  - Position wird alle 2s erfasst (min. 15m Bewegung), max 2000 Punkte
+  - 8 verschiedene Trail-Farben für Unterscheidbarkeit
+  - Tracked IDs werden in localStorage gespeichert (überlebt Page Refresh)
+- **Archivierung (7 Tage):** Getrackte Flüge können archiviert werden
+  - Backend speichert Trail als JSON in `backend/data/archives/`
+  - Automatische Cleanup-Routine löscht Einträge nach 7 Tagen
+  - REST API: GET/POST/DELETE `/api/trails/archives`
+  - Archivierte Trails werden gestrichelt auf der Karte dargestellt
+- **TrackingPanel:** Dropdown-Panel in der Top-Bar mit Übersicht aller aktiven Trackings + Archive
+  - Zeigt Punktanzahl, Status, Verbleibende Tage für Archive
+  - Quick-Actions: Stop, Archivieren, Archiv löschen
+- **Karten-Darstellung:** Leaflet Polylines mit Canvas-Renderer
+  - Aktives Tracking: Durchgezogene Linie, Opacity 0.8
+  - Gestoppt/Archiviert: Gestrichelte Linie, Opacity 0.5
+  - Tooltip mit Drohnen-Name bei Hover über Trail
+- **Loading-Flicker Fix:** Loading-Indikatoren (Progress-Bar, Spinner-Cards) werden erst nach 400ms Verzögerung angezeigt
+
+**Dateien:**
+- `backend/trail_archive.py` - NEU: TrailArchive Manager mit JSON-Persistenz + Cleanup
+- `backend/app.py` - 4 neue Archive-Routes + TrailArchive Init
+- `frontend/src/types/drone.ts` - TrailPoint, TrackedFlight, ArchivedTrail Interfaces
+- `frontend/src/api.ts` - Archive CRUD API-Funktionen
+- `frontend/src/useTracking.ts` - NEU: Tracking Hook (State, Position-Update, Archive)
+- `frontend/src/components/TrackingPanel.tsx` - NEU: Tracking-Übersicht Panel
+- `frontend/src/components/MapComponent.tsx` - Trail Polyline Rendering
+- `frontend/src/components/MapPage.tsx` - Tracking Integration + TrackingPanel
+- `frontend/src/components/StatusPanel.tsx` - Track/Untrack/Archiv Buttons
+- `frontend/src/components/DroneDetailPage.tsx` - Verzögerter Loading-Indikator
+- `frontend/dist/` - Rebuild
+
+### 2026-03-11 - Praezise Hoehenanzeige (MSL + AGL) + Geschwindigkeitskorrektur
+**Aenderungen:**
+- **Hoehenreferenzierung:** Alle Provider liefern jetzt getrennte Hoehenwerte
+  - `altitude_baro`: Barometrische Hoehe (MSL, druckkorrigiert) — primaere Hoehe fuer Luftfahrt
+  - `altitude_geom`: Geometrische/GPS-Hoehe (WGS84) — wo verfuegbar
+  - `altitude`: Bleibt als "beste verfuegbare Hoehe" (Abwaertskompatibilitaet)
+- **Provider-Korrekturen:**
+  - adsb.fi/adsb.lol: `alt_geom` (GPS-Hoehe) wird jetzt zusaetzlich zu `alt_baro` erfasst
+  - adsb.fi/adsb.lol: Feet-zu-Meter Konversionsfaktor korrigiert (0.3048 statt 1/3.281)
+  - adsb.fi/adsb.lol: Knoten-zu-m/s Konversionsfaktor praezisiert (0.514444 statt 0.5144)
+  - OpenSky: `baro_altitude` (s[7]) und `geo_altitude` (s[13]) werden getrennt durchgereicht
+  - OGN: Hoehe als `altitude_geom` markiert (GPS-basiert AMSL)
+- **Terrain-Elevation API:** Neuer Endpunkt `/api/elevation?locations=lat,lon|lat,lon`
+  - Nutzt Open-Meteo Elevation API (kostenlos, kein API-Key)
+  - In-Memory-Cache (4 Dezimalstellen ≈ 11m Aufloesung)
+  - Batch-Abfragen unterstuetzt
+- **AGL-Berechnung:** Hoehe ueber Grund = MSL - Gelaendehoehe, im Frontend berechnet
+- **Frontend-Anzeige:**
+  - StatusPanel: Zeigt "Hoehe MSL", "Hoehe AGL", "Hoehe GPS" (wenn verfuegbar), "Gelaende"
+  - DroneDetailPage Live-Status: MSL + AGL Tiles, Geschwindigkeit in m/s + km/h
+  - DroneDetailPage Position: MSL (baro), GPS (geom), AGL, Gelaendehoehe
+  - Map Tooltip: Zeigt "Hoehe MSL" statt generisch "Hoehe", Speed mit km/h
+
+**Dateien:**
+- `backend/providers/adsbfi_provider.py` - altitude_baro + altitude_geom, Faktorkorrektur
+- `backend/providers/adsblol_provider.py` - altitude_baro + altitude_geom, Faktorkorrektur
+- `backend/providers/opensky_provider.py` - Getrennte baro/geo Altitude
+- `backend/providers/ogn_provider.py` - altitude_geom Markierung
+- `backend/providers/base_provider.py` - altitude_baro/altitude_geom Pass-through
+- `backend/app.py` - /api/elevation Endpoint mit Open-Meteo + Caching
+- `frontend/src/types/drone.ts` - altitude_baro, altitude_geom, ground_elevation, altitude_agl
+- `frontend/src/api.ts` - fetchElevation() mit Client-Cache
+- `frontend/src/components/StatusPanel.tsx` - Elevation Fetch, MSL/AGL/GPS/Gelaende Anzeige
+- `frontend/src/components/DroneDetailPage.tsx` - MSL/AGL/GPS Anzeige, km/h Conversion
+- `frontend/src/components/MapComponent.tsx` - Tooltip MSL + km/h
+- `frontend/src/test/mocks.ts` - altitude_baro/altitude_geom in Mock-Daten
+- `frontend/dist/` - Rebuild
+
+### 2026-03-11 - Elevation Grid Pre-Computation + Progressive Loading
+**Aenderungen:**
+- **Elevation Grid (`elevationGrid.ts`):** Vorberechnetes Hoehenraster fuer den gesamten Drohnen-Suchbereich
+  - Generiert regulaeres Lat/Lon-Gitter ueber den Suchkreis, holt Hoehen von Open-Meteo in Batches
+  - O(1) bilineare Interpolation fuer beliebige Punkte im Raster
+  - Float32Array Storage (Row-Major), ~600 Punkte im Kreis (6 API-Batches)
+  - Spacing-Formel: `max(500, min(15000, radius/14))` — skaliert mit Suchradius
+  - Re-Fetch nur wenn Position >30% des Radius verschoben oder Radius >50% geaendert
+- **Progressive Loading:** Grid wird nach dem ersten erfolgreichen Batch als "ready" markiert
+  - Listener werden sofort benachrichtigt, Hoehenanzeige erscheint progressiv
+  - Spaetere Batches verfeinern das Grid im Hintergrund
+- **Rate-Limiting Fix:** Open-Meteo Free Tier (max 100 Coords/Request, ~10 req/sec)
+  - Batch-Delay von 300ms auf 500ms erhoeht
+  - Exponentieller Backoff bei HTTP 429: 3s → 6s (2 Retries)
+  - Abbruch nach 3 aufeinanderfolgenden Fehlern (partial grid bleibt nutzbar)
+- **Frontend-Integration:**
+  - MapPage: `buildGrid()` wird bei Position/Radius-Aenderung getriggert
+  - StatusPanel + DroneDetailPage: `getElevation()` + `onGridReady()` fuer synchrone Abfrage mit Listener
+  - Loading-Indicator (Spinner) wenn Grid noch laedt
+  - Alle Hoehen-Felder (MSL, AGL, GPS, Gelaende) immer sichtbar, "Laden..." wenn Daten pending
+- **Elevation API direkt:** Frontend ruft Open-Meteo direkt auf (CORS erlaubt), kein Backend-Proxy noetig
+  - Batch-Fetch fuer mehrere Koordinaten, Deduplizierung, Client-seitiger Cache
+
+**Dateien:**
+- `frontend/src/elevationGrid.ts` - NEU: Grid-Modul mit bilinearer Interpolation
+- `frontend/src/api.ts` - fetchElevation/fetchElevationBatch (Open-Meteo direkt)
+- `frontend/src/components/MapPage.tsx` - buildGrid() Integration
+- `frontend/src/components/StatusPanel.tsx` - getElevation + onGridReady, Loading-Props
+- `frontend/src/components/DroneDetailPage.tsx` - getElevation + onGridReady, Loading-Props
+- `frontend/dist/` - Rebuild
+
+### 2026-03-11 - Versionsanzeige + Version Bump 1.1.0
+**Aenderungen:**
+- **Versionsanzeige im Header:** Version wird neben dem App-Titel in der Top-Bar angezeigt (z.B. "v1.1.0")
+- **Build-Time Injection:** Vite `define` liest Version aus `manifest.json` zur Build-Zeit und injiziert sie als `__APP_VERSION__` Konstante
+- **Synchrone Versionierung:** `manifest.json` (Hub) und `package.json` (Frontend) haben immer die gleiche Version
+- **Version Bump:** 1.0.0 → 1.1.0 (Provider Pattern, NFZ, Tracking, Elevation Grid, Aircraft Lookup, Themes)
+
+**Dateien:**
+- `frontend/vite.config.ts` - `define: { __APP_VERSION__ }` aus manifest.json
+- `frontend/src/vite-env.d.ts` - NEU: TypeScript-Deklaration fuer __APP_VERSION__
+- `frontend/src/components/MapPage.tsx` - Version im Header anzeigen
+- `manifest.json` - Version 1.0.0 → 1.1.0
+- `frontend/package.json` - Version 1.0.0 → 1.1.0
+- `frontend/dist/` - Rebuild
+
 ## Offene Aufgaben
 - [ ] WebSocket-Integration für echte Push-Updates statt Polling
 - [ ] ESP 8266 MicroPython-Anpassung
@@ -317,7 +490,10 @@
 - Polling-Intervall: 2s (normal), 5s (>100 Drohnen)
 - DIPUL WMS: 34 Layer gesamt (17 konfiguriert), Daten von DFS Deutsche Flugsicherung, aktualisiert im AIRAC-Zyklus (28 Tage)
 - DIPUL WMS CORS erlaubt (`Access-Control-Allow-Origin: *`) - GetFeatureInfo direkt vom Frontend moeglich
-- DIPUL WMS rendert in dunklen Farben → CSS `filter: invert(1) hue-rotate(180deg) brightness(1.3)` fuer Dark Theme noetig
+- DIPUL WMS rendert in dunklen Farben → CSS `filter: invert(1) hue-rotate(180deg) brightness(1.3)` nur im Dark Theme, Light Theme zeigt Originalfarben
 - Hover-Tooltip: Zeigt Zonenname, Typ, Hoehengrenzen, Rechtsgrundlage. Klick-Popup: Vollstaendige Details inkl. Referenz
 - FFH-Gebiete: WMS-Layer heisst `dipul:ffh-gebiete` (Bindestrich!), nicht `dipul:ffh_gebiete`
 - Test-Abdeckung: 132 Backend-Tests, 57 Frontend Unit-Tests, 69 E2E-Tests (30 davon NFZ-spezifisch)
+- Aircraft Lookup Quellen (7): adsbdb.com, OpenSky Network, hexdb.io, OGN DDB, adsbdb Callsign, planespotters.net, airport-data.com
+- OGN Aircraft Type Codes: 0=Unknown, 1=Segelflugzeug, 3=Helikopter, 8=Motorflugzeug, 9=Jet, 13=UAV/Drohne, etc.
+- OGN Feld 12 = ICAO Hex (Mode-S), Feld 10 = Aircraft Type Code, Feld 13 = OGN/FLARM Device ID

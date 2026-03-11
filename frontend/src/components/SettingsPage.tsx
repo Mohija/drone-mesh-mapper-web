@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { DataSourceSettings } from '../types/drone';
 import { fetchSettings, updateSettings } from '../api';
+import { useTheme } from '../ThemeContext';
 
 const SOURCE_COLORS: Record<string, string> = {
   simulator: '#3b82f6',
@@ -13,6 +14,7 @@ const SOURCE_COLORS: Record<string, string> = {
 
 export default function SettingsPage() {
   const navigate = useNavigate();
+  const { theme, setTheme } = useTheme();
   const [settings, setSettings] = useState<DataSourceSettings | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -98,7 +100,7 @@ export default function SettingsPage() {
         >
           &#8592; Karte
         </button>
-        <div style={{ fontSize: 20, fontWeight: 600 }}>Datenquellen</div>
+        <div style={{ fontSize: 20, fontWeight: 600 }}>Einstellungen</div>
       </div>
 
       {/* Content */}
@@ -127,7 +129,84 @@ export default function SettingsPage() {
           </div>
         )}
 
+        {/* Theme toggle */}
+        <div style={{
+          background: 'var(--bg-secondary)',
+          border: '1px solid var(--border)',
+          borderRadius: 10,
+          padding: '14px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 14,
+          marginBottom: 24,
+        }}>
+          <div style={{
+            width: 10,
+            height: 10,
+            borderRadius: '50%',
+            background: theme === 'dark' ? '#6366f1' : '#f59e0b',
+            boxShadow: `0 0 8px ${theme === 'dark' ? '#6366f1' : '#f59e0b'}`,
+            flexShrink: 0,
+          }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>Erscheinungsbild</div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+              {theme === 'dark' ? 'Dunkler Modus' : 'Heller Modus'}
+            </div>
+          </div>
+          <div style={{
+            display: 'flex',
+            background: 'var(--bg-tertiary)',
+            borderRadius: 8,
+            padding: 2,
+            gap: 2,
+          }}>
+            <button
+              onClick={() => setTheme('light')}
+              style={{
+                padding: '6px 12px',
+                borderRadius: 6,
+                border: 'none',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                background: theme === 'light' ? 'var(--accent)' : 'transparent',
+                color: theme === 'light' ? '#fff' : 'var(--text-secondary)',
+                transition: 'background 0.2s, color 0.2s',
+              }}
+            >
+              Hell
+            </button>
+            <button
+              onClick={() => setTheme('dark')}
+              style={{
+                padding: '6px 12px',
+                borderRadius: 6,
+                border: 'none',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                background: theme === 'dark' ? 'var(--accent)' : 'transparent',
+                color: theme === 'dark' ? '#fff' : 'var(--text-secondary)',
+                transition: 'background 0.2s, color 0.2s',
+              }}
+            >
+              Dunkel
+            </button>
+          </div>
+        </div>
+
         {/* Source list */}
+        <div style={{
+          fontSize: 11,
+          fontWeight: 600,
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em',
+          color: 'var(--text-muted)',
+          marginBottom: 12,
+        }}>
+          Datenquellen
+        </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {Object.entries(settings.sources).map(([id, cfg]) => (
             <div

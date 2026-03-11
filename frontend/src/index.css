@@ -6,7 +6,8 @@
   padding: 0;
 }
 
-:root {
+:root,
+[data-theme="dark"] {
   --bg-primary: #0f1117;
   --bg-secondary: #1a1d27;
   --bg-tertiary: #242836;
@@ -23,6 +24,39 @@
   --signal-good: #22c55e;
   --signal-mid: #eab308;
   --signal-bad: #ef4444;
+  --popup-bg: rgba(26, 29, 39, 0.95);
+  --popup-border: rgba(239, 68, 68, 0.4);
+  --popup-text: #e4e6eb;
+  --popup-text-secondary: #9ca3af;
+  --popup-text-muted: #6b7280;
+  --popup-divider: rgba(255, 255, 255, 0.1);
+  --attribution-bg: rgba(15, 17, 23, 0.8);
+}
+
+[data-theme="light"] {
+  --bg-primary: #f3f4f6;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #e5e7eb;
+  --text-primary: #111827;
+  --text-secondary: #4b5563;
+  --text-muted: #9ca3af;
+  --border: #d1d5db;
+  --accent: #2563eb;
+  --status-active: #16a34a;
+  --status-idle: #ca8a04;
+  --status-error: #dc2626;
+  --status-lost: #6b7280;
+  --user-blue: #2563eb;
+  --signal-good: #16a34a;
+  --signal-mid: #ca8a04;
+  --signal-bad: #dc2626;
+  --popup-bg: rgba(255, 255, 255, 0.97);
+  --popup-border: rgba(220, 38, 38, 0.3);
+  --popup-text: #111827;
+  --popup-text-secondary: #4b5563;
+  --popup-text-muted: #9ca3af;
+  --popup-divider: rgba(0, 0, 0, 0.08);
+  --attribution-bg: rgba(255, 255, 255, 0.85);
 }
 
 html,
@@ -52,7 +86,7 @@ body,
 }
 
 .leaflet-control-attribution {
-  background: rgba(15, 17, 23, 0.8) !important;
+  background: var(--attribution-bg) !important;
   color: var(--text-muted) !important;
 }
 
@@ -61,11 +95,16 @@ body,
 }
 
 /* NFZ WMS tile layer: invert dark WMS colors to bright for visibility on dark map */
-.nfz-wms-tiles img {
+[data-theme="dark"] .nfz-wms-tiles img {
   filter: invert(1) hue-rotate(180deg) brightness(1.3) !important;
 }
 
-/* NFZ click popup styling for dark theme */
+/* Light mode: keep NFZ WMS colors as-is but boost opacity */
+[data-theme="light"] .nfz-wms-tiles img {
+  filter: brightness(1.1) saturate(1.2) !important;
+}
+
+/* NFZ click popup styling */
 .nfz-popup .leaflet-popup-content-wrapper {
   background: var(--bg-secondary) !important;
   color: var(--text-primary) !important;
@@ -78,6 +117,29 @@ body,
 }
 
 .nfz-popup .leaflet-popup-close-button {
+  color: var(--text-secondary) !important;
+}
+
+/* Loading progress bar animation */
+@keyframes loading-progress {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(0%); }
+  100% { transform: translateX(100%); }
+}
+
+/* Leaflet popup styling (drone popups) */
+.leaflet-popup-content-wrapper {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+}
+
+.leaflet-popup-tip {
+  background: var(--bg-secondary) !important;
+}
+
+.leaflet-popup-close-button {
   color: var(--text-secondary) !important;
 }
 

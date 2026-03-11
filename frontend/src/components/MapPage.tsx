@@ -3,10 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import type { Drone, UserLocation } from '../types/drone';
 import { fetchDrones, setFleetCenter } from '../api';
+import { buildGrid } from '../elevationGrid';
 import MapComponent from './MapComponent';
 import StatusPanel from './StatusPanel';
 import GeolocationButton from './GeolocationButton';
+import { pruneCache } from '../lookupCache';
+import { useTracking } from '../useTracking';
 import NoFlyZonesPanel from './NoFlyZonesPanel';
+import TrackingPanel from './TrackingPanel';
 import {
   DEFAULT_ENABLED_LAYERS,
   NFZ_LAYERS,
@@ -41,6 +45,8 @@ export default function MapPage() {
   const [nfzRadiusEnabled, setNfzRadiusEnabled] = useState(false);
   const [nfzRadius, setNfzRadius] = useState(50000); // 50km default
   const [altitudeZone, setAltitudeZone] = useState('all');
+  const [trackingPanelOpen, setTrackingPanelOpen] = useState(false);
+  const tracking = useTracking();
   const [enabledNoFlyLayers, setEnabledNoFlyLayers] = useState<string[]>(() => {
     try {
       const stored = localStorage.getItem('nofly-layers');
@@ -72,9 +78,24 @@ export default function MapPage() {
         if (!prev) return null;
         return data.drones.find((d) => d.id === prev.id) || prev;
       });
+
+      // Prune lookup/NFZ cache for drones no longer visible
+      const visibleKeys = new Set(data.drones.map((d) => d.basic_id || d.id));
+      pruneCache(visibleKeys);
+
+      // Feed new positions to tracked flights
+      tracking.updatePositions(data.drones);
     } catch (err) {
       setError('Verbindung zum Server fehlgeschlagen');
     }
+  }, [userLocation, radiusEnabled, radius, tracking.updatePositions]);
+
+  // Build elevation grid for the search area (pre-computes terrain for AGL)
+  useEffect(() => {
+    const lat = userLocation ? userLocation.latitude : DEFAULT_CENTER.lat;
+    const lon = userLocation ? userLocation.longitude : DEFAULT_CENTER.lon;
+    const r = radiusEnabled ? radius : 50000; // Default 50km if no radius
+    buildGrid(lat, lon, r);
   }, [userLocation, radiusEnabled, radius]);
 
   // Polling interval - slower when many drones to reduce render load
@@ -168,6 +189,7 @@ export default function MapPage() {
         nfzRadiusMeters={nfzRadiusEnabled && noFlyEnabled ? nfzRadius : null}
         droneRadiusCenter={radiusEnabled ? currentCenter : null}
         droneRadiusMeters={radiusEnabled ? radius : null}
+        trails={tracking.allTrails}
       />
 
       {/* Top bar */}
@@ -194,6 +216,11 @@ export default function MapPage() {
         }}>
           <span style={{ fontSize: 18 }}>&#128681;</span>
           <span style={{ fontWeight: 600, fontSize: 14 }}>Drone Mesh Mapper</span>
+          <span style={{
+            fontSize: 10,
+            color: 'var(--text-muted)',
+            fontWeight: 400,
+          }}>v{__APP_VERSION__}</span>
           <span style={{
             background: 'var(--bg-tertiary)',
             padding: '2px 8px',
@@ -475,10 +502,63 @@ export default function MapPage() {
           </div>
         )}
 
+        {/* Tracking button */}
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => setTrackingPanelOpen(prev => !prev)}
+            title="Tracking"
+            style={{
+              background: tracking.trackedFlights.size > 0 ? 'rgba(249, 115, 22, 0.15)' : 'var(--bg-secondary)',
+              border: `1px solid ${tracking.trackedFlights.size > 0 ? '#f97316' : 'var(--border)'}`,
+              borderRadius: 8,
+              padding: '8px 12px',
+              cursor: 'pointer',
+              color: tracking.trackedFlights.size > 0 ? '#f97316' : 'var(--text-secondary)',
+              fontSize: 14,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <span style={{ fontSize: 14 }}>&#9678;</span>
+            <span>Tracking</span>
+            {(tracking.trackedFlights.size > 0 || tracking.archives.length > 0) && (
+              <span style={{
+                background: '#f97316',
+                color: '#fff',
+                borderRadius: 8,
+                padding: '0 5px',
+                fontSize: 10,
+                fontWeight: 700,
+                minWidth: 16,
+                textAlign: 'center',
+              }}>
+                {tracking.trackedFlights.size + tracking.archives.length}
+              </span>
+            )}
+          </button>
+
+          {trackingPanelOpen && (
+            <TrackingPanel
+              trackedFlights={tracking.trackedFlights}
+              archives={tracking.archives}
+              onUntrack={tracking.untrackDrone}
+              onArchive={tracking.archiveFlight}
+              onDeleteArchive={tracking.removeArchive}
+              onTrack={(droneId) => {
+                const drone = drones.find(d => d.id === droneId);
+                if (drone) tracking.trackDrone(drone);
+              }}
+              onClose={() => setTrackingPanelOpen(false)}
+            />
+          )}
+        </div>
+
         {/* Settings button */}
         <button
           onClick={() => navigate('/settings')}
-          title="Datenquellen"
+          title="Einstellungen"
           style={{
             background: 'var(--bg-secondary)',
             border: '1px solid var(--border)',
@@ -513,7 +593,15 @@ export default function MapPage() {
 
       {/* Status panel */}
       {selectedDrone && (
-        <StatusPanel drone={selectedDrone} onClose={handlePanelClose} enabledNoFlyLayers={noFlyEnabled ? enabledNoFlyLayers : undefined} />
+        <StatusPanel
+          drone={selectedDrone}
+          onClose={handlePanelClose}
+          enabledNoFlyLayers={noFlyEnabled ? enabledNoFlyLayers : undefined}
+          trackingState={tracking.isTracked(selectedDrone.id)?.state || null}
+          onTrack={tracking.trackDrone}
+          onUntrack={tracking.untrackDrone}
+          onArchive={tracking.archiveFlight}
+        />
       )}
     </div>
   );

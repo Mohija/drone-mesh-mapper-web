@@ -65,7 +65,7 @@ class BaseProvider(ABC):
 
     def _normalize(self, raw: dict) -> dict:
         """Fill in missing fields with defaults and add source info."""
-        return {
+        result = {
             "id": raw.get("id", "unknown"),
             "mac": raw.get("mac"),
             "name": raw.get("name", "Unknown"),
@@ -85,3 +85,9 @@ class BaseProvider(ABC):
             "source": self.source_id,
             "source_label": self.source_label,
         }
+        # Pass through provider-specific extra fields
+        for key in ("icao_hex", "ogn_aircraft_type", "ogn_aircraft_type_label",
+                     "altitude_baro", "altitude_geom"):
+            if key in raw:
+                result[key] = raw[key]
+        return result

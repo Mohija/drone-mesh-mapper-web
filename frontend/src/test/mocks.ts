@@ -8,6 +8,8 @@ export function createMockDrone(overrides: Partial<Drone> = {}): Drone {
     latitude: 50.1109,
     longitude: 8.6821,
     altitude: 100.0,
+    altitude_baro: null,
+    altitude_geom: null,
     pilot_latitude: 50.112,
     pilot_longitude: 8.683,
     signal_strength: -45,

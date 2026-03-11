@@ -1,27 +1,27 @@
 {
   "sources": {
     "simulator": {
-      "enabled": true,
+      "enabled": false,
       "label": "Simulator",
       "description": "Simulierte Drohnen (lokal generiert)"
     },
     "opensky": {
-      "enabled": false,
+      "enabled": true,
       "label": "OpenSky Network",
       "description": "ADS-B Flugzeug- und UAV-Daten (opensky-network.org)"
     },
     "adsbfi": {
-      "enabled": false,
+      "enabled": true,
       "label": "adsb.fi",
       "description": "ADS-B Tracking via adsb.fi Community-Netzwerk"
     },
     "adsblol": {
-      "enabled": false,
+      "enabled": true,
       "label": "adsb.lol",
       "description": "ADS-B Tracking via adsb.lol Community-Netzwerk"
     },
     "ogn": {
-      "enabled": false,
+      "enabled": true,
       "label": "Open Glider Network",
       "description": "Gleiter und Kleinfluggeraete (experimental)"
     }

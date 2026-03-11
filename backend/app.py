@@ -16,6 +16,7 @@ from flask_cors import CORS
 from drone_simulator import DroneFleet
 from settings import SettingsManager
 from providers import ProviderRegistry
+from trail_archive import TrailArchive
 
 # Logging setup
 logging.basicConfig(
@@ -52,9 +53,10 @@ CORS(app, origins=[
 fleet = DroneFleet(center_lat=DEFAULT_LAT, center_lon=DEFAULT_LON)
 fleet.start(interval=2.0)
 
-# Initialize settings and provider registry
+# Initialize settings, provider registry, and trail archive
 settings = SettingsManager()
 registry = ProviderRegistry(fleet)
+archive = TrailArchive(os.path.join(BASE_DIR, "data", "archives"))
 
 
 # ─── API Routes ────────────────────────────────────────────
@@ -148,7 +150,7 @@ def health():
     return jsonify({"status": "ok"})
 
 
-# ─── Aircraft Lookup (adsbdb.com + OpenSky) ─────────────────
+# ─── Aircraft Lookup (adsbdb.com + OpenSky + OGN DDB) ──────
 
 lookup_logger = logging.getLogger("lookup")
 
@@ -157,6 +159,58 @@ _aircraft_cache: dict[str, dict] = {}
 _cache_lock = threading.Lock()
 LOOKUP_CACHE_TTL = 3600  # 1 hour
 LOOKUP_TIMEOUT = 10  # seconds
+
+# OGN Device Database cache
+_ogn_ddb: dict[str, dict] = {}  # device_id -> { model, registration, cn, type }
+_ogn_ddb_lock = threading.Lock()
+_ogn_ddb_loaded = 0.0
+OGN_DDB_TTL = 86400  # 24 hours
+OGN_DDB_URL = "http://ddb.glidernet.org/download/"
+
+
+def _load_ogn_ddb():
+    """Load OGN Device Database (CSV) into memory cache."""
+    global _ogn_ddb_loaded
+    with _ogn_ddb_lock:
+        if time.time() - _ogn_ddb_loaded < OGN_DDB_TTL and _ogn_ddb:
+            return
+    try:
+        resp = http_requests.get(OGN_DDB_URL, timeout=15)
+        if resp.status_code != 200:
+            lookup_logger.warning("OGN DDB download failed: status %d", resp.status_code)
+            return
+        entries: dict[str, dict] = {}
+        for line in resp.text.strip().split("\n"):
+            if line.startswith("#"):
+                continue
+            parts = line.split(",")
+            if len(parts) < 7:
+                continue
+            device_type = parts[0].strip("'")
+            device_id = parts[1].strip("'").upper()
+            model = parts[2].strip("'")
+            registration = parts[3].strip("'")
+            cn = parts[4].strip("'")
+            entries[device_id] = {
+                "device_type": device_type,
+                "model": model,
+                "registration": registration,
+                "cn": cn,
+            }
+        with _ogn_ddb_lock:
+            _ogn_ddb.clear()
+            _ogn_ddb.update(entries)
+            _ogn_ddb_loaded = time.time()
+        lookup_logger.info("OGN DDB loaded: %d entries", len(entries))
+    except Exception as e:
+        lookup_logger.warning("OGN DDB load failed: %s", e)
+
+
+def _lookup_ogn_ddb(device_id: str) -> dict | None:
+    """Look up aircraft in OGN Device Database by ICAO hex or FLARM ID."""
+    _load_ogn_ddb()
+    with _ogn_ddb_lock:
+        return _ogn_ddb.get(device_id.upper())
 
 
 def _cached_lookup(key: str) -> dict | None:
@@ -239,19 +293,56 @@ def _lookup_planespotters_photo(hex_code: str) -> str | None:
     return None
 
 
+def _lookup_airport_data_photo(hex_code: str) -> str | None:
+    """Get aircraft thumbnail from airport-data.com (fallback photo source)."""
+    try:
+        resp = http_requests.get(
+            f"https://airport-data.com/api/ac_thumb.json?m={hex_code}&n=1",
+            timeout=LOOKUP_TIMEOUT,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get("status") == 200 and data.get("data"):
+                return data["data"][0].get("image")
+    except Exception as e:
+        lookup_logger.debug("airport-data.com lookup failed for %s: %s", hex_code, e)
+    return None
+
+
+def _lookup_hexdb(hex_code: str) -> dict | None:
+    """Query hexdb.io for aircraft info (fallback for adsbdb)."""
+    try:
+        resp = http_requests.get(
+            f"https://hexdb.io/api/v1/aircraft/{hex_code}",
+            timeout=LOOKUP_TIMEOUT,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get("Registration"):
+                return data
+    except Exception as e:
+        lookup_logger.debug("hexdb.io lookup failed for %s: %s", hex_code, e)
+    return None
+
+
 @app.route("/api/aircraft/lookup/<identifier>", methods=["GET"])
 def lookup_aircraft(identifier: str):
     """Lookup aircraft info by hex code, registration, or callsign.
-    Queries adsbdb.com (free, no API key) + OpenSky metadata + planespotters.net.
+    Queries adsbdb.com (free, no API key) + OpenSky metadata + planespotters.net + OGN DDB.
+    Accepts optional ?callsign=XXX and ?icao_hex=XXX (ICAO hex from OGN data).
     Results are cached for 1 hour.
     """
     identifier = identifier.strip().upper()
     callsign = request.args.get("callsign", "").strip().upper()
+    icao_hex = request.args.get("icao_hex", "").strip().upper()
 
-    lookup_logger.info("GET /api/aircraft/lookup/%s callsign=%s", identifier, callsign or "-")
+    lookup_logger.info(
+        "GET /api/aircraft/lookup/%s callsign=%s icao_hex=%s",
+        identifier, callsign or "-", icao_hex or "-",
+    )
 
     # Check cache
-    cache_key = f"{identifier}_{callsign}"
+    cache_key = f"{identifier}_{callsign}_{icao_hex}"
     cached = _cached_lookup(cache_key)
     if cached:
         lookup_logger.debug("Cache hit for %s", cache_key)
@@ -259,8 +350,12 @@ def lookup_aircraft(identifier: str):
 
     result: dict = {"identifier": identifier, "found": False}
 
+    # Determine which hex code to use for lookups
+    # If icao_hex is provided (from OGN data), use it for adsbdb/OpenSky/planespotters
+    lookup_hex = icao_hex if icao_hex else identifier
+
     # 1. adsbdb.com aircraft lookup (by hex or registration)
-    adsbdb = _lookup_adsbdb(identifier)
+    adsbdb = _lookup_adsbdb(lookup_hex)
     if adsbdb:
         result["found"] = True
         result["type"] = adsbdb.get("type") or adsbdb.get("icao_type")
@@ -274,7 +369,7 @@ def lookup_aircraft(identifier: str):
         result["source_db"] = "adsbdb"
 
     # 2. OpenSky metadata (supplements adsbdb or used as fallback)
-    opensky = _lookup_opensky_metadata(identifier)
+    opensky = _lookup_opensky_metadata(lookup_hex)
     if opensky:
         result["found"] = True
         if not result.get("type"):
@@ -282,7 +377,7 @@ def lookup_aircraft(identifier: str):
         if not result.get("icao_type"):
             result["icao_type"] = opensky.get("typecode")
         if not result.get("manufacturer"):
-            result["manufacturer"] = opensky.get("manufacturer")
+            result["manufacturer"] = opensky.get("manufacturer") or opensky.get("manufacturerName")
         if not result.get("registration"):
             result["registration"] = opensky.get("registration")
         if not result.get("owner"):
@@ -296,7 +391,45 @@ def lookup_aircraft(identifier: str):
         if not result.get("source_db"):
             result["source_db"] = "opensky"
 
-    # 3. Callsign route lookup
+    # 3. hexdb.io (fallback if adsbdb had no data)
+    if not result.get("type"):
+        hexdb = _lookup_hexdb(lookup_hex)
+        if hexdb:
+            result["found"] = True
+            if not result.get("type"):
+                result["type"] = hexdb.get("Type")
+            if not result.get("icao_type"):
+                result["icao_type"] = hexdb.get("ICAOTypeCode")
+            if not result.get("manufacturer"):
+                result["manufacturer"] = hexdb.get("Manufacturer")
+            if not result.get("registration"):
+                result["registration"] = hexdb.get("Registration")
+            if not result.get("owner"):
+                result["owner"] = hexdb.get("RegisteredOwners")
+            if not result.get("operator_flag"):
+                result["operator_flag"] = hexdb.get("OperatorFlagCode")
+            if not result.get("source_db"):
+                result["source_db"] = "hexdb"
+
+    # 4. OGN Device Database (for gliders, FLARM devices, and as supplement)
+    # Try icao_hex first, then the original identifier
+    ogn_entry = None
+    if icao_hex:
+        ogn_entry = _lookup_ogn_ddb(icao_hex)
+    if not ogn_entry:
+        ogn_entry = _lookup_ogn_ddb(identifier)
+    if ogn_entry:
+        result["found"] = True
+        if not result.get("type"):
+            result["type"] = ogn_entry.get("model")
+        if not result.get("registration"):
+            result["registration"] = ogn_entry.get("registration")
+        result["ogn_cn"] = ogn_entry.get("cn")
+        result["ogn_device_type"] = ogn_entry.get("device_type")
+        if not result.get("source_db"):
+            result["source_db"] = "ogn_ddb"
+
+    # 4. Callsign route lookup
     if callsign:
         route = _lookup_adsbdb_callsign(callsign)
         if route:
@@ -323,18 +456,166 @@ def lookup_aircraft(identifier: str):
                     "city": destination.get("municipality"),
                 }
 
-    # 4. Photo (if not already from adsbdb)
+    # 6. Photo (if not already from adsbdb)
     if not result.get("photo_url"):
-        photo = _lookup_planespotters_photo(identifier)
+        photo = _lookup_planespotters_photo(lookup_hex)
+        if photo:
+            result["photo_url"] = photo
+
+    # 7. Photo fallback: airport-data.com
+    if not result.get("photo_url"):
+        photo = _lookup_airport_data_photo(lookup_hex)
         if photo:
             result["photo_url"] = photo
 
     _store_cache(cache_key, result)
     lookup_logger.info(
-        "Lookup result for %s: found=%s type=%s owner=%s",
-        identifier, result["found"], result.get("type"), result.get("owner"),
+        "Lookup result for %s: found=%s type=%s reg=%s owner=%s source=%s",
+        identifier, result["found"], result.get("type"),
+        result.get("registration"), result.get("owner"), result.get("source_db"),
     )
     return jsonify(result)
+
+
+# ─── Trail Archive Routes ──────────────────────────────────
+
+trail_logger = logging.getLogger("trails")
+
+
+@app.route("/api/trails/archives", methods=["GET"])
+def list_trail_archives():
+    """List all archived flight trails (metadata only)."""
+    archives = archive.list_archives()
+    trail_logger.debug("GET /api/trails/archives - %d archives", len(archives))
+    return jsonify(archives)
+
+
+@app.route("/api/trails/archives/<archive_id>", methods=["GET"])
+def get_trail_archive(archive_id: str):
+    """Get a full archived trail including all points."""
+    data = archive.get_archive(archive_id)
+    if not data:
+        return jsonify({"error": "Archive not found"}), 404
+    return jsonify(data)
+
+
+@app.route("/api/trails/archives", methods=["POST"])
+def save_trail_archive():
+    """Save a tracked flight trail to the archive (7 day retention)."""
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Request body required"}), 400
+    try:
+        result = archive.save_archive(data)
+        return jsonify(result), 201
+    except ValueError as e:
+        trail_logger.warning("Archive rejected: %s", e)
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/trails/archives/<archive_id>", methods=["DELETE"])
+def delete_trail_archive(archive_id: str):
+    """Delete an archived trail."""
+    if archive.delete_archive(archive_id):
+        return jsonify({"status": "deleted"})
+    return jsonify({"error": "Archive not found"}), 404
+
+
+# ─── Terrain Elevation API ─────────────────────────────────
+
+elevation_logger = logging.getLogger("elevation")
+
+# In-memory elevation cache: "lat_lon" (4 decimal places) -> elevation_m
+_elevation_cache: dict[str, float] = {}
+_elevation_cache_lock = threading.Lock()
+
+
+def _get_cached_elevation(lat: float, lon: float) -> float | None:
+    """Get cached terrain elevation for rounded coordinates."""
+    key = f"{lat:.4f}_{lon:.4f}"
+    with _elevation_cache_lock:
+        return _elevation_cache.get(key)
+
+
+def _store_elevation(lat: float, lon: float, elevation: float):
+    """Store terrain elevation in cache."""
+    key = f"{lat:.4f}_{lon:.4f}"
+    with _elevation_cache_lock:
+        _elevation_cache[key] = elevation
+
+
+def _fetch_elevations(coords: list[tuple[float, float]]) -> list[float | None]:
+    """Fetch terrain elevations from Open-Meteo API (batch, free, no key)."""
+    if not coords:
+        return []
+    lats = ",".join(f"{c[0]:.4f}" for c in coords)
+    lons = ",".join(f"{c[1]:.4f}" for c in coords)
+    try:
+        resp = http_requests.get(
+            "https://api.open-meteo.com/v1/elevation",
+            params={"latitude": lats, "longitude": lons},
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            elevations = data.get("elevation", [])
+            if isinstance(elevations, list) and len(elevations) == len(coords):
+                for i, (lat, lon) in enumerate(coords):
+                    if elevations[i] is not None:
+                        _store_elevation(lat, lon, elevations[i])
+                return elevations
+    except Exception as e:
+        elevation_logger.warning("Open-Meteo elevation fetch failed: %s", e)
+    return [None] * len(coords)
+
+
+@app.route("/api/elevation", methods=["GET"])
+def get_elevation():
+    """Get terrain elevation for coordinates. Supports batch: ?locations=lat,lon|lat,lon
+    Returns ground elevation in meters (above mean sea level).
+    """
+    locations_str = request.args.get("locations", "")
+    if not locations_str:
+        return jsonify({"error": "locations parameter required (format: lat,lon|lat,lon)"}), 400
+
+    coords: list[tuple[float, float]] = []
+    for loc in locations_str.split("|"):
+        parts = loc.strip().split(",")
+        if len(parts) != 2:
+            continue
+        try:
+            coords.append((float(parts[0]), float(parts[1])))
+        except ValueError:
+            continue
+
+    if not coords:
+        return jsonify({"error": "No valid coordinates provided"}), 400
+
+    # Check cache first, collect uncached
+    results: list[dict] = []
+    uncached_indices: list[int] = []
+    uncached_coords: list[tuple[float, float]] = []
+
+    for i, (lat, lon) in enumerate(coords):
+        cached = _get_cached_elevation(lat, lon)
+        if cached is not None:
+            results.append({"lat": lat, "lon": lon, "elevation": cached})
+        else:
+            results.append({"lat": lat, "lon": lon, "elevation": None})
+            uncached_indices.append(i)
+            uncached_coords.append((lat, lon))
+
+    # Fetch uncached from Open-Meteo
+    if uncached_coords:
+        fetched = _fetch_elevations(uncached_coords)
+        for j, idx in enumerate(uncached_indices):
+            if fetched[j] is not None:
+                results[idx]["elevation"] = fetched[j]
+
+    elevation_logger.debug("Elevation query: %d coords, %d cached, %d fetched",
+                           len(coords), len(coords) - len(uncached_coords), len(uncached_coords))
+
+    return jsonify({"elevations": results})
 
 
 # ─── No-Fly Zone (DIPUL WMS) Routes ────────────────────────

@@ -2,7 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import type { Drone, AircraftLookup } from '../types/drone';
 import { useNavigate } from 'react-router-dom';
 import { lookupAircraft } from '../api';
+import { getElevation, onGridReady, isGridReady } from '../elevationGrid';
 import { DIPUL_WMS_URL, getWmsLayerString, NFZ_LAYERS } from '../config/noFlyZones';
+import { getCachedLookup, setCachedLookup, getCachedNfz, setCachedNfz } from '../lookupCache';
+import type { TrackingState } from '../types/drone';
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   active: { label: 'Aktiv', color: 'var(--status-active)' },
@@ -52,6 +55,10 @@ interface Props {
   drone: Drone;
   onClose: () => void;
   enabledNoFlyLayers?: string[];
+  trackingState?: TrackingState | null;
+  onTrack?: (drone: Drone) => void;
+  onUntrack?: (droneId: string) => void;
+  onArchive?: (droneId: string) => Promise<void>;
 }
 
 const SOURCE_COLORS: Record<string, string> = {
@@ -62,7 +69,7 @@ const SOURCE_COLORS: Record<string, string> = {
   ogn: '#10b981',
 };
 
-export default function StatusPanel({ drone, onClose, enabledNoFlyLayers }: Props) {
+export default function StatusPanel({ drone, onClose, enabledNoFlyLayers, trackingState, onTrack, onUntrack, onArchive }: Props) {
   const navigate = useNavigate();
   const statusInfo = STATUS_LABELS[drone.status] || STATUS_LABELS.lost;
   const signal = drone.signal_strength != null ? signalBar(drone.signal_strength) : null;
@@ -77,13 +84,41 @@ export default function StatusPanel({ drone, onClose, enabledNoFlyLayers }: Prop
   const [nfzZones, setNfzZones] = useState<NfzFeature[]>([]);
   const [nfzLoading, setNfzLoading] = useState(false);
 
+  // Ground elevation from pre-computed grid (synchronous, O(1) bilinear interpolation)
+  const [groundElevation, setGroundElevation] = useState<number | null>(
+    () => getElevation(drone.latitude, drone.longitude),
+  );
+
   const prevIdRef = useRef<string>('');
 
-  // Lookup aircraft info when drone changes
+  // Update elevation when drone moves or grid becomes ready
+  useEffect(() => {
+    const elev = getElevation(drone.latitude, drone.longitude);
+    setGroundElevation(elev);
+
+    if (elev !== null) return; // Already have it
+    // Grid might still be loading — subscribe to updates
+    const unsub = onGridReady(() => {
+      const e = getElevation(drone.latitude, drone.longitude);
+      if (e !== null) setGroundElevation(e);
+    });
+    return unsub;
+  }, [drone.latitude, drone.longitude]);
+
+  // Lookup aircraft info when drone changes — use shared cache
   useEffect(() => {
     const droneKey = drone.basic_id || drone.id;
     if (droneKey === prevIdRef.current) return;
     prevIdRef.current = droneKey;
+
+    // Check shared cache first
+    const cached = getCachedLookup(droneKey);
+    if (cached) {
+      setLookup(cached);
+      setLookupLoading(false);
+      setLookupError(null);
+      return;
+    }
 
     // Only lookup for external sources (have hex codes)
     if (drone.source === 'simulator') {
@@ -94,8 +129,10 @@ export default function StatusPanel({ drone, onClose, enabledNoFlyLayers }: Prop
       setLookupLoading(true);
       setLookupError(null);
       const callsign = drone.name && drone.name !== 'Unknown' ? drone.name.replace(/\s/g, '') : undefined;
-      lookupAircraft(droneKey, callsign)
+      const icaoHex = drone.icao_hex || undefined;
+      lookupAircraft(droneKey, callsign, icaoHex)
         .then(data => {
+          setCachedLookup(droneKey, data);
           setLookup(data);
           setLookupLoading(false);
         })
@@ -104,10 +141,23 @@ export default function StatusPanel({ drone, onClose, enabledNoFlyLayers }: Prop
           setLookupLoading(false);
         });
     }
-  }, [drone.basic_id, drone.id, drone.source, drone.name]);
+  }, [drone.basic_id, drone.id, drone.source, drone.name, drone.icao_hex]);
 
-  // Check if drone is in any NFZ (via DIPUL WMS GetFeatureInfo)
+  // Check if drone is in any NFZ (via DIPUL WMS GetFeatureInfo) — with shared cache
+  const prevNfzPosRef = useRef<string>('');
   useEffect(() => {
+    const posKey = `${drone.latitude.toFixed(4)}_${drone.longitude.toFixed(4)}`;
+    if (posKey === prevNfzPosRef.current) return;
+    prevNfzPosRef.current = posKey;
+
+    // Check shared cache first
+    const cached = getCachedNfz(posKey);
+    if (cached) {
+      setNfzZones(cached);
+      setNfzLoading(false);
+      return;
+    }
+
     const allLayers = enabledNoFlyLayers && enabledNoFlyLayers.length > 0
       ? getWmsLayerString(enabledNoFlyLayers)
       : getWmsLayerString(NFZ_LAYERS.map(l => l.id));
@@ -140,21 +190,21 @@ export default function StatusPanel({ drone, onClose, enabledNoFlyLayers }: Prop
     fetch(`${DIPUL_WMS_URL}?${params}`, { signal: controller.signal })
       .then(r => r.ok ? r.json() : null)
       .then(data => {
+        let zones: NfzFeature[] = [];
         if (data?.features?.length > 0) {
-          const zones: NfzFeature[] = data.features.map((f: any) => ({
+          const raw: NfzFeature[] = data.features.map((f: any) => ({
             name: f.properties?.name || 'Unbekannte Zone',
             type_code: f.properties?.type_code || '',
           }));
-          // Deduplicate by name
           const seen = new Set<string>();
-          setNfzZones(zones.filter(z => {
+          zones = raw.filter(z => {
             if (seen.has(z.name)) return false;
             seen.add(z.name);
             return true;
-          }));
-        } else {
-          setNfzZones([]);
+          });
         }
+        setCachedNfz(posKey, zones);
+        setNfzZones(zones);
         setNfzLoading(false);
       })
       .catch(() => {
@@ -347,8 +397,26 @@ export default function StatusPanel({ drone, onClose, enabledNoFlyLayers }: Prop
         <Section title="Position">
           <DataRow label="Breitengrad" value={drone.latitude.toFixed(6)} />
           <DataRow label="L&auml;ngengrad" value={drone.longitude.toFixed(6)} />
-          <DataRow label="H&ouml;he" value={`${drone.altitude.toFixed(1)} m`} />
-          <DataRow label="Geschwindigkeit" value={`${drone.speed.toFixed(1)} m/s`} />
+          <DataRow
+            label="H&ouml;he MSL"
+            value={`${(drone.altitude_baro ?? drone.altitude).toFixed(1)} m`}
+          />
+          <DataRow
+            label="H&ouml;he AGL"
+            value={groundElevation != null
+              ? `${((drone.altitude_baro ?? drone.altitude) - groundElevation).toFixed(1)} m`
+              : undefined}
+            loading={groundElevation == null}
+          />
+          {drone.altitude_geom != null && (
+            <DataRow label="H&ouml;he GPS" value={`${drone.altitude_geom.toFixed(1)} m`} />
+          )}
+          <DataRow
+            label="Gel&auml;nde"
+            value={groundElevation != null ? `${groundElevation.toFixed(0)} m MSL` : undefined}
+            loading={groundElevation == null}
+          />
+          <DataRow label="Geschwindigkeit" value={`${drone.speed.toFixed(1)} m/s (${(drone.speed * 3.6).toFixed(0)} km/h)`} />
           <DataRow label="Flugmuster" value={drone.flight_pattern} />
           {drone.distance !== undefined && (
             <DataRow label="Entfernung" value={`${(drone.distance / 1000).toFixed(2)} km`} />
@@ -373,6 +441,14 @@ export default function StatusPanel({ drone, onClose, enabledNoFlyLayers }: Prop
             <DataRow label="Gewicht" value={`${drone.faa_data.weight} kg`} />
             <DataRow label="Zweck" value={drone.faa_data.purpose} />
             <DataRow label="Status" value={drone.faa_data.status} />
+          </Section>
+        )}
+
+        {/* OGN Aircraft Type (always shown for OGN source if available) */}
+        {drone.source === 'ogn' && drone.ogn_aircraft_type_label && !lookupLoading && (
+          <Section title="OGN Typ">
+            <DataRow label="Kategorie" value={drone.ogn_aircraft_type_label} />
+            {drone.icao_hex && <DataRow label="ICAO Hex" value={drone.icao_hex} />}
           </Section>
         )}
 
@@ -454,7 +530,73 @@ export default function StatusPanel({ drone, onClose, enabledNoFlyLayers }: Prop
       <div style={{
         padding: 12,
         borderTop: '1px solid var(--border)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
       }}>
+        {/* Tracking controls */}
+        <div style={{ display: 'flex', gap: 6 }}>
+          {(!trackingState || trackingState === 'untracked') && onTrack && (
+            <button
+              onClick={() => onTrack(drone)}
+              style={{
+                flex: 1,
+                padding: '7px 12px',
+                background: 'rgba(249, 115, 22, 0.1)',
+                border: '1px solid #f97316',
+                color: '#f97316',
+                borderRadius: 6,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 4,
+              }}
+            >
+              <span style={{ fontSize: 14 }}>&#9678;</span>
+              {trackingState === 'untracked' ? 'Erneut tracken' : 'Tracking starten'}
+            </button>
+          )}
+          {trackingState === 'tracking' && (
+            <>
+              <button
+                onClick={() => onUntrack?.(drone.id)}
+                style={{
+                  flex: 1,
+                  padding: '7px 12px',
+                  background: 'var(--bg-tertiary)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-secondary)',
+                  borderRadius: 6,
+                  fontSize: 12,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+              >
+                Stoppen
+              </button>
+              <button
+                onClick={() => onArchive?.(drone.id)}
+                style={{
+                  flex: 1,
+                  padding: '7px 12px',
+                  background: 'rgba(59, 130, 246, 0.1)',
+                  border: '1px solid var(--accent)',
+                  color: 'var(--accent)',
+                  borderRadius: 6,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Archivieren
+              </button>
+            </>
+          )}
+        </div>
+
         <button
           onClick={() => navigate(`/drone/${drone.id}`)}
           style={{
@@ -494,16 +636,24 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function DataRow({ label, value }: { label: string; value: string }) {
+function DataRow({ label, value, loading }: { label: string; value?: string; loading?: boolean }) {
   return (
     <div style={{
       display: 'flex',
       justifyContent: 'space-between',
+      alignItems: 'center',
       padding: '3px 0',
       fontSize: 13,
     }}>
       <span style={{ color: 'var(--text-secondary)' }}>{label}</span>
-      <span style={{ fontWeight: 500, fontFamily: 'monospace', fontSize: 12 }}>{value}</span>
+      {loading ? (
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <Spinner size={10} />
+          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Laden...</span>
+        </span>
+      ) : (
+        <span style={{ fontWeight: 500, fontFamily: 'monospace', fontSize: 12 }}>{value ?? 'N/A'}</span>
+      )}
     </div>
   );
 }

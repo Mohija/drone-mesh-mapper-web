@@ -61,12 +61,18 @@ class OpenSkyProvider(BaseProvider):
         for s in states:
             if s[5] is None or s[6] is None:
                 continue  # Skip entries without position
+            baro_alt = s[7]  # barometric altitude in meters (or None)
+            geo_alt = s[13]  # geometric (GPS) altitude in meters (or None)
+            best_alt = baro_alt or geo_alt or 0
+
             results.append({
                 "id": s[0],  # icao24
                 "name": (s[1] or s[0]).strip(),  # callsign or icao24
                 "latitude": s[6],
                 "longitude": s[5],
-                "altitude": s[7] or s[13] or 0,  # baro_altitude or geo_altitude
+                "altitude": round(best_alt, 1),
+                "altitude_baro": round(baro_alt, 1) if baro_alt is not None else None,
+                "altitude_geom": round(geo_alt, 1) if geo_alt is not None else None,
                 "speed": s[9] or 0,  # velocity in m/s
                 "status": "idle" if s[8] else "active",  # on_ground
                 "basic_id": s[0],

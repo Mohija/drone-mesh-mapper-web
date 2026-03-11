@@ -3,6 +3,8 @@ import L from 'leaflet';
 import type { Drone, UserLocation } from '../types/drone';
 import { useNavigate } from 'react-router-dom';
 import { DIPUL_WMS_URL, getWmsLayerString, NFZ_LAYERS } from '../config/noFlyZones';
+import { useTheme } from '../ThemeContext';
+import type { TrailData } from '../useTracking';
 
 // Persist map view across remounts (route navigation)
 let savedCenter: [number, number] = [52.0302, 8.5325]; // Bielefeld
@@ -97,20 +99,20 @@ function buildPopup(drone: Drone): string {
   const batteryText = drone.battery != null ? `${drone.battery}%` : 'N/A';
 
   return `
-    <div style="font-family: sans-serif; font-size: 12px; min-width: 160px;">
+    <div style="font-family: sans-serif; font-size: 12px; min-width: 160px; color: var(--text-primary);">
       <strong style="font-size: 13px;">${drone.name}</strong> ${sourceTag}<br/>
       <span style="color: ${STATUS_COLORS[drone.status]};">&#9679;</span> ${drone.status.toUpperCase()}
-      <hr style="margin: 4px 0; border-color: #444;" />
+      <hr style="margin: 4px 0; border-color: var(--border);" />
       <div style="display: grid; grid-template-columns: auto 1fr; gap: 2px 8px;">
-        <span style="color: #999;">Signal:</span>
+        <span style="color: var(--text-muted);">Signal:</span>
         ${signalText}
-        <span style="color: #999;">Batterie:</span>
+        <span style="color: var(--text-muted);">Batterie:</span>
         <span>${batteryText}</span>
-        <span style="color: #999;">Höhe:</span>
-        <span>${Math.round(drone.altitude)}m</span>
-        <span style="color: #999;">Speed:</span>
-        <span>${drone.speed} m/s</span>
-        ${drone.distance !== undefined ? `<span style="color: #999;">Entfernung:</span><span>${(drone.distance / 1000).toFixed(1)} km</span>` : ''}
+        <span style="color: var(--text-muted);">H&ouml;he MSL:</span>
+        <span>${Math.round(drone.altitude_baro ?? drone.altitude)} m</span>
+        <span style="color: var(--text-muted);">Speed:</span>
+        <span>${drone.speed.toFixed(1)} m/s (${(drone.speed * 3.6).toFixed(0)} km/h)</span>
+        ${drone.distance !== undefined ? `<span style="color: var(--text-muted);">Entfernung:</span><span>${(drone.distance / 1000).toFixed(1)} km</span>` : ''}
       </div>
     </div>
   `;
@@ -206,14 +208,14 @@ function buildNfzTooltipHtml(features: Array<{ properties: Record<string, unknow
     const legal = p.legal_ref ? String(p.legal_ref) : '';
 
     return `
-      <div style="margin-bottom:4px;${idx > 0 ? 'padding-top:4px;border-top:1px solid rgba(255,255,255,0.1);' : ''}">
-        <div style="font-weight:600;font-size:12px;color:#e4e6eb;">${name}</div>
+      <div style="margin-bottom:4px;${idx > 0 ? 'padding-top:4px;border-top:1px solid var(--popup-divider);' : ''}">
+        <div style="font-weight:600;font-size:12px;color:var(--popup-text);">${name}</div>
         ${typeLabel ? `<div style="font-size:11px;color:${typeColor};margin-top:1px;">${typeLabel}</div>` : ''}
-        ${altText ? `<div style="font-size:10px;color:#9ca3af;margin-top:1px;">Hoehe: ${altText}</div>` : ''}
-        ${legal ? `<div style="font-size:10px;color:#6b7280;margin-top:1px;">${legal}</div>` : ''}
+        ${altText ? `<div style="font-size:10px;color:var(--popup-text-secondary);margin-top:1px;">Hoehe: ${altText}</div>` : ''}
+        ${legal ? `<div style="font-size:10px;color:var(--popup-text-muted);margin-top:1px;">${legal}</div>` : ''}
       </div>
     `;
-  }).join('') + (unique.length > 3 ? `<div style="font-size:10px;color:#6b7280;">+${unique.length - 3} weitere</div>` : '');
+  }).join('') + (unique.length > 3 ? `<div style="font-size:10px;color:var(--popup-text-muted);">+${unique.length - 3} weitere</div>` : '');
 }
 
 /**
@@ -222,7 +224,7 @@ function buildNfzTooltipHtml(features: Array<{ properties: Record<string, unknow
 function buildNfzPopupHtml(features: Array<{ properties: Record<string, unknown> }>): string {
   const unique = dedupeFeatures(features);
 
-  const header = `<div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:12px;min-width:220px;max-width:320px;">`;
+  const header = `<div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:12px;min-width:220px;max-width:320px;color:var(--text-primary);">`;
   const footer = `</div>`;
 
   const items = unique.map((f, idx) => {
@@ -236,21 +238,21 @@ function buildNfzPopupHtml(features: Array<{ properties: Record<string, unknown>
     const extRef = p.external_reference ? String(p.external_reference) : '';
 
     const rows: string[] = [];
-    if (typeLabel) rows.push(`<span style="color:#999;">Typ:</span><span style="color:${typeColor};">${typeLabel}</span>`);
-    if (altText) rows.push(`<span style="color:#999;">Hoehe:</span><span>${altText}</span>`);
-    if (legal) rows.push(`<span style="color:#999;">Rechtsgrundlage:</span><span>${legal}</span>`);
-    if (extRef) rows.push(`<span style="color:#999;">Referenz:</span><span>${extRef}</span>`);
+    if (typeLabel) rows.push(`<span style="color:var(--text-muted);">Typ:</span><span style="color:${typeColor};">${typeLabel}</span>`);
+    if (altText) rows.push(`<span style="color:var(--text-muted);">Hoehe:</span><span>${altText}</span>`);
+    if (legal) rows.push(`<span style="color:var(--text-muted);">Rechtsgrundlage:</span><span>${legal}</span>`);
+    if (extRef) rows.push(`<span style="color:var(--text-muted);">Referenz:</span><span>${extRef}</span>`);
 
     // Show any extra properties not already displayed
     const knownKeys = new Set(['name', 'type_code', 'legal_ref', 'lower_limit_altitude', 'lower_limit_unit', 'lower_limit_alt_ref', 'upper_limit_altitude', 'upper_limit_unit', 'upper_limit_alt_ref', 'external_reference']);
     Object.entries(p).forEach(([key, val]) => {
       if (!knownKeys.has(key) && val != null && val !== '') {
-        rows.push(`<span style="color:#999;">${key.replace(/_/g, ' ')}:</span><span>${String(val)}</span>`);
+        rows.push(`<span style="color:var(--text-muted);">${key.replace(/_/g, ' ')}:</span><span>${String(val)}</span>`);
       }
     });
 
     return `
-      <div style="${idx > 0 ? 'margin-top:8px;padding-top:8px;border-top:1px solid #333;' : ''}">
+      <div style="${idx > 0 ? 'margin-top:8px;padding-top:8px;border-top:1px solid var(--border);' : ''}">
         <strong style="font-size:13px;">${name}</strong>
         <div style="display:grid;grid-template-columns:auto 1fr;gap:2px 8px;margin-top:4px;">
           ${rows.join('')}
@@ -273,6 +275,7 @@ interface Props {
   nfzRadiusMeters: number | null;
   droneRadiusCenter: { lat: number; lon: number } | null;
   droneRadiusMeters: number | null;
+  trails?: TrailData[];
 }
 
 // Store drone data for map event handlers (avoids stale closures)
@@ -280,9 +283,15 @@ let droneDataMap: Map<string, Drone> = new Map();
 // Store active WMS layer string for event handlers
 let currentWmsLayers = '';
 
-export default function MapComponent({ drones, selectedDrone, userLocation, onDroneClick, activeNoFlyLayers, nfzBounds, nfzRadiusCenter, nfzRadiusMeters, droneRadiusCenter, droneRadiusMeters }: Props) {
+const TILE_URLS = {
+  dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+  light: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+};
+
+export default function MapComponent({ drones, selectedDrone, userLocation, onDroneClick, activeNoFlyLayers, nfzBounds, nfzRadiusCenter, nfzRadiusMeters, droneRadiusCenter, droneRadiusMeters, trails = [] }: Props) {
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
   const droneMarkersRef = useRef<Map<string, L.CircleMarker>>(new Map());
   const selectedMarkerRef = useRef<L.CircleMarker | null>(null);
   const userMarkerRef = useRef<L.Marker | null>(null);
@@ -294,7 +303,9 @@ export default function MapComponent({ drones, selectedDrone, userLocation, onDr
   const nfzTooltipRef = useRef<HTMLDivElement | null>(null);
   const nfzFetchControllerRef = useRef<AbortController | null>(null);
   const nfzDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const trailPolylinesRef = useRef<Map<string, L.Polyline>>(new Map());
   const navigate = useNavigate();
+  const { theme } = useTheme();
 
   // Initialize map with Canvas renderer for correct positioning at all zoom levels
   useEffect(() => {
@@ -308,8 +319,9 @@ export default function MapComponent({ drones, selectedDrone, userLocation, onDr
       preferCanvas: true,
     });
 
-    // Dark map tiles
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    // Map tiles (theme-aware, initial)
+    const initialTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+    tileLayerRef.current = L.tileLayer(TILE_URLS[initialTheme as keyof typeof TILE_URLS] || TILE_URLS.dark, {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
       subdomains: 'abcd',
       maxZoom: 19,
@@ -330,13 +342,14 @@ export default function MapComponent({ drones, selectedDrone, userLocation, onDr
       'display:none',
       'pointer-events:none',
       'z-index:2000',
-      'background:rgba(26,29,39,0.95)',
-      'border:1px solid rgba(239,68,68,0.4)',
+      'background:var(--popup-bg)',
+      'border:1px solid var(--popup-border)',
       'border-radius:8px',
       'padding:8px 12px',
       'font-family:-apple-system,BlinkMacSystemFont,sans-serif',
       'max-width:280px',
-      'box-shadow:0 4px 16px rgba(0,0,0,0.5)',
+      'box-shadow:0 4px 16px rgba(0,0,0,0.3)',
+      'color:var(--popup-text)',
     ].join(';');
     mapContainerRef.current.appendChild(tooltipDiv);
     nfzTooltipRef.current = tooltipDiv;
@@ -437,6 +450,15 @@ export default function MapComponent({ drones, selectedDrone, userLocation, onDr
       mapRef.current = null;
     };
   }, []);
+
+  // Switch tile layer when theme changes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !tileLayerRef.current) return;
+
+    const url = TILE_URLS[theme] || TILE_URLS.dark;
+    tileLayerRef.current.setUrl(url);
+  }, [theme]);
 
   // Update user location marker
   useEffect(() => {
@@ -711,6 +733,48 @@ export default function MapComponent({ drones, selectedDrone, userLocation, onDr
       }
     }
   }, [drones, selectedDrone, onDroneClick, navigate, droneRadiusCenter, droneRadiusMeters]);
+
+  // Render flight trail polylines
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const currentIds = new Set(trails.map(t => t.id));
+
+    // Remove polylines no longer in trails
+    trailPolylinesRef.current.forEach((polyline, id) => {
+      if (!currentIds.has(id)) {
+        polyline.remove();
+        trailPolylinesRef.current.delete(id);
+      }
+    });
+
+    // Update or create polylines
+    for (const trail of trails) {
+      if (trail.points.length < 2) continue;
+      const existing = trailPolylinesRef.current.get(trail.id);
+
+      if (existing) {
+        existing.setLatLngs(trail.points);
+        existing.setStyle({
+          dashArray: trail.dashed ? '8, 6' : undefined,
+          color: trail.color,
+        });
+      } else {
+        const polyline = L.polyline(trail.points, {
+          color: trail.color,
+          weight: 3,
+          opacity: trail.dashed ? 0.5 : 0.8,
+          dashArray: trail.dashed ? '8, 6' : undefined,
+          interactive: true,
+        })
+          .addTo(map)
+          .bindTooltip(trail.label, { sticky: true, direction: 'top' });
+        polyline.bringToBack();
+        trailPolylinesRef.current.set(trail.id, polyline);
+      }
+    }
+  }, [trails]);
 
   return (
     <div

@@ -7,6 +7,10 @@ export interface Drone {
   latitude: number;
   longitude: number;
   altitude: number;
+  altitude_baro: number | null;   // barometric altitude MSL (meters)
+  altitude_geom: number | null;   // geometric/GPS altitude (meters)
+  ground_elevation?: number | null; // terrain elevation MSL (meters) — from elevation API
+  altitude_agl?: number | null;     // above ground level (meters) — computed
   pilot_latitude: number | null;
   pilot_longitude: number | null;
   signal_strength: number | null;
@@ -20,6 +24,9 @@ export interface Drone {
   distance?: number;
   source?: string;
   source_label?: string;
+  icao_hex?: string;
+  ogn_aircraft_type?: number;
+  ogn_aircraft_type_label?: string;
 }
 
 export interface FAAData {
@@ -81,6 +88,8 @@ export interface AircraftLookup {
   airline_country?: string;
   origin?: { name?: string; icao?: string; iata?: string; city?: string };
   destination?: { name?: string; icao?: string; iata?: string; city?: string };
+  ogn_cn?: string;
+  ogn_device_type?: string;
 }
 
 export interface DataSourceConfig {
@@ -91,4 +100,41 @@ export interface DataSourceConfig {
 
 export interface DataSourceSettings {
   sources: Record<string, DataSourceConfig>;
+}
+
+// ─── Tracking ────────────────────────────────────────────
+
+export interface TrailPoint {
+  lat: number;
+  lon: number;
+  altitude: number;
+  timestamp: number;
+}
+
+export type TrackingState = 'tracking' | 'untracked';
+
+export interface TrackedFlight {
+  droneId: string;
+  droneName: string;
+  source?: string;
+  state: TrackingState;
+  trail: TrailPoint[];
+  color: string;
+  startedAt: number;
+}
+
+export interface ArchivedTrailSummary {
+  id: string;
+  droneId: string;
+  droneName: string;
+  source?: string;
+  color: string;
+  startedAt: number;
+  archivedAt: number;
+  expiresAt: number;
+  pointCount: number;
+}
+
+export interface ArchivedTrail extends ArchivedTrailSummary {
+  trail: TrailPoint[];
 }

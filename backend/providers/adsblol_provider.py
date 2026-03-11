@@ -43,12 +43,17 @@ class AdsbLolProvider(BaseProvider):
                 continue
 
             gs = ac.get("gs") or 0
-            speed_ms = gs * 0.5144
+            speed_ms = gs * 0.514444
 
-            alt_ft = ac.get("alt_baro")
-            if isinstance(alt_ft, str):
-                alt_ft = 0
-            altitude = (alt_ft or 0) / 3.281
+            # Altitude: barometric in feet -> meters (1 ft = 0.3048 m)
+            alt_baro_ft = ac.get("alt_baro")
+            if isinstance(alt_baro_ft, str):
+                alt_baro_ft = 0
+            altitude_baro = (alt_baro_ft or 0) * 0.3048
+
+            # Altitude: geometric (GPS) in feet -> meters
+            alt_geom_ft = ac.get("alt_geom")
+            altitude_geom = (alt_geom_ft or 0) * 0.3048 if alt_geom_ft else None
 
             name = (ac.get("flight") or ac.get("r") or ac.get("hex", "")).strip()
 
@@ -57,7 +62,9 @@ class AdsbLolProvider(BaseProvider):
                 "name": name or ac.get("hex", "unknown"),
                 "latitude": lat,
                 "longitude": lon,
-                "altitude": round(altitude, 1),
+                "altitude": round(altitude_baro, 1),
+                "altitude_baro": round(altitude_baro, 1),
+                "altitude_geom": round(altitude_geom, 1) if altitude_geom is not None else None,
                 "speed": round(speed_ms, 1),
                 "signal_strength": ac.get("rssi"),
                 "status": "active" if speed_ms > 1 else "idle",

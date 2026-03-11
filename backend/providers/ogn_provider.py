@@ -17,6 +17,26 @@ logger = logging.getLogger("providers.ogn")
 
 OGN_API = "https://live.glidernet.org/lxml.php"
 
+# OGN aircraft type codes (field index 10)
+OGN_AIRCRAFT_TYPES = {
+    0: "Unknown",
+    1: "Segelflugzeug",
+    2: "Schleppflugzeug",
+    3: "Helikopter",
+    4: "Fallschirmspringer",
+    5: "Absetzflugzeug",
+    6: "Hängegleiter",
+    7: "Gleitschirm",
+    8: "Motorflugzeug",
+    9: "Jet / Mehrmotorig",
+    10: "Unbekannt",
+    11: "Ballon",
+    12: "Luftschiff",
+    13: "UAV / Drohne",
+    14: "Bodenstation",
+    15: "Sonstiges",
+}
+
 
 class OgnProvider(BaseProvider):
     source_id = "ogn"
@@ -75,20 +95,38 @@ class OgnProvider(BaseProvider):
             except (ValueError, IndexError):
                 speed_ms = 0.0
 
+            # Aircraft type code (field 10)
+            try:
+                aircraft_type_code = int(parts[10]) if len(parts) > 10 else 0
+            except ValueError:
+                aircraft_type_code = 0
+
+            # ICAO hex code from Mode-S transponder (field 12), "0" means no transponder
+            icao_hex = parts[12] if len(parts) > 12 and parts[12] != "0" else None
+
             ogn_id = parts[13] if len(parts) > 13 else parts[3]
 
-            results.append({
+            drone = {
                 "id": ogn_id,
                 "name": name,
                 "latitude": lat,
                 "longitude": lon,
                 "altitude": round(altitude, 1),
+                "altitude_baro": None,  # OGN has no barometric altitude
+                "altitude_geom": round(altitude, 1),  # OGN altitude is GPS-based (AMSL)
                 "speed": round(speed_ms, 1),
                 "status": "active" if speed_ms > 1 else "idle",
                 "basic_id": ogn_id,
                 "last_update": time.time(),
                 "flight_pattern": "glider",
-            })
+                "ogn_aircraft_type": aircraft_type_code,
+                "ogn_aircraft_type_label": OGN_AIRCRAFT_TYPES.get(aircraft_type_code, "Unbekannt"),
+            }
+
+            if icao_hex:
+                drone["icao_hex"] = icao_hex
+
+            results.append(drone)
 
         logger.info("OGN returned %d aircraft", len(results))
         return results
