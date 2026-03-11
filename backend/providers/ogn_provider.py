@@ -59,7 +59,7 @@ class OgnProvider(BaseProvider):
         }
 
         resp = requests.get(OGN_API, params=params, timeout=10, headers={
-            "User-Agent": "drone-mesh-mapper/1.0",
+            "User-Agent": "flight-arc/1.2",
             "Referer": "https://live.glidernet.org/",
         })
         resp.raise_for_status()

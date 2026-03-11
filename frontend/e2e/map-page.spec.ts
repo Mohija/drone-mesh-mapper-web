@@ -25,7 +25,7 @@ test.describe('Map Page', () => {
   });
 
   test('page loads with title bar', async ({ page }) => {
-    await expect(page.locator('text=Drone Mesh Mapper')).toBeVisible();
+    await expect(page.locator('text=FlightArc')).toBeVisible();
   });
 
   test('shows drone count', async ({ page }) => {

@@ -215,7 +215,7 @@ export default function MapPage() {
           whiteSpace: 'nowrap',
         }}>
           <span style={{ fontSize: 18 }}>&#128681;</span>
-          <span style={{ fontWeight: 600, fontSize: 14 }}>Drone Mesh Mapper</span>
+          <span style={{ fontWeight: 600, fontSize: 14 }}>FlightArc</span>
           <span style={{
             fontSize: 10,
             color: 'var(--text-muted)',

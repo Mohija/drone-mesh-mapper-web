@@ -1,6 +1,5 @@
 """
-Drone Simulator - Adapted from drone-mesh-mapper tester
-Generates realistic drone detection data for testing without hardware.
+Drone Simulator - Generates realistic drone detection data for testing without hardware.
 """
 
 import logging

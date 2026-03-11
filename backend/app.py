@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Drone Mesh Mapper Web - Python Backend
-Flask server wrapping drone-mesh-mapper tester with REST API.
+FlightArc - Python Backend
+Flask server with REST API for drone/aircraft tracking.
 Serves React frontend dist/ as static files (Production Server Pattern).
 """
 
@@ -734,7 +734,7 @@ def serve_frontend(path: str):
 
 
 if __name__ == "__main__":
-    logger.info("Drone Mesh Mapper Web starting on port %d", PORT)
+    logger.info("FlightArc starting on port %d", PORT)
     logger.info("Fleet center: %.6f, %.6f", DEFAULT_LAT, DEFAULT_LON)
     logger.info("Frontend dist: %s", FRONTEND_DIST)
     logger.info("Enabled sources: %s", settings.get_enabled_sources())

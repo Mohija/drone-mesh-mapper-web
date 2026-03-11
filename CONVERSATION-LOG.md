@@ -1,4 +1,4 @@
-# Conversation Log: Drone Mesh Mapper Web Frontend
+# Conversation Log: FlightArc (ehem. Drone Mesh Mapper)
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
@@ -475,6 +475,26 @@
 - `frontend/src/components/MapPage.tsx` - Version im Header anzeigen
 - `manifest.json` - Version 1.0.0 → 1.1.0
 - `frontend/package.json` - Version 1.0.0 → 1.1.0
+- `frontend/dist/` - Rebuild
+
+### 2026-03-11 - Projekt-Umbenennung: FlightArc (v1.2.0)
+**Aenderungen:**
+- **Rename:** "Drone Mesh Mapper" → "FlightArc" in allen Dateien
+- **Version Bump:** 1.1.0 → 1.2.0
+- Aktualisiert: manifest.json, package.json, index.html, MapPage Header, Backend Docstrings/Logger, OGN User-Agent, .env.example, E2E-Tests, CONVERSATION-LOG
+
+**Dateien:**
+- `manifest.json` - Name, displayName, description, service name, version
+- `frontend/package.json` - name, version
+- `frontend/index.html` - Title Tag
+- `frontend/src/components/MapPage.tsx` - Header-Text
+- `backend/app.py` - Docstring, Logger
+- `backend/drone_simulator.py` - Docstring
+- `backend/providers/ogn_provider.py` - User-Agent
+- `.env.example` - Kommentar
+- `frontend/e2e/map-page.spec.ts` - Erwarteter Titel
+- `frontend/e2e/drone-detail.spec.ts` - Erwarteter Titel
+- `CONVERSATION-LOG.md` - Titel
 - `frontend/dist/` - Rebuild
 
 ## Offene Aufgaben

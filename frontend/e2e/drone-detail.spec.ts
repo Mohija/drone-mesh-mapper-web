@@ -54,7 +54,7 @@ test.describe('Drone Detail Page', () => {
     await expect(page.locator('text=Desert Eagle')).toBeVisible({ timeout: 10000 });
     await page.locator('text=/← Karte/').click();
 
-    await expect(page.locator('text=Drone Mesh Mapper')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('text=FlightArc')).toBeVisible({ timeout: 5000 });
   });
 
   test('nonexistent drone shows error', async ({ page }) => {
@@ -70,7 +70,7 @@ test.describe('Drone Detail Page', () => {
     await expect(page.locator('text=Zur Karte')).toBeVisible({ timeout: 10000 });
     await page.locator('text=Zur Karte').click();
 
-    await expect(page.locator('text=Drone Mesh Mapper')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('text=FlightArc')).toBeVisible({ timeout: 5000 });
   });
 
   test('all configured drones accessible', async ({ page }) => {
