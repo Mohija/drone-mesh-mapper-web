@@ -9,6 +9,24 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from app import app as flask_app
 from drone_simulator import DroneFleet, DroneSimulator
+from settings import SettingsManager, SETTINGS_FILE
+from providers import ProviderRegistry
+
+
+@pytest.fixture(autouse=True)
+def reset_settings_to_simulator_only():
+    """Ensure only simulator is enabled before each test."""
+    from app import settings as app_settings
+    app_settings.update({
+        "sources": {
+            "simulator": {"enabled": True},
+            "opensky": {"enabled": False},
+            "adsbfi": {"enabled": False},
+            "adsblol": {"enabled": False},
+            "ogn": {"enabled": False},
+        }
+    })
+    yield
 
 
 @pytest.fixture
@@ -43,3 +61,15 @@ def drone():
         center_lat=50.1109,
         center_lon=8.6821,
     )
+
+
+@pytest.fixture
+def settings_manager():
+    """Create a SettingsManager for testing."""
+    return SettingsManager()
+
+
+@pytest.fixture
+def registry(fleet):
+    """Create a ProviderRegistry with a test fleet."""
+    return ProviderRegistry(fleet)

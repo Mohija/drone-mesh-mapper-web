@@ -1,30 +1,62 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import L from 'leaflet';
 import type { Drone, UserLocation } from '../types/drone';
 import { fetchDrones, setFleetCenter } from '../api';
 import MapComponent from './MapComponent';
 import StatusPanel from './StatusPanel';
 import GeolocationButton from './GeolocationButton';
+import NoFlyZonesPanel from './NoFlyZonesPanel';
+import {
+  DEFAULT_ENABLED_LAYERS,
+  NFZ_LAYERS,
+  type NoFlyCategory,
+  getLayersByCategory,
+} from '../config/noFlyZones';
+
+const DEFAULT_RADIUS = 50000; // 50km
+const DEFAULT_CENTER = { lat: 52.0302, lon: 8.5325 }; // Bielefeld
 
 export default function MapPage() {
+  const navigate = useNavigate();
   const [drones, setDrones] = useState<Drone[]>([]);
   const [selectedDrone, setSelectedDrone] = useState<Drone | null>(null);
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [droneCount, setDroneCount] = useState(0);
+  const [radiusEnabled, setRadiusEnabled] = useState(true);
+  const [radius, setRadius] = useState(DEFAULT_RADIUS);
+  const [noFlyEnabled, setNoFlyEnabled] = useState(false);
+  const [noFlyPanelOpen, setNoFlyPanelOpen] = useState(false);
+  const [nfzRadiusEnabled, setNfzRadiusEnabled] = useState(false);
+  const [nfzRadius, setNfzRadius] = useState(50000); // 50km default
+  const [enabledNoFlyLayers, setEnabledNoFlyLayers] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem('nofly-layers');
+      return stored ? JSON.parse(stored) : DEFAULT_ENABLED_LAYERS;
+    } catch {
+      return DEFAULT_ENABLED_LAYERS;
+    }
+  });
   const intervalRef = useRef<ReturnType<typeof setInterval>>();
+
+  // Persist no-fly layer selection
+  useEffect(() => {
+    localStorage.setItem('nofly-layers', JSON.stringify(enabledNoFlyLayers));
+  }, [enabledNoFlyLayers]);
 
   const loadDrones = useCallback(async () => {
     try {
-      const data = await fetchDrones(
-        userLocation?.latitude,
-        userLocation?.longitude,
-        10000
-      );
+      // Always send center + radius. Use GPS position if available, otherwise default (Bielefeld)
+      const lat = userLocation ? userLocation.latitude : DEFAULT_CENTER.lat;
+      const lon = userLocation ? userLocation.longitude : DEFAULT_CENTER.lon;
+      const r = radiusEnabled ? radius : 0;
+
+      const data = await fetchDrones(lat, lon, r);
       setDrones(data.drones);
       setDroneCount(data.count);
       setError(null);
 
-      // Update selected drone data if one is selected (functional form avoids stale closure)
       setSelectedDrone(prev => {
         if (!prev) return null;
         return data.drones.find((d) => d.id === prev.id) || prev;
@@ -32,16 +64,17 @@ export default function MapPage() {
     } catch (err) {
       setError('Verbindung zum Server fehlgeschlagen');
     }
-  }, [userLocation]);
+  }, [userLocation, radiusEnabled, radius]);
 
-  // Polling interval
+  // Polling interval - slower when many drones to reduce render load
   useEffect(() => {
     loadDrones();
-    intervalRef.current = setInterval(loadDrones, 2000);
+    const interval = droneCount > 100 ? 5000 : 2000;
+    intervalRef.current = setInterval(loadDrones, interval);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [loadDrones]);
+  }, [loadDrones, droneCount > 100]);
 
   const handleLocationFound = useCallback(async (loc: UserLocation) => {
     setUserLocation(loc);
@@ -60,6 +93,51 @@ export default function MapPage() {
     setSelectedDrone(null);
   }, []);
 
+  const handleToggleNoFlyLayer = useCallback((layerId: string) => {
+    setEnabledNoFlyLayers(prev =>
+      prev.includes(layerId) ? prev.filter(id => id !== layerId) : [...prev, layerId]
+    );
+  }, []);
+
+  const handleToggleNoFlyCategory = useCallback((category: NoFlyCategory) => {
+    const catLayers = getLayersByCategory(category);
+    const catIds = catLayers.map(l => l.id);
+    setEnabledNoFlyLayers(prev => {
+      const allEnabled = catIds.every(id => prev.includes(id));
+      if (allEnabled) {
+        return prev.filter(id => !catIds.includes(id));
+      }
+      return [...prev.filter(id => !catIds.includes(id)), ...catIds];
+    });
+  }, []);
+
+  const handleToggleAllNoFly = useCallback((enabled: boolean) => {
+    setEnabledNoFlyLayers(enabled ? NFZ_LAYERS.map(l => l.id) : []);
+  }, []);
+
+  const activeNoFlyLayers = noFlyEnabled ? enabledNoFlyLayers : [];
+
+  // Compute NFZ bounds from position + radius (limits WMS tile loading area)
+  const nfzCenter = userLocation
+    ? { lat: userLocation.latitude, lon: userLocation.longitude }
+    : DEFAULT_CENTER;
+  const nfzBounds = useMemo(() => {
+    if (!nfzRadiusEnabled || !noFlyEnabled) return null;
+    const center = L.latLng(nfzCenter.lat, nfzCenter.lon);
+    // Convert radius in meters to approximate lat/lon delta
+    const latDelta = (nfzRadius / 111320); // ~111km per degree latitude
+    const lonDelta = (nfzRadius / (111320 * Math.cos(center.lat * Math.PI / 180)));
+    return L.latLngBounds(
+      [center.lat - latDelta, center.lng - lonDelta],
+      [center.lat + latDelta, center.lng + lonDelta],
+    );
+  }, [nfzRadiusEnabled, noFlyEnabled, nfzCenter.lat, nfzCenter.lon, nfzRadius]);
+
+  // Shared center for radii (GPS position or Bielefeld default)
+  const currentCenter = userLocation
+    ? { lat: userLocation.latitude, lon: userLocation.longitude }
+    : DEFAULT_CENTER;
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <MapComponent
@@ -67,6 +145,12 @@ export default function MapPage() {
         selectedDrone={selectedDrone}
         userLocation={userLocation}
         onDroneClick={handleDroneClick}
+        activeNoFlyLayers={activeNoFlyLayers}
+        nfzBounds={nfzBounds}
+        nfzRadiusCenter={nfzRadiusEnabled && noFlyEnabled ? nfzCenter : null}
+        nfzRadiusMeters={nfzRadiusEnabled && noFlyEnabled ? nfzRadius : null}
+        droneRadiusCenter={radiusEnabled ? currentCenter : null}
+        droneRadiusMeters={radiusEnabled ? radius : null}
       />
 
       {/* Top bar */}
@@ -78,7 +162,8 @@ export default function MapPage() {
         zIndex: 1000,
         display: 'flex',
         alignItems: 'center',
-        gap: 12,
+        gap: 8,
+        flexWrap: 'wrap',
       }}>
         <div style={{
           background: 'var(--bg-secondary)',
@@ -102,6 +187,255 @@ export default function MapPage() {
             {droneCount} Drohne{droneCount !== 1 ? 'n' : ''}
           </span>
         </div>
+
+        {/* Radius control */}
+        <div style={{
+          background: 'var(--bg-secondary)',
+          border: '1px solid var(--border)',
+          borderRadius: 8,
+          padding: '6px 12px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          whiteSpace: 'nowrap',
+        }}>
+          {/* Toggle */}
+          <button
+            onClick={() => setRadiusEnabled(prev => !prev)}
+            title={radiusEnabled ? 'Radius deaktivieren (alle anzeigen)' : 'Radius aktivieren'}
+            style={{
+              width: 32,
+              height: 18,
+              borderRadius: 9,
+              border: 'none',
+              background: radiusEnabled ? 'var(--accent)' : 'var(--bg-tertiary)',
+              cursor: 'pointer',
+              position: 'relative',
+              transition: 'background 0.2s',
+              flexShrink: 0,
+            }}
+          >
+            <div style={{
+              width: 14,
+              height: 14,
+              borderRadius: '50%',
+              background: '#fff',
+              position: 'absolute',
+              top: 2,
+              left: radiusEnabled ? 16 : 2,
+              transition: 'left 0.2s',
+            }} />
+          </button>
+
+          {radiusEnabled ? (
+            <>
+              <select
+                value={radius}
+                onChange={(e) => setRadius(Number(e.target.value))}
+                style={{
+                  background: 'var(--bg-tertiary)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 4,
+                  padding: '2px 4px',
+                  color: 'var(--text-primary)',
+                  fontSize: 12,
+                  cursor: 'pointer',
+                }}
+              >
+                <option value={5000}>5 km</option>
+                <option value={10000}>10 km</option>
+                <option value={25000}>25 km</option>
+                <option value={50000}>50 km</option>
+                <option value={100000}>100 km</option>
+                <option value={250000}>250 km</option>
+              </select>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Radius</span>
+            </>
+          ) : (
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Alle</span>
+          )}
+        </div>
+
+        {/* No-fly zones toggle */}
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => {
+              if (!noFlyEnabled) {
+                setNoFlyEnabled(true);
+                setNoFlyPanelOpen(true);
+              } else {
+                setNoFlyPanelOpen(prev => !prev);
+              }
+            }}
+            title="Flugverbotszonen"
+            data-testid="nofly-toggle"
+            style={{
+              background: noFlyEnabled ? 'rgba(239, 68, 68, 0.15)' : 'var(--bg-secondary)',
+              border: `1px solid ${noFlyEnabled ? 'var(--status-error)' : 'var(--border)'}`,
+              borderRadius: 8,
+              padding: '8px 12px',
+              cursor: 'pointer',
+              color: noFlyEnabled ? 'var(--status-error)' : 'var(--text-secondary)',
+              fontSize: 14,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <span style={{ fontSize: 16 }}>&#9888;</span>
+            <span>NFZ</span>
+            {noFlyEnabled && enabledNoFlyLayers.length > 0 && (
+              <span style={{
+                background: 'var(--status-error)',
+                color: '#fff',
+                borderRadius: 8,
+                padding: '0 5px',
+                fontSize: 10,
+                fontWeight: 700,
+                minWidth: 16,
+                textAlign: 'center',
+              }}>
+                {enabledNoFlyLayers.length}
+              </span>
+            )}
+          </button>
+
+          {/* Disable button (only when enabled) */}
+          {noFlyEnabled && (
+            <button
+              onClick={() => {
+                setNoFlyEnabled(false);
+                setNoFlyPanelOpen(false);
+              }}
+              title="Flugverbotszonen ausblenden"
+              data-testid="nofly-disable"
+              style={{
+                position: 'absolute',
+                top: -4,
+                right: -4,
+                width: 16,
+                height: 16,
+                borderRadius: '50%',
+                background: 'var(--bg-tertiary)',
+                border: '1px solid var(--border)',
+                color: 'var(--text-secondary)',
+                fontSize: 10,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 0,
+                lineHeight: 1,
+              }}
+            >
+              &#10005;
+            </button>
+          )}
+
+          {/* Layer selection panel */}
+          {noFlyPanelOpen && (
+            <NoFlyZonesPanel
+              enabledLayers={enabledNoFlyLayers}
+              onToggleLayer={handleToggleNoFlyLayer}
+              onToggleCategory={handleToggleNoFlyCategory}
+              onToggleAll={handleToggleAllNoFly}
+              onClose={() => setNoFlyPanelOpen(false)}
+            />
+          )}
+        </div>
+
+        {/* NFZ radius control (only when NFZ is enabled) */}
+        {noFlyEnabled && (
+          <div
+            data-testid="nfz-radius-control"
+            style={{
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--border)',
+              borderRadius: 8,
+              padding: '6px 12px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <button
+              onClick={() => setNfzRadiusEnabled(prev => !prev)}
+              data-testid="nfz-radius-toggle"
+              title={nfzRadiusEnabled ? 'NFZ Radius deaktivieren' : 'NFZ Radius aktivieren'}
+              style={{
+                width: 32,
+                height: 18,
+                borderRadius: 9,
+                border: 'none',
+                background: nfzRadiusEnabled ? 'var(--status-error)' : 'var(--bg-tertiary)',
+                cursor: 'pointer',
+                position: 'relative',
+                transition: 'background 0.2s',
+                flexShrink: 0,
+              }}
+            >
+              <div style={{
+                width: 14,
+                height: 14,
+                borderRadius: '50%',
+                background: '#fff',
+                position: 'absolute',
+                top: 2,
+                left: nfzRadiusEnabled ? 16 : 2,
+                transition: 'left 0.2s',
+              }} />
+            </button>
+
+            {nfzRadiusEnabled ? (
+              <>
+                <select
+                  value={nfzRadius}
+                  onChange={(e) => setNfzRadius(Number(e.target.value))}
+                  data-testid="nfz-radius-select"
+                  style={{
+                    background: 'var(--bg-tertiary)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 4,
+                    padding: '2px 4px',
+                    color: 'var(--text-primary)',
+                    fontSize: 12,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <option value={10000}>10 km</option>
+                  <option value={25000}>25 km</option>
+                  <option value={50000}>50 km</option>
+                  <option value={100000}>100 km</option>
+                  <option value={250000}>250 km</option>
+                </select>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>NFZ Radius</span>
+              </>
+            ) : (
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>NFZ &#x221E;</span>
+            )}
+          </div>
+        )}
+
+        {/* Settings button */}
+        <button
+          onClick={() => navigate('/settings')}
+          title="Datenquellen"
+          style={{
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--border)',
+            borderRadius: 8,
+            padding: '8px 12px',
+            cursor: 'pointer',
+            color: 'var(--text-secondary)',
+            fontSize: 16,
+            display: 'flex',
+            alignItems: 'center',
+          }}
+        >
+          &#9881;
+        </button>
 
         {error && (
           <div style={{

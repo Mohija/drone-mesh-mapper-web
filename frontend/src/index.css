@@ -60,6 +60,27 @@ body,
   color: var(--text-secondary) !important;
 }
 
+/* NFZ WMS tile layer: invert dark WMS colors to bright for visibility on dark map */
+.nfz-wms-tiles img {
+  filter: invert(1) hue-rotate(180deg) brightness(1.3) !important;
+}
+
+/* NFZ click popup styling for dark theme */
+.nfz-popup .leaflet-popup-content-wrapper {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+}
+
+.nfz-popup .leaflet-popup-tip {
+  background: var(--bg-secondary) !important;
+}
+
+.nfz-popup .leaflet-popup-close-button {
+  color: var(--text-secondary) !important;
+}
+
 /* Drone marker pulse animation */
 @keyframes pulse {
   0% {

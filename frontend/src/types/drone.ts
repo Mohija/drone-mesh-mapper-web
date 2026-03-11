@@ -2,15 +2,15 @@ export type DroneStatus = 'active' | 'idle' | 'error' | 'lost';
 
 export interface Drone {
   id: string;
-  mac: string;
+  mac: string | null;
   name: string;
   latitude: number;
   longitude: number;
   altitude: number;
-  pilot_latitude: number;
-  pilot_longitude: number;
-  signal_strength: number;
-  battery: number;
+  pilot_latitude: number | null;
+  pilot_longitude: number | null;
+  signal_strength: number | null;
+  battery: number | null;
   speed: number;
   status: DroneStatus;
   flight_pattern: string;
@@ -18,6 +18,8 @@ export interface Drone {
   faa_data: FAAData | null;
   last_update: number;
   distance?: number;
+  source?: string;
+  source_label?: string;
 }
 
 export interface FAAData {
@@ -52,4 +54,15 @@ export interface DronesResponse {
   drones: Drone[];
   count: number;
   center: { lat: number; lon: number };
+  sources?: string[];
+}
+
+export interface DataSourceConfig {
+  enabled: boolean;
+  label: string;
+  description: string;
+}
+
+export interface DataSourceSettings {
+  sources: Record<string, DataSourceConfig>;
 }

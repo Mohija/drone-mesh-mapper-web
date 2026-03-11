@@ -11,6 +11,14 @@ const STATUS_COLORS: Record<string, string> = {
   lost: 'var(--status-lost)',
 };
 
+const SOURCE_COLORS: Record<string, string> = {
+  simulator: '#3b82f6',
+  opensky: '#f59e0b',
+  adsbfi: '#8b5cf6',
+  adsblol: '#ec4899',
+  ogn: '#10b981',
+};
+
 function signalColor(rssi: number): string {
   if (rssi >= -50) return 'var(--signal-good)';
   if (rssi >= -70) return 'var(--signal-mid)';
@@ -131,9 +139,23 @@ export default function DroneDetailPage() {
           &#8592; Karte
         </button>
         <div>
-          <div style={{ fontSize: 20, fontWeight: 600 }}>{drone.name}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 20, fontWeight: 600 }}>{drone.name}</span>
+            {drone.source_label && (
+              <span style={{
+                background: `${SOURCE_COLORS[drone.source || ''] || '#6b7280'}22`,
+                color: SOURCE_COLORS[drone.source || ''] || '#6b7280',
+                padding: '2px 10px',
+                borderRadius: 4,
+                fontSize: 11,
+                fontWeight: 600,
+              }}>
+                {drone.source_label}
+              </span>
+            )}
+          </div>
           <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-            {drone.basic_id} &middot; {drone.mac}
+            {drone.basic_id}{drone.mac ? ` \u00b7 ${drone.mac}` : ''}
           </div>
         </div>
         <div style={{
@@ -171,33 +193,35 @@ export default function DroneDetailPage() {
           <StatGrid>
             <StatItem
               label="Signal"
-              value={`${drone.signal_strength} dBm`}
-              color={signalColor(drone.signal_strength)}
+              value={drone.signal_strength != null ? `${drone.signal_strength} dBm` : 'N/A'}
+              color={drone.signal_strength != null ? signalColor(drone.signal_strength) : undefined}
             />
             <StatItem
               label="Batterie"
-              value={`${drone.battery.toFixed(1)}%`}
-              color={batteryColor(drone.battery)}
+              value={drone.battery != null ? `${drone.battery.toFixed(1)}%` : 'N/A'}
+              color={drone.battery != null ? batteryColor(drone.battery) : undefined}
             />
             <StatItem label="Höhe" value={`${drone.altitude.toFixed(1)} m`} />
             <StatItem label="Geschwindigkeit" value={`${drone.speed.toFixed(1)} m/s`} />
           </StatGrid>
-          <div style={{ marginTop: 12 }}>
-            <div style={{
-              height: 6,
-              background: 'var(--bg-primary)',
-              borderRadius: 3,
-              overflow: 'hidden',
-            }}>
+          {drone.battery != null && (
+            <div style={{ marginTop: 12 }}>
               <div style={{
-                width: `${drone.battery}%`,
-                height: '100%',
-                background: batteryColor(drone.battery),
+                height: 6,
+                background: 'var(--bg-primary)',
                 borderRadius: 3,
-                transition: 'width 0.5s ease',
-              }} />
+                overflow: 'hidden',
+              }}>
+                <div style={{
+                  width: `${drone.battery}%`,
+                  height: '100%',
+                  background: batteryColor(drone.battery),
+                  borderRadius: 3,
+                  transition: 'width 0.5s ease',
+                }} />
+              </div>
             </div>
-          </div>
+          )}
         </Card>
 
         {/* Position */}
@@ -212,10 +236,12 @@ export default function DroneDetailPage() {
         </Card>
 
         {/* Pilot */}
-        <Card title="Pilot-Position">
-          <DetailRow label="Breitengrad" value={drone.pilot_latitude.toFixed(6)} mono />
-          <DetailRow label="Längengrad" value={drone.pilot_longitude.toFixed(6)} mono />
-        </Card>
+        {drone.pilot_latitude != null && drone.pilot_longitude != null && (
+          <Card title="Pilot-Position">
+            <DetailRow label="Breitengrad" value={drone.pilot_latitude.toFixed(6)} mono />
+            <DetailRow label="Längengrad" value={drone.pilot_longitude.toFixed(6)} mono />
+          </Card>
+        )}
 
         {/* FAA Data */}
         {drone.faa_data && (

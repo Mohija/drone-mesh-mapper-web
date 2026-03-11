@@ -31,10 +31,19 @@ interface Props {
   onClose: () => void;
 }
 
+const SOURCE_COLORS: Record<string, string> = {
+  simulator: '#3b82f6',
+  opensky: '#f59e0b',
+  adsbfi: '#8b5cf6',
+  adsblol: '#ec4899',
+  ogn: '#10b981',
+};
+
 export default function StatusPanel({ drone, onClose }: Props) {
   const navigate = useNavigate();
   const statusInfo = STATUS_LABELS[drone.status] || STATUS_LABELS.lost;
-  const signal = signalBar(drone.signal_strength);
+  const signal = drone.signal_strength != null ? signalBar(drone.signal_strength) : null;
+  const sourceColor = SOURCE_COLORS[drone.source || ''] || '#6b7280';
 
   return (
     <div style={{
@@ -59,9 +68,23 @@ export default function StatusPanel({ drone, onClose }: Props) {
         justifyContent: 'space-between',
       }}>
         <div>
-          <div style={{ fontSize: 16, fontWeight: 600 }}>{drone.name}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 16, fontWeight: 600 }}>{drone.name}</span>
+            {drone.source_label && (
+              <span style={{
+                background: `${sourceColor}22`,
+                color: sourceColor,
+                padding: '1px 8px',
+                borderRadius: 4,
+                fontSize: 10,
+                fontWeight: 600,
+              }}>
+                {drone.source_label}
+              </span>
+            )}
+          </div>
           <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
-            {drone.basic_id} &middot; {drone.mac}
+            {drone.basic_id}{drone.mac ? ` \u00b7 ${drone.mac}` : ''}
           </div>
         </div>
         <button
@@ -108,49 +131,57 @@ export default function StatusPanel({ drone, onClose }: Props) {
 
         {/* Signal */}
         <Section title="Signal">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end' }}>
-              {[1, 2, 3, 4].map((i) => (
-                <div
-                  key={i}
-                  style={{
-                    width: 5,
-                    height: 4 + i * 4,
-                    borderRadius: 1,
-                    background: i <= signal.level ? signal.color : 'var(--border)',
-                  }}
-                />
-              ))}
+          {signal ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end' }}>
+                {[1, 2, 3, 4].map((i) => (
+                  <div
+                    key={i}
+                    style={{
+                      width: 5,
+                      height: 4 + i * 4,
+                      borderRadius: 1,
+                      background: i <= signal.level ? signal.color : 'var(--border)',
+                    }}
+                  />
+                ))}
+              </div>
+              <span style={{ color: signal.color, fontSize: 14, fontWeight: 500 }}>
+                {drone.signal_strength} dBm
+              </span>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>({signal.label})</span>
             </div>
-            <span style={{ color: signal.color, fontSize: 14, fontWeight: 500 }}>
-              {drone.signal_strength} dBm
-            </span>
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>({signal.label})</span>
-          </div>
+          ) : (
+            <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>N/A</span>
+          )}
         </Section>
 
         {/* Battery */}
         <Section title="Batterie">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{
-              width: 120,
-              height: 8,
-              background: 'var(--bg-primary)',
-              borderRadius: 4,
-              overflow: 'hidden',
-            }}>
+          {drone.battery != null ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{
-                width: `${drone.battery}%`,
-                height: '100%',
-                background: batteryColor(drone.battery),
+                width: 120,
+                height: 8,
+                background: 'var(--bg-primary)',
                 borderRadius: 4,
-                transition: 'width 0.3s ease',
-              }} />
+                overflow: 'hidden',
+              }}>
+                <div style={{
+                  width: `${drone.battery}%`,
+                  height: '100%',
+                  background: batteryColor(drone.battery),
+                  borderRadius: 4,
+                  transition: 'width 0.3s ease',
+                }} />
+              </div>
+              <span style={{ color: batteryColor(drone.battery), fontWeight: 500 }}>
+                {drone.battery.toFixed(1)}%
+              </span>
             </div>
-            <span style={{ color: batteryColor(drone.battery), fontWeight: 500 }}>
-              {drone.battery.toFixed(1)}%
-            </span>
-          </div>
+          ) : (
+            <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>N/A</span>
+          )}
         </Section>
 
         {/* Position */}
@@ -166,10 +197,12 @@ export default function StatusPanel({ drone, onClose }: Props) {
         </Section>
 
         {/* Pilot */}
-        <Section title="Pilot">
-          <DataRow label="Breitengrad" value={drone.pilot_latitude.toFixed(6)} />
-          <DataRow label="Längengrad" value={drone.pilot_longitude.toFixed(6)} />
-        </Section>
+        {drone.pilot_latitude != null && drone.pilot_longitude != null && (
+          <Section title="Pilot">
+            <DataRow label="Breitengrad" value={drone.pilot_latitude.toFixed(6)} />
+            <DataRow label="Längengrad" value={drone.pilot_longitude.toFixed(6)} />
+          </Section>
+        )}
 
         {/* FAA Data */}
         {drone.faa_data && (

@@ -2,7 +2,7 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-04
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-11
 - **Typ:** Projekt | **Status:** Development
 
 ## Änderungshistorie
@@ -101,6 +101,181 @@
 - `frontend/src/components/MapComponent.tsx` - Map-Position persistieren über Remounts
 - `frontend/dist/` - Rebuild
 
+### 2026-03-10 - Provider Pattern: Oeffentliche Datenquellen
+**Änderungen:**
+- **Provider Pattern:** Abstrakte Basisklasse mit Caching, Error Handling und Normalisierung
+- **5 Datenquellen:** Simulator (Default ON), OpenSky Network, adsb.fi, adsb.lol, Open Glider Network
+- **Settings-System:** `settings.json` mit thread-safe SettingsManager, REST API (`GET/POST /api/settings`)
+- **Provider Registry:** Paralleles Fetching via ThreadPoolExecutor, Compound IDs (`{source}_{id}`)
+- **Settings-Seite:** Dark Theme UI mit Toggle-Switches pro Datenquelle
+- **Source-Marker:** Farbcodierung nach Quelle (Blau=Simulator, Orange=OpenSky, Lila=adsb.fi, Pink=adsb.lol, Gruen=OGN)
+- **Null-safe Rendering:** StatusPanel, DroneDetailPage, MapComponent behandeln fehlende Felder (signal, battery, pilot) mit "N/A"
+- **Source-Badge:** Label der Datenquelle in StatusPanel, DroneDetailPage und Map-Popup
+
+**Dateien:**
+- `backend/settings.py` - SettingsManager (load/save/thread-safe)
+- `backend/providers/__init__.py` - ProviderRegistry mit parallelem Fetching
+- `backend/providers/base_provider.py` - Abstrakte Basisklasse
+- `backend/providers/simulator_provider.py` - DroneFleet Wrapper
+- `backend/providers/opensky_provider.py` - OpenSky Network API
+- `backend/providers/adsbfi_provider.py` - adsb.fi API
+- `backend/providers/adsblol_provider.py` - adsb.lol API
+- `backend/providers/ogn_provider.py` - Open Glider Network API
+- `backend/app.py` - Registry + Settings Endpoints integriert
+- `frontend/src/types/drone.ts` - Nullable Felder, DataSourceSettings Interface
+- `frontend/src/api.ts` - fetchSettings/updateSettings, encodeURIComponent fuer Compound IDs
+- `frontend/src/App.tsx` - Route /settings
+- `frontend/src/components/SettingsPage.tsx` - Datenquellen-Verwaltung
+- `frontend/src/components/MapPage.tsx` - Settings-Button (Zahnrad)
+- `frontend/src/components/MapComponent.tsx` - Source-Farben, null-safe Popup
+- `frontend/src/components/StatusPanel.tsx` - Source-Badge, null-safe Signal/Batterie/Pilot
+- `frontend/src/components/DroneDetailPage.tsx` - Source-Badge, null-safe Stats
+- `frontend/dist/` - Rebuild
+
+### 2026-03-10 - Radius-Steuerung + Performance-Optimierung
+**Änderungen:**
+- **Radius zentriert auf Benutzer-Position:** Wenn Geolocation aktiv, wird der Radius um die eigene Position angewendet
+- **Radius-Toggle:** Button zum Ein-/Ausschalten des Radius-Filters (Aus = alle Drohnen anzeigen)
+- **Radius-Auswahl:** Dropdown mit 5/10/25/50/100/250 km Optionen (Default: 50km)
+- **Backend:** `radius=0` bedeutet kein Filter (Simulator gibt alle zurück, externe APIs nutzen MAX_EXTERNAL_RADIUS=500km)
+- **Radius-Bug Fix:** Cache berücksichtigt jetzt Parameter (lat/lon/radius) — bei Radius-Wechsel wird Cache invalidiert
+- **Cache-Key Fix:** `radius_key = 0 if radius_m <= 0 else max(round(radius_m, -2), 100)` verhindert Kollision zwischen radius=0 und kleinen positiven Werten
+- **Performance:** `L.circleMarker` mit Canvas-Renderer statt `L.DivIcon` (DOM-Elemente) — drastisch weniger DOM-Manipulation bei 300+ Markern
+- **Performance:** Polling-Intervall erhöht auf 5s wenn >100 Drohnen (sonst 2s)
+- **Performance:** Pulse-CSS-Animation entfernt (verursachte Repaints für jeden Marker)
+- **Default-Ort:** Bielefeld (52.0302, 8.5325) statt Frankfurt als Standard-Zentrum
+- **Radius immer aktiv:** lat/lon/radius werden immer gesendet (Default-Center wenn keine Geolocation)
+- **Zoom-Fix:** Canvas-Renderer (`preferCanvas: true`) statt SVG — korrekte Marker-Positionen bei allen Zoom-Stufen
+
+### 2026-03-10 - Umfassende Test-Abdeckung für Radius-Toggle
+**Änderungen:**
+- **Backend Tests (+18):** 105 Tests gesamt (vorher 87)
+  - `test_api.py`: radius=0 returns all, toggle-sequence, default radius, drone data structure
+  - `test_providers.py`: SimulatorRadiusFilter (5 Tests), BaseProviderCaching (+2), ExternalProviderDefaults (4)
+  - `test_settings.py`: Settings API und Datenquellen-Integration (9 Tests)
+- **E2E Tests (+10):** 39 Tests gesamt (vorher 29)
+  - `map-page.spec.ts`: Radius-Toggle UI (shows controls, disables/enables, API params, select changes), Settings-Navigation
+  - `api.spec.ts`: radius=0 API, toggle-sequence, Settings GET/POST
+  - Canvas-kompatible Marker-Klicks via `page.evaluate()` mit Leaflet interner API (`_leaflet_map`)
+
+**Dateien:**
+- `frontend/src/components/MapPage.tsx` - Radius-State, Toggle-Button, DEFAULT_CENTER Bielefeld, immer lat/lon senden
+- `frontend/src/components/MapComponent.tsx` - Canvas-Renderer, CircleMarker, `_leaflet_map` Exposure für E2E
+- `frontend/e2e/map-page.spec.ts` - 6 neue Tests (Radius-Toggle, Settings), Canvas-Marker-Klick-Helper
+- `frontend/e2e/api.spec.ts` - 4 neue Tests (radius=0, toggle-sequence, Settings API)
+- `backend/app.py` - Default-Center Bielefeld, Default-Radius 50km
+- `backend/providers/base_provider.py` - Cache-Invalidierung mit Parameter-Tuple, Cache-Key-Fix
+- `backend/providers/simulator_provider.py` - radius<=0 gibt alle Drohnen zurück
+- `backend/providers/__init__.py` - MAX_EXTERNAL_RADIUS für externe APIs wenn Radius deaktiviert
+- `backend/tests/test_api.py` - 4 neue Tests, Bielefeld-Koordinaten
+- `backend/tests/test_providers.py` - 8 neue Tests (Radius, Caching, External Defaults)
+- `.env.example` - Bielefeld als Default
+- `frontend/dist/` - Rebuild
+
+### 2026-03-11 - No-Flight-Zones (DIPUL WMS Integration) + Hover-Tooltip
+**Änderungen:**
+- **DIPUL WMS Integration:** Flugverbotszonen-Overlay basierend auf DFS Deutsche Flugsicherung WMS-Service
+- **WMS Endpoint:** `https://uas-betrieb.de/geoservices/dipul/wms` - 17 Layer in 5 Kategorien
+- **Kategorien:** Luftfahrt (4 Layer, default AN), Temporaer (1), Naturschutz (4), Infrastruktur (4), Sensible Bereiche (3)
+- **NFZ Toggle-Button:** In der Top-Bar mit Warn-Icon, Badge mit aktiver Layer-Anzahl, X-Button zum Deaktivieren
+- **Layer-Auswahl-Panel:** Dropdown mit Kategorie- und Einzel-Layer-Toggles, Master-Toggle (Alle an/aus)
+- **MapComponent:** `L.tileLayer.wms()` mit transparentem PNG-Overlay, dynamische Layer-Updates via `setParams()`
+- **Hover-Tooltip:** Beim Hovern ueber NFZ-Zonen wird per WMS GetFeatureInfo (direkt, CORS erlaubt) der Zonenname, Typ (Flughafen/Kontrollzone/etc.), Hoehengrenze und Rechtsgrundlage angezeigt
+- **GetFeatureInfo:** Debounced (200ms), AbortController fuer Cancellation, versteckt bei Zoom/Pan/Mouseout
+- **WMS Version:** 1.1.1 (maximale Kompatibilitaet mit Leaflet EPSG:3857)
+- **Backend Proxy:** `/api/nofly/check` (WMS-Verfuegbarkeitspruefung), `/api/nofly/info` (GetFeatureInfo-Proxy als Fallback)
+- **Logging:** `nofly` Logger fuer alle WMS-Proxy-Aufrufe (debug/info/warning/error)
+- **LocalStorage:** Layer-Auswahl wird persistent gespeichert
+- **Attribution:** "Geodaten: DFS, BKG 2026" wird bei aktiven Zonen angezeigt
+- **Positionspruefung:** Screenshots bei Frankfurt Airport (z11/z14) und Bielefeld (z10/z13) verifiziert - korrekte Ausrichtung
+- **Backend Tests (+18):** 123 Tests gesamt - NoFlyCheck (5 Tests), NoFlyFeatureInfo (13 Tests)
+- **Frontend Unit Tests (+11):** 56 Tests gesamt - noFlyZones config (20), API nofly functions (3)
+- **E2E Tests (+20):** 59 Tests gesamt - NFZ UI (12), Hover-Tooltip (3), NFZ API (5)
+- **API-Pruefung:** Alle WMS-Anbindungen einzeln getestet (GetCapabilities, GetMap, GetFeatureInfo, CORS)
+
+**Dateien:**
+- `frontend/src/config/noFlyZones.ts` - **NEU** Layer-Definitionen, Kategorien, WMS URL
+- `frontend/src/components/NoFlyZonesPanel.tsx` - **NEU** Layer-Auswahl-UI mit Kategorie-Toggles
+- `frontend/src/components/MapComponent.tsx` - WMS TileLayer, Hover GetFeatureInfo Tooltip, type_code Labels
+- `frontend/src/components/MapPage.tsx` - NFZ State-Management, Toggle-Button, Panel-Integration
+- `frontend/src/api.ts` - checkNoFlyWms(), fetchNoFlyInfo() API-Funktionen
+- `backend/app.py` - /api/nofly/check und /api/nofly/info Proxy-Endpoints, nofly_logger
+- `frontend/src/config/noFlyZones.test.ts` - **NEU** 20 Unit-Tests
+- `frontend/src/api.test.ts` - 3 neue Tests fuer nofly API
+- `frontend/e2e/nofly-zones.spec.ts` - **NEU** 20 E2E-Tests (UI + Hover + API)
+- `backend/tests/test_nofly.py` - **NEU** 18 Backend-Tests
+- `frontend/dist/` - Rebuild
+
+### 2026-03-11 - NFZ Infrastruktur-Sichtbarkeit + Bugfixes + Detail-Popups
+**Änderungen:**
+- **Infrastruktur-Layer unsichtbar:** Root Cause gefunden — WMS rendert alle Features in dunklen Farben (dunkelblau/lila), die auf der dunklen Karte (CartoDB Dark Matter) unsichtbar waren
+- **CSS Color Inversion:** `filter: invert(1) hue-rotate(180deg) brightness(1.3)` auf WMS-Tiles — wandelt dunkle Features in helle Farben um, perfekt sichtbar auf Dark Theme
+- **Alle 4 Infrastruktur-Layer verifiziert:** Bundesautobahnen (Pufferzonen), Stromleitungen (Linien), Windkraftanlagen (kleine Polygone in Norddeutschland), Kraftwerke (Punkte) — alle rendern korrekt und sind jetzt sichtbar
+- **FFH-Gebiete Layer Fix:** WMS-Layername korrigiert von `dipul:ffh_gebiete` (Unterstrich) zu `dipul:ffh-gebiete` (Bindestrich) — Layer war vorher nicht auffindbar (WMS "LayerNotDefined" Fehler)
+- **Klick-Popup:** Beim Klicken auf eine NFZ-Zone öffnet sich ein Leaflet-Popup mit detaillierten Informationen (Name, Typ, Höhengrenzen, Rechtsgrundlage, Referenz, und alle weiteren verfügbaren Properties)
+- **Popup Dark-Theme:** CSS-Styling für Leaflet-Popups angepasst (dunkler Hintergrund, heller Text)
+- **Tooltip-Verbesserungen:** Zeigt jetzt untere UND obere Höhengrenzen (vorher nur obere), kategoriespezifische Farben (rot=Luftfahrt, grün=Natur, gelb=Infrastruktur, lila=Sensibel, orange=Temporär)
+- **WMS Layer-Analyse:** Alle 34 verfügbaren DIPUL WMS-Layer identifiziert (17 konfiguriert, 17 weitere verfügbar)
+- **Property-Schema verifiziert:** Alle Layer nutzen gleiches Schema: `name`, `type_code`, `legal_ref`, `lower_limit_altitude/unit/alt_ref`, `upper_limit_altitude/unit/alt_ref`, `external_reference`
+
+**Dateien:**
+- `frontend/src/index.css` - CSS Filter für WMS-Tiles (invert+hue-rotate+brightness), Popup Dark-Theme
+- `frontend/src/config/noFlyZones.ts` - FFH-Layername Fix (Unterstrich → Bindestrich)
+- `frontend/src/components/MapComponent.tsx` - className für WMS-Layer, Klick-Handler mit Popup, Opacity 0.85, verbesserte Tooltip-Formatierung
+- `frontend/src/config/noFlyZones.test.ts` - FFH-Hyphen-Regression-Test
+- `frontend/e2e/nofly-zones.spec.ts` - Klick-Popup E2E-Test
+- `frontend/dist/` - Rebuild
+
+### 2026-03-11 - NFZ Radius-Begrenzung + Alle Layer verifiziert + Disable-Fix
+**Änderungen:**
+- **NFZ Radius-Begrenzung:** Optionaler Radius um aktuelle Position, begrenzt WMS-Tile-Ladung auf Umkreis
+  - Toggle-Button + Dropdown (10/25/50/100/250 km) erscheint wenn NFZ aktiviert
+  - Nutzt Leaflet `bounds`-Option auf WMS-TileLayer — verhindert Tile-Requests außerhalb des Radius
+  - Zentriert auf Benutzer-Position (GPS) oder Default-Position (Bielefeld)
+  - Deaktivierbar für unbegrenztes Laden (Symbol ∞)
+- **Alle 17 Layer einzeln verifiziert:** GetMap-Requests für jeden Layer bestätigt:
+  - 15/17 Layer haben sichtbare Daten bei Deutschland-Übersicht
+  - `temporaere_betriebseinschraenkungen`: Leer (keine aktuellen temporären Einschränkungen)
+  - `kraftwerke`: Sehr kleine Punkt-Features, sichtbar bei höherem Zoom
+- **Enable/Disable verifiziert:** 4 dedizierte E2E-Tests bestätigen:
+  - Aktivieren lädt WMS-Tiles (`.nfz-wms-tiles img` Elemente vorhanden)
+  - Deaktivieren entfernt alle Tiles, versteckt Tooltip, entfernt Disable-Button
+  - Erneutes Aktivieren nach Deaktivieren funktioniert
+  - "Alle aus" im Panel entfernt Tiles
+- **WMS Layer neu erstellt bei Bounds-Änderung:** `bounds` kann nicht dynamisch aktualisiert werden → Layer wird entfernt und mit neuen Bounds neu erstellt
+- **E2E Tests (+9):** 30 NFZ-Tests gesamt — Enable/Disable (4), Radius-Control (4), Visual Rendering (1)
+
+**Dateien:**
+- `frontend/src/components/MapPage.tsx` - NFZ Radius State (nfzRadiusEnabled, nfzRadius), Bounds-Berechnung, Radius-UI-Control
+- `frontend/src/components/MapComponent.tsx` - nfzBounds Prop, bounds-basierte WMS-Layer-Erstellung, Layer-Recreate bei Bounds-Änderung
+- `frontend/e2e/nfz-verify.spec.ts` - **NEU** 9 E2E-Tests (Enable/Disable, Radius, Visual)
+- `frontend/dist/` - Rebuild
+
+### 2026-03-11 - Drohnen-Deduplizierung + Radius-Visualisierung + NFZ Clip-Path
+**Änderungen:**
+- **Drohnen-Deduplizierung:** Wenn dieselbe Drohne (gleiche `basic_id`) aus mehreren Quellen erscheint, wird nur die Quelle mit den meisten Metadaten behalten
+  - Scoring-System: Zählt vorhandene Felder (pilot_lat/lon, battery, signal_strength, faa_data, mac, flight_pattern)
+  - Priorisierung: Simulator (alle Daten) > adsb.fi/adsb.lol (Signal) > OpenSky > OGN
+  - Logging: Debug-Meldung bei jeder Deduplizierung, Info-Meldung mit Gesamt-Statistik
+  - 9 neue Unit-Tests für Deduplizierungs-Logik und Scoring
+- **NFZ Radius Clip-Path:** WMS-Tiles werden per CSS `clip-path: circle()` exakt auf den Radius zugeschnitten
+  - Eigene Leaflet-Pane `nfz` für WMS-Layer mit clip-path
+  - `latLngToLayerPoint` + meters-to-pixels Berechnung für zoom-unabhängiges Clipping
+  - Aktualisiert auf `zoomend`/`moveend` — Position bleibt geographisch fixiert beim Panning
+  - Gestrichelte rote Kreislinie (`L.circle`) als zusätzlicher visueller Rand-Indikator
+  - Leaflet `bounds`-Option bleibt für Performance (verhindert Tile-Requests außerhalb)
+- **Drohnen-Radius Kreis:** Gestrichelte blaue Kreislinie zeigt den Drohnen-Suchradius auf der Karte
+  - `L.circle()` mit Position (GPS oder Bielefeld) und gewähltem Radius
+  - Erscheint wenn Drohnen-Radius aktiv, verschwindet wenn deaktiviert
+  - Unabhängig vom Zoom-Level da Leaflet `L.circle` in Metern arbeitet
+
+**Dateien:**
+- `backend/providers/__init__.py` - `_metadata_score()`, `_deduplicate_drones()`, Integration in `get_all_drones()`
+- `backend/tests/test_providers.py` - 9 neue Tests (TestDroneDeduplication)
+- `frontend/src/components/MapComponent.tsx` - NFZ Pane + clip-path, Drohnen-Radius L.Circle, NFZ L.Circle
+- `frontend/src/components/MapPage.tsx` - droneRadiusCenter/droneRadiusMeters Props
+- `frontend/dist/` - Rebuild
+
 ## Offene Aufgaben
 - [ ] WebSocket-Integration für echte Push-Updates statt Polling
 - [ ] ESP 8266 MicroPython-Anpassung
@@ -110,5 +285,11 @@
 ## Notizen
 - Simulation generiert 5 Drohnen mit verschiedenen Flugmustern (linear, circular, waypoint, search, hover)
 - Drohnen-Positionen basierend auf dem drone-mesh-mapper Tester-Format
-- Standard-Zentrum: Frankfurt (50.1109, 8.6821) - kann über Geolocation oder ENV angepasst werden
-- Polling-Intervall: 2 Sekunden
+- Standard-Zentrum: Bielefeld (52.0302, 8.5325) - kann über Geolocation oder ENV angepasst werden
+- Polling-Intervall: 2s (normal), 5s (>100 Drohnen)
+- DIPUL WMS: 34 Layer gesamt (17 konfiguriert), Daten von DFS Deutsche Flugsicherung, aktualisiert im AIRAC-Zyklus (28 Tage)
+- DIPUL WMS CORS erlaubt (`Access-Control-Allow-Origin: *`) - GetFeatureInfo direkt vom Frontend moeglich
+- DIPUL WMS rendert in dunklen Farben → CSS `filter: invert(1) hue-rotate(180deg) brightness(1.3)` fuer Dark Theme noetig
+- Hover-Tooltip: Zeigt Zonenname, Typ, Hoehengrenzen, Rechtsgrundlage. Klick-Popup: Vollstaendige Details inkl. Referenz
+- FFH-Gebiete: WMS-Layer heisst `dipul:ffh-gebiete` (Bindestrich!), nicht `dipul:ffh_gebiete`
+- Test-Abdeckung: 132 Backend-Tests, 57 Frontend Unit-Tests, 69 E2E-Tests (30 davon NFZ-spezifisch)

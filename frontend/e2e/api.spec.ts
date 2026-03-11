@@ -12,21 +12,72 @@ test.describe('API Endpoints', () => {
     const res = await request.get('/api/drones');
     expect(res.status()).toBe(200);
     const data = await res.json();
-    expect(data.count).toBe(5);
-    expect(data.drones).toHaveLength(5);
+    expect(data.count).toBeGreaterThanOrEqual(5);
+    expect(data.drones.length).toBe(data.count);
     expect(data.center).toHaveProperty('lat');
     expect(data.center).toHaveProperty('lon');
+    expect(data).toHaveProperty('sources');
   });
 
   test('GET /api/drones with radius filter', async ({ request }) => {
-    const res = await request.get('/api/drones?lat=50.1109&lon=8.6821&radius=50000');
+    const res = await request.get('/api/drones?lat=52.0302&lon=8.5325&radius=50000');
     expect(res.status()).toBe(200);
     const data = await res.json();
-    expect(data.count).toBe(5);
-    // Filtered results should have distance field
-    for (const drone of data.drones) {
-      expect(drone).toHaveProperty('distance');
-    }
+    expect(data.count).toBeGreaterThanOrEqual(5);
+  });
+
+  test('GET /api/drones with radius=0 returns all drones', async ({ request }) => {
+    // radius=0 disables filter - should return all drones even far from center
+    const res = await request.get('/api/drones?lat=0&lon=0&radius=0');
+    expect(res.status()).toBe(200);
+    const data = await res.json();
+    expect(data.count).toBeGreaterThanOrEqual(5);
+  });
+
+  test('GET /api/drones radius toggle sequence', async ({ request }) => {
+    // 1. Small radius far from fleet → 0 drones
+    const res1 = await request.get('/api/drones?lat=0&lon=0&radius=1');
+    const data1 = await res1.json();
+    expect(data1.count).toBe(0);
+
+    // 2. Disable radius (0) → all drones
+    const res2 = await request.get('/api/drones?lat=0&lon=0&radius=0');
+    const data2 = await res2.json();
+    expect(data2.count).toBeGreaterThanOrEqual(5);
+
+    // 3. Re-enable small radius → 0 drones again (cache must not interfere)
+    const res3 = await request.get('/api/drones?lat=0&lon=0&radius=1');
+    const data3 = await res3.json();
+    expect(data3.count).toBe(0);
+  });
+
+  test('GET /api/settings returns source configuration', async ({ request }) => {
+    const res = await request.get('/api/settings');
+    expect(res.status()).toBe(200);
+    const data = await res.json();
+    expect(data).toHaveProperty('sources');
+    expect(data.sources).toHaveProperty('simulator');
+    expect(data.sources.simulator).toHaveProperty('enabled');
+    expect(data.sources.simulator).toHaveProperty('label');
+  });
+
+  test('POST /api/settings toggles source', async ({ request }) => {
+    // Get current settings
+    const before = await (await request.get('/api/settings')).json();
+    const wasEnabled = before.sources.simulator.enabled;
+
+    // Toggle simulator
+    const res = await request.post('/api/settings', {
+      data: { sources: { simulator: { enabled: !wasEnabled } } },
+    });
+    expect(res.status()).toBe(200);
+    const data = await res.json();
+    expect(data.sources.simulator.enabled).toBe(!wasEnabled);
+
+    // Restore original
+    await request.post('/api/settings', {
+      data: { sources: { simulator: { enabled: wasEnabled } } },
+    });
   });
 
   test('GET /api/drones/<id> returns single drone', async ({ request }) => {
@@ -78,7 +129,7 @@ test.describe('API Endpoints', () => {
 
     // Reset center back
     await request.post('/api/fleet/center', {
-      data: { lat: 50.1109, lon: 8.6821 },
+      data: { lat: 52.0302, lon: 8.5325 },
     });
   });
 

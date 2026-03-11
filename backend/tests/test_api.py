@@ -30,18 +30,51 @@ class TestGetDrones:
         assert "lon" in data["center"]
 
     def test_with_location_filter(self, client):
-        res = client.get("/api/drones?lat=50.1109&lon=8.6821&radius=50000")
+        res = client.get("/api/drones?lat=52.0302&lon=8.5325&radius=50000")
         assert res.status_code == 200
         data = res.get_json()
         assert "drones" in data
         # All drones near center should be included with large radius
         assert data["count"] == 5
 
+    def test_with_radius_zero_returns_all(self, client):
+        """radius=0 means no filter - should return all simulator drones."""
+        res = client.get("/api/drones?lat=0&lon=0&radius=0")
+        assert res.status_code == 200
+        data = res.get_json()
+        # radius=0 disables filter, all 5 simulator drones visible regardless of position
+        assert data["count"] == 5
+
     def test_with_small_radius(self, client):
-        res = client.get("/api/drones?lat=50.1109&lon=8.6821&radius=1")
+        res = client.get("/api/drones?lat=52.0302&lon=8.5325&radius=1")
         assert res.status_code == 200
         data = res.get_json()
         assert data["count"] <= 5
+
+    def test_radius_toggle_sequence(self, client):
+        """Toggling radius between 0 and a value should give different results."""
+        # With radius far away from drones -> 0 results
+        res1 = client.get("/api/drones?lat=0&lon=0&radius=1")
+        data1 = res1.get_json()
+        assert data1["count"] == 0
+
+        # Disable radius (radius=0) -> all drones visible
+        res2 = client.get("/api/drones?lat=0&lon=0&radius=0")
+        data2 = res2.get_json()
+        assert data2["count"] == 5
+
+        # Re-enable radius far away -> 0 again (cache should not interfere)
+        res3 = client.get("/api/drones?lat=0&lon=0&radius=1")
+        data3 = res3.get_json()
+        assert data3["count"] == 0
+
+    def test_default_radius_applied(self, client):
+        """Without explicit radius param, DEFAULT_RADIUS should be used."""
+        res = client.get("/api/drones")
+        assert res.status_code == 200
+        data = res.get_json()
+        # Default is 50km around Bielefeld, simulator drones should be within
+        assert data["count"] == 5
 
     def test_drone_data_structure(self, client):
         res = client.get("/api/drones")

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fetchDrones, fetchDrone, fetchDroneHistory, setFleetCenter } from './api';
+import { fetchDrones, fetchDrone, fetchDroneHistory, setFleetCenter, checkNoFlyWms, fetchNoFlyInfo } from './api';
 import { createMockDrone, createMockDronesResponse, createMockHistory } from './test/mocks';
 
 const mockFetch = vi.fn();
@@ -95,5 +95,47 @@ describe('setFleetCenter', () => {
   it('throws on error', async () => {
     mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
     await expect(setFleetCenter(48.0, 11.0)).rejects.toThrow();
+  });
+});
+
+describe('checkNoFlyWms', () => {
+  it('fetches WMS check endpoint', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ available: true, status_code: 200, wms_url: 'https://test.de/wms' }),
+    });
+
+    const result = await checkNoFlyWms();
+    expect(mockFetch).toHaveBeenCalledWith('/api/nofly/check');
+    expect(result.available).toBe(true);
+    expect(result.status_code).toBe(200);
+  });
+
+  it('throws on error', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
+    await expect(checkNoFlyWms()).rejects.toThrow('API error: 500');
+  });
+});
+
+describe('fetchNoFlyInfo', () => {
+  it('fetches feature info with correct params', async () => {
+    const mockData = { type: 'FeatureCollection', features: [] };
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(mockData),
+    });
+
+    const result = await fetchNoFlyInfo(52.0, 8.0, 'dipul:flughaefen');
+    const url = mockFetch.mock.calls[0][0] as string;
+    expect(url).toContain('/api/nofly/info');
+    expect(url).toContain('lat=52');
+    expect(url).toContain('lon=8');
+    expect(url).toContain('layers=dipul');
+    expect(result.type).toBe('FeatureCollection');
+  });
+
+  it('throws on error', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 502 });
+    await expect(fetchNoFlyInfo(52.0, 8.0, 'dipul:flughaefen')).rejects.toThrow('API error: 502');
   });
 });
