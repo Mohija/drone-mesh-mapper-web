@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import type { Drone, TrackedFlight, TrailPoint, ArchivedTrail, ArchivedTrailSummary } from './types/drone';
 import { fetchArchivedTrails, fetchArchivedTrail, saveArchivedTrail, deleteArchivedTrail } from './api';
+import { getUserItem, setUserItem } from './userStorage';
 
 const TRAIL_COLORS = [
   '#f97316', '#06b6d4', '#a855f7', '#eab308',
@@ -65,7 +66,7 @@ export function useTracking(): UseTrackingReturn {
   // Restore tracked IDs from localStorage
   useEffect(() => {
     try {
-      const stored = localStorage.getItem('tracked-drones');
+      const stored = getUserItem('tracked-drones');
       if (stored) {
         const ids: string[] = JSON.parse(stored);
         // We only store IDs — the trails start fresh after reload
@@ -95,7 +96,7 @@ export function useTracking(): UseTrackingReturn {
     const ids = [...trackedFlights.values()]
       .filter(f => f.state === 'tracking')
       .map(f => f.droneId);
-    localStorage.setItem('tracked-drones', JSON.stringify(ids));
+    setUserItem('tracked-drones', JSON.stringify(ids));
   }, [trackedFlights]);
 
   const trackDrone = useCallback((drone: Drone) => {
@@ -105,18 +106,24 @@ export function useTracking(): UseTrackingReturn {
       if (existing && existing.state === 'tracking') return prev; // already tracking
 
       const color = existing?.color || TRAIL_COLORS[colorIndexRef.current++ % TRAIL_COLORS.length];
+      const now = Date.now() / 1000;
       const initialPoint: TrailPoint = {
         lat: drone.latitude,
         lon: drone.longitude,
         altitude: drone.altitude,
-        timestamp: Date.now() / 1000,
+        timestamp: now,
       };
+      // Start with 2 points so the trail is immediately visible on the map
+      // (allTrails requires >= 2 points to render a polyline)
+      const initialTrail = existing?.trail.length
+        ? existing.trail
+        : [initialPoint, { ...initialPoint, timestamp: now + 0.001 }];
       next.set(drone.id, {
         droneId: drone.id,
         droneName: drone.name,
         source: drone.source,
         state: 'tracking',
-        trail: existing?.trail.length ? existing.trail : [initialPoint],
+        trail: initialTrail,
         color,
         startedAt: existing?.startedAt || Date.now(),
       });

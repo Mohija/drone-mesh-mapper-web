@@ -1,11 +1,15 @@
 import { test, expect } from '@playwright/test';
+import { apiLogin } from './helpers';
 
 // Unique zone name per test run to avoid collisions
 const uid = Date.now().toString(36);
 
+// Auth headers for API requests (populated in beforeAll)
+let authHeaders: Record<string, string>;
+
 /** Helper: find our test zone by name prefix */
 async function findZone(request: any, name: string) {
-  const all = await (await request.get('/api/zones')).json();
+  const all = await (await request.get('/api/zones', { headers: authHeaders })).json();
   return all.find((z: any) => z.name === name);
 }
 
@@ -33,17 +37,22 @@ async function waitForViolationRows(page: any, minCount: number, timeout = 15000
 // ─── API Tests ─────────────────────────────────────────────────
 
 test.describe('Flight Zones API', () => {
+  test.beforeAll(async ({ request }) => {
+    authHeaders = await apiLogin(request);
+  });
+
   test.afterAll(async ({ request }) => {
-    const all = await (await request.get('/api/zones')).json();
+    const all = await (await request.get('/api/zones', { headers: authHeaders })).json();
     for (const z of all) {
       if (z.name.startsWith('E2E-')) {
-        await request.delete(`/api/zones/${z.id}`);
+        await request.delete(`/api/zones/${z.id}`, { headers: authHeaders });
       }
     }
   });
 
   test('POST /api/zones creates a zone', async ({ request }) => {
     const res = await request.post('/api/zones', {
+      headers: authHeaders,
       data: {
         name: `E2E-Zone-${uid}`,
         color: '#ff0000',
@@ -65,7 +74,7 @@ test.describe('Flight Zones API', () => {
   });
 
   test('GET /api/zones lists zones', async ({ request }) => {
-    const res = await request.get('/api/zones');
+    const res = await request.get('/api/zones', { headers: authHeaders });
     expect(res.status()).toBe(200);
     const data = await res.json();
     expect(Array.isArray(data)).toBe(true);
@@ -77,7 +86,7 @@ test.describe('Flight Zones API', () => {
     const zone = await findZone(request, `E2E-Zone-${uid}`);
     expect(zone).toBeTruthy();
 
-    const res = await request.get(`/api/zones/${zone.id}`);
+    const res = await request.get(`/api/zones/${zone.id}`, { headers: authHeaders });
     expect(res.status()).toBe(200);
     const data = await res.json();
     expect(data.name).toBe(`E2E-Zone-${uid}`);
@@ -87,6 +96,7 @@ test.describe('Flight Zones API', () => {
     const zone = await findZone(request, `E2E-Zone-${uid}`);
 
     const res = await request.put(`/api/zones/${zone.id}`, {
+      headers: authHeaders,
       data: { name: `E2E-Zone-Updated-${uid}`, color: '#00ff00' },
     });
     expect(res.status()).toBe(200);
@@ -96,6 +106,7 @@ test.describe('Flight Zones API', () => {
 
     // Rename back for subsequent tests
     await request.put(`/api/zones/${zone.id}`, {
+      headers: authHeaders,
       data: { name: `E2E-Zone-${uid}` },
     });
   });
@@ -104,6 +115,7 @@ test.describe('Flight Zones API', () => {
     const zone = await findZone(request, `E2E-Zone-${uid}`);
 
     const res = await request.put(`/api/zones/${zone.id}`, {
+      headers: authHeaders,
       data: { minAltitudeAGL: 10, maxAltitudeAGL: 120 },
     });
     expect(res.status()).toBe(200);
@@ -113,6 +125,7 @@ test.describe('Flight Zones API', () => {
 
     // Reset AGL
     await request.put(`/api/zones/${zone.id}`, {
+      headers: authHeaders,
       data: { minAltitudeAGL: null, maxAltitudeAGL: null },
     });
   });
@@ -121,6 +134,7 @@ test.describe('Flight Zones API', () => {
     const zone = await findZone(request, `E2E-Zone-${uid}`);
 
     const res = await request.post(`/api/zones/${zone.id}/assign`, {
+      headers: authHeaders,
       data: { droneIds: ['AZTEST001', 'AZTEST002'] },
     });
     expect(res.status()).toBe(200);
@@ -133,6 +147,7 @@ test.describe('Flight Zones API', () => {
     const zone = await findZone(request, `E2E-Zone-${uid}`);
 
     const res = await request.post(`/api/zones/${zone.id}/unassign`, {
+      headers: authHeaders,
       data: { droneIds: ['AZTEST002'] },
     });
     expect(res.status()).toBe(200);
@@ -142,7 +157,7 @@ test.describe('Flight Zones API', () => {
   });
 
   test('GET /api/zones/violations returns violations', async ({ request }) => {
-    const res = await request.get('/api/zones/violations');
+    const res = await request.get('/api/zones/violations', { headers: authHeaders });
     expect(res.status()).toBe(200);
     const data = await res.json();
     expect(data).toHaveProperty('violations');
@@ -158,6 +173,7 @@ test.describe('Flight Zones API', () => {
 
   test('POST /api/zones 400 without required fields', async ({ request }) => {
     const res = await request.post('/api/zones', {
+      headers: authHeaders,
       data: { name: 'Bad Zone' },
     });
     expect(res.status()).toBe(400);
@@ -165,6 +181,7 @@ test.describe('Flight Zones API', () => {
 
   test('POST /api/zones 400 with too few polygon points', async ({ request }) => {
     const res = await request.post('/api/zones', {
+      headers: authHeaders,
       data: {
         name: 'Bad Zone',
         color: '#ff0000',
@@ -175,7 +192,7 @@ test.describe('Flight Zones API', () => {
   });
 
   test('GET /api/zones/nonexistent returns 404', async ({ request }) => {
-    const res = await request.get('/api/zones/nonexistent-id-xyz');
+    const res = await request.get('/api/zones/nonexistent-id-xyz', { headers: authHeaders });
     expect(res.status()).toBe(404);
   });
 
@@ -183,10 +200,10 @@ test.describe('Flight Zones API', () => {
     const zone = await findZone(request, `E2E-Zone-${uid}`);
     expect(zone).toBeTruthy();
 
-    const res = await request.delete(`/api/zones/${zone.id}`);
+    const res = await request.delete(`/api/zones/${zone.id}`, { headers: authHeaders });
     expect(res.status()).toBe(200);
 
-    const after = await request.get(`/api/zones/${zone.id}`);
+    const after = await request.get(`/api/zones/${zone.id}`, { headers: authHeaders });
     expect(after.status()).toBe(404);
   });
 });
@@ -195,19 +212,20 @@ test.describe('Flight Zones API', () => {
 
 test.describe('Flight Zones UI', () => {
   test.beforeAll(async ({ request }) => {
-    const all = await (await request.get('/api/zones')).json();
+    if (!authHeaders) authHeaders = await apiLogin(request);
+    const all = await (await request.get('/api/zones', { headers: authHeaders })).json();
     for (const z of all) {
       if (z.name.startsWith('E2E-')) {
-        await request.delete(`/api/zones/${z.id}`);
+        await request.delete(`/api/zones/${z.id}`, { headers: authHeaders });
       }
     }
   });
 
   test.afterAll(async ({ request }) => {
-    const all = await (await request.get('/api/zones')).json();
+    const all = await (await request.get('/api/zones', { headers: authHeaders })).json();
     for (const z of all) {
       if (z.name.startsWith('E2E-')) {
-        await request.delete(`/api/zones/${z.id}`);
+        await request.delete(`/api/zones/${z.id}`, { headers: authHeaders });
       }
     }
   });
@@ -227,9 +245,9 @@ test.describe('Flight Zones UI', () => {
   });
 
   test('panel shows empty state when no zones exist', async ({ page, request }) => {
-    const all = await (await request.get('/api/zones')).json();
+    const all = await (await request.get('/api/zones', { headers: authHeaders })).json();
     for (const z of all) {
-      await request.delete(`/api/zones/${z.id}`);
+      await request.delete(`/api/zones/${z.id}`, { headers: authHeaders });
     }
 
     await page.goto('/');
@@ -311,6 +329,7 @@ test.describe('Flight Zones UI', () => {
 
   test('zone appears in panel after creation via API', async ({ page, request }) => {
     await request.post('/api/zones', {
+      headers: authHeaders,
       data: {
         name: 'E2E-ListTest',
         color: '#3b82f6',
@@ -333,6 +352,7 @@ test.describe('Flight Zones UI', () => {
 
   test('delete zone from panel', async ({ page, request }) => {
     const createRes = await request.post('/api/zones', {
+      headers: authHeaders,
       data: {
         name: 'E2E-DeleteMe',
         color: '#ef4444',
@@ -360,6 +380,7 @@ test.describe('Flight Zones UI', () => {
 
   test('assign drones panel opens with edit fields', async ({ page, request }) => {
     const createRes = await request.post('/api/zones', {
+      headers: authHeaders,
       data: {
         name: 'E2E-AssignTest',
         color: '#22c55e',
@@ -395,6 +416,7 @@ test.describe('Flight Zones UI', () => {
 
   test('edit zone name and color via assign panel', async ({ page, request }) => {
     const createRes = await request.post('/api/zones', {
+      headers: authHeaders,
       data: {
         name: 'E2E-EditMe',
         color: '#3b82f6',
@@ -425,16 +447,17 @@ test.describe('Flight Zones UI', () => {
     await page.locator('[data-testid="save-assignments-btn"]').click();
 
     await page.waitForTimeout(500);
-    const updated = await (await request.get(`/api/zones/${zone.id}`)).json();
+    const updated = await (await request.get(`/api/zones/${zone.id}`, { headers: authHeaders })).json();
     expect(updated.name).toBe('E2E-Edited');
 
     await expect(zonesPanel.locator('text=E2E-Edited')).toBeVisible({ timeout: 3000 });
   });
 
   test('zone badge shows count on button', async ({ page, request }) => {
-    const zones = await (await request.get('/api/zones')).json();
+    const zones = await (await request.get('/api/zones', { headers: authHeaders })).json();
     if (zones.length === 0) {
       await request.post('/api/zones', {
+        headers: authHeaders,
         data: {
           name: 'E2E-Badge',
           color: '#3b82f6',
@@ -477,16 +500,18 @@ test.describe('Violation Table', () => {
   let testZoneId: string;
 
   test.beforeAll(async ({ request }) => {
+    if (!authHeaders) authHeaders = await apiLogin(request);
     // Clean up old E2E violation zones
-    const all = await (await request.get('/api/zones')).json();
+    const all = await (await request.get('/api/zones', { headers: authHeaders })).json();
     for (const z of all) {
       if (z.name.startsWith('E2E-ViolationZone')) {
-        await request.delete(`/api/zones/${z.id}`);
+        await request.delete(`/api/zones/${z.id}`, { headers: authHeaders });
       }
     }
 
     // Create a zone covering the entire Bielefeld area (where simulated drones fly)
     const res = await request.post('/api/zones', {
+      headers: authHeaders,
       data: {
         name: 'E2E-ViolationZone',
         color: '#ef4444',
@@ -504,7 +529,7 @@ test.describe('Violation Table', () => {
 
   test.afterAll(async ({ request }) => {
     if (testZoneId) {
-      await request.delete(`/api/zones/${testZoneId}`);
+      await request.delete(`/api/zones/${testZoneId}`, { headers: authHeaders });
     }
   });
 
@@ -645,15 +670,17 @@ test.describe('Violation Selection & Trails', () => {
   let testZoneId: string;
 
   test.beforeAll(async ({ request }) => {
-    const all = await (await request.get('/api/zones')).json();
+    if (!authHeaders) authHeaders = await apiLogin(request);
+    const all = await (await request.get('/api/zones', { headers: authHeaders })).json();
     for (const z of all) {
       if (z.name.startsWith('E2E-SelectZone')) {
-        await request.delete(`/api/zones/${z.id}`);
+        await request.delete(`/api/zones/${z.id}`, { headers: authHeaders });
       }
     }
 
     // Large zone covering all simulated drones
     const res = await request.post('/api/zones', {
+      headers: authHeaders,
       data: {
         name: 'E2E-SelectZone',
         color: '#3b82f6',
@@ -671,7 +698,7 @@ test.describe('Violation Selection & Trails', () => {
 
   test.afterAll(async ({ request }) => {
     if (testZoneId) {
-      await request.delete(`/api/zones/${testZoneId}`);
+      await request.delete(`/api/zones/${testZoneId}`, { headers: authHeaders });
     }
   });
 
@@ -821,14 +848,16 @@ test.describe('Violation Clear & Re-detection', () => {
   let testZoneId: string;
 
   test.beforeAll(async ({ request }) => {
-    const all = await (await request.get('/api/zones')).json();
+    if (!authHeaders) authHeaders = await apiLogin(request);
+    const all = await (await request.get('/api/zones', { headers: authHeaders })).json();
     for (const z of all) {
       if (z.name.startsWith('E2E-RedetectZone')) {
-        await request.delete(`/api/zones/${z.id}`);
+        await request.delete(`/api/zones/${z.id}`, { headers: authHeaders });
       }
     }
 
     const res = await request.post('/api/zones', {
+      headers: authHeaders,
       data: {
         name: 'E2E-RedetectZone',
         color: '#f59e0b',
@@ -846,7 +875,7 @@ test.describe('Violation Clear & Re-detection', () => {
 
   test.afterAll(async ({ request }) => {
     if (testZoneId) {
-      await request.delete(`/api/zones/${testZoneId}`);
+      await request.delete(`/api/zones/${testZoneId}`, { headers: authHeaders });
     }
   });
 
@@ -945,7 +974,11 @@ test.describe('Refresh Rate Control', () => {
   test('refresh rate has correct default (2s)', async ({ page }) => {
     // Clear stored value
     await page.goto('/');
-    await page.evaluate(() => localStorage.removeItem('refresh-rate'));
+    await page.evaluate(() => {
+      const userId = localStorage.getItem('current_user_id');
+      const key = userId ? `refresh-rate_${userId}` : 'refresh-rate';
+      localStorage.removeItem(key);
+    });
     await page.reload();
     await page.waitForResponse(resp => resp.url().includes('/api/drones') && resp.status() === 200);
 
@@ -978,7 +1011,11 @@ test.describe('Refresh Rate Control', () => {
     await select.selectOption('5000');
 
     // Verify localStorage
-    const stored = await page.evaluate(() => localStorage.getItem('refresh-rate'));
+    const stored = await page.evaluate(() => {
+      const userId = localStorage.getItem('current_user_id');
+      const key = userId ? `refresh-rate_${userId}` : 'refresh-rate';
+      return localStorage.getItem(key);
+    });
     expect(stored).toBe('5000');
 
     // Reload and verify persistence

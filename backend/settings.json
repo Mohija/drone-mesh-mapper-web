@@ -21,7 +21,7 @@
       "description": "ADS-B Tracking via adsb.lol Community-Netzwerk"
     },
     "ogn": {
-      "enabled": false,
+      "enabled": true,
       "label": "Open Glider Network",
       "description": "Gleiter und Kleinfluggeraete (experimental)"
     }

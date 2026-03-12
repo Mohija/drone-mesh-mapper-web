@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import type { Drone, UserLocation } from '../types/drone';
 import { fetchDrones, setFleetCenter } from '../api';
+import { useAuth } from '../AuthContext';
 import { buildGrid } from '../elevationGrid';
 import MapComponent from './MapComponent';
 import StatusPanel from './StatusPanel';
@@ -22,6 +23,7 @@ import {
   type NoFlyCategory,
   getLayersByCategory,
 } from '../config/noFlyZones';
+import { getUserItem, setUserItem } from '../userStorage';
 
 const DEFAULT_RADIUS = 50000; // 50km
 const DEFAULT_CENTER = { lat: 52.0302, lon: 8.5325 }; // Bielefeld
@@ -48,6 +50,7 @@ const ALTITUDE_ZONES = [
 
 export default function MapPage() {
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [drones, setDrones] = useState<Drone[]>([]);
   const [selectedDrone, setSelectedDrone] = useState<Drone | null>(null);
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
@@ -61,7 +64,7 @@ export default function MapPage() {
   const [nfzRadius, setNfzRadius] = useState(50000); // 50km default
   const [altitudeZone, setAltitudeZone] = useState('all');
   const [refreshRate, setRefreshRate] = useState(() => {
-    const stored = localStorage.getItem('refresh-rate');
+    const stored = getUserItem('refresh-rate');
     const parsed = stored ? Number(stored) : 2000;
     return REFRESH_RATES.some(r => r.value === parsed) ? parsed : 2000;
   });
@@ -76,9 +79,17 @@ export default function MapPage() {
   const hasActiveTracking = [...tracking.trackedFlights.values()].some(f => f.state === 'tracking');
   const flightZones = useFlightZones();
   const violationLog = useViolationLog();
+
+  // Refs to break the dependency chain: loadDrones must NOT depend on tracking/violation
+  // state, otherwise every trail update recreates loadDrones → resets the polling interval
+  // → causes near-continuous polling instead of the configured interval.
+  const trackingRef = useRef(tracking);
+  trackingRef.current = tracking;
+  const violationLogRef = useRef(violationLog);
+  violationLogRef.current = violationLog;
   const [enabledNoFlyLayers, setEnabledNoFlyLayers] = useState<string[]>(() => {
     try {
-      const stored = localStorage.getItem('nofly-layers');
+      const stored = getUserItem('nofly-layers');
       return stored ? JSON.parse(stored) : DEFAULT_ENABLED_LAYERS;
     } catch {
       return DEFAULT_ENABLED_LAYERS;
@@ -90,7 +101,7 @@ export default function MapPage() {
 
   // Persist no-fly layer selection
   useEffect(() => {
-    localStorage.setItem('nofly-layers', JSON.stringify(enabledNoFlyLayers));
+    setUserItem('nofly-layers', JSON.stringify(enabledNoFlyLayers));
   }, [enabledNoFlyLayers]);
 
   const loadDrones = useCallback(async () => {
@@ -119,27 +130,34 @@ export default function MapPage() {
       const visibleKeys = new Set(data.drones.map((d) => d.basic_id || d.id));
       pruneCache(visibleKeys);
 
-      // Feed new positions to tracked flights
-      tracking.updatePositions(data.drones);
+      // Access latest hook state via refs to avoid dependency on tracking/violation state.
+      // Without refs, every trail update changes trackedFlights → isTracked ref → loadDrones
+      // ref → useEffect restarts interval → immediate re-poll → infinite loop.
+      const t = trackingRef.current;
+      const vl = violationLogRef.current;
 
-      // Check flight zone violations and feed to violation log
-      const currentViolations = flightZones.checkViolations(data.drones);
+      // Feed new positions to existing tracked flights
+      t.updatePositions(data.drones);
 
-      // Update violation log with auto-tracking
-      violationLog.update(
-        currentViolations,
+      // Sync shared violation records from backend (violations are computed server-side
+      // during the /api/drones call, shared across all tenant users).
+      // Await so auto-tracked drones get their positions updated in the same cycle.
+      await vl.sync(
         data.drones,
-        flightZones.zones,
         (drone) => {
-          if (!tracking.isTracked(drone.id)) {
-            tracking.trackDrone(drone);
+          // Use ref to always read latest tracking state (not stale closure)
+          if (!trackingRef.current.isTracked(drone.id)) {
+            trackingRef.current.trackDrone(drone);
           }
         },
       );
+
+      // Update positions again so newly auto-tracked drones get trail points immediately
+      trackingRef.current.updatePositions(data.drones);
     } catch (err) {
       setError('Verbindung zum Server fehlgeschlagen');
     }
-  }, [userLocation, radiusEnabled, radius, tracking.updatePositions, tracking.isTracked, tracking.trackDrone, flightZones.checkViolations, flightZones.zones, violationLog.update]);
+  }, [userLocation, radiusEnabled, radius]);
 
   // Build elevation grid for the search area (pre-computes terrain for AGL)
   useEffect(() => {
@@ -151,7 +169,7 @@ export default function MapPage() {
 
   // Persist refresh rate
   useEffect(() => {
-    localStorage.setItem('refresh-rate', String(refreshRate));
+    setUserItem('refresh-rate', String(refreshRate));
   }, [refreshRate]);
 
   // Polling interval - enforce minimum 5s when >100 drones to reduce render load
@@ -240,16 +258,20 @@ export default function MapPage() {
     }
   }, [selectedViolationRecordId, selectedViolationRecord]);
 
-  // Show only the selected drone's trail when a violation row is selected
+  // Show only the selected drone's trail when a violation row is selected.
+  // Falls back to all trails if the selected drone has no trail yet (e.g. just auto-tracked).
   const visibleTrails = useMemo(() => {
     if (selectedViolationRecord) {
       const selectedDroneId = selectedViolationRecord.droneId;
-      return tracking.allTrails.filter(t => {
+      const filtered = tracking.allTrails.filter(t => {
         const droneId = t.id.startsWith('track-') ? t.id.slice(6) : null;
         return droneId === selectedDroneId;
       });
+      // If the selected drone has a trail, show only that; otherwise show all trails
+      // so we don't accidentally hide everything when the trail is still building up
+      if (filtered.length > 0) return filtered;
     }
-    // No violation selected: show all trails except hidden ones
+    // No violation selected (or selected drone has no trail): show all trails except hidden ones
     if (violationLog.hiddenTrailDroneIds.size === 0) return tracking.allTrails;
     return tracking.allTrails.filter(t => {
       const droneId = t.id.startsWith('track-') ? t.id.slice(6) : null;
@@ -774,6 +796,53 @@ export default function MapPage() {
         >
           &#9881;
         </button>
+
+        {/* User info & logout */}
+        <div style={{
+          background: 'var(--bg-secondary)',
+          border: '1px solid var(--border)',
+          borderRadius: 8,
+          padding: '6px 12px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          marginLeft: 'auto',
+        }}>
+          {user && (
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+              {user.display_name}
+              {user.tenant_name && (
+                <span style={{ color: 'var(--text-muted)', marginLeft: 4 }}>
+                  ({user.tenant_name})
+                </span>
+              )}
+            </span>
+          )}
+          {user && (user.role === 'super_admin' || user.role === 'tenant_admin') && (
+            <button
+              onClick={() => navigate('/admin')}
+              title="Administration"
+              data-testid="admin-button"
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'var(--text-secondary)', fontSize: 14, padding: '2px 4px',
+              }}
+            >
+              &#9881;&#65039;
+            </button>
+          )}
+          <button
+            onClick={logout}
+            title="Abmelden"
+            data-testid="logout-button"
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: 'var(--text-muted)', fontSize: 13, padding: '2px 4px',
+            }}
+          >
+            Abmelden
+          </button>
+        </div>
 
         {error && (
           <div style={{

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { Drone, FlightZone, ZoneViolation } from './types/drone';
+import type { FlightZone } from './types/drone';
 import {
   fetchFlightZones,
   createFlightZone,
@@ -8,7 +8,6 @@ import {
   assignDronesToZone,
   unassignDronesFromZone,
 } from './api';
-import { getElevation } from './elevationGrid';
 
 const ZONE_COLORS = [
   '#3b82f6', '#ef4444', '#22c55e', '#f59e0b',
@@ -41,7 +40,6 @@ const SNAP_THRESHOLD = 0.00015;
 
 export interface UseFlightZonesReturn {
   zones: FlightZone[];
-  violations: ZoneViolation[];
   drawingMode: boolean;
   pendingPoints: [number, number][];
   snappable: boolean; // true when next click would snap to first point
@@ -54,22 +52,22 @@ export interface UseFlightZonesReturn {
   updateZone: (zoneId: string, updates: Partial<Pick<FlightZone, 'name' | 'color' | 'polygon' | 'minAltitudeAGL' | 'maxAltitudeAGL'>>) => Promise<void>;
   assignDrones: (zoneId: string, droneIds: string[]) => Promise<void>;
   unassignDrones: (zoneId: string, droneIds: string[]) => Promise<void>;
-  checkViolations: (drones: Drone[]) => ZoneViolation[];
   colorIndex: number;
 }
 
 export function useFlightZones(): UseFlightZonesReturn {
   const [zones, setZones] = useState<FlightZone[]>([]);
-  const [violations, setViolations] = useState<ZoneViolation[]>([]);
   const [drawingMode, setDrawingMode] = useState(false);
   const [pendingPoints, setPendingPoints] = useState<[number, number][]>([]);
   const colorIndexRef = useRef(0);
 
-  // Load zones on mount
+  // Load zones on mount + refresh periodically (30s) so all users in a tenant
+  // see zones created by other users without a page reload.
   useEffect(() => {
-    fetchFlightZones()
-      .then(setZones)
-      .catch(() => {});
+    const load = () => fetchFlightZones().then(setZones).catch(() => {});
+    load();
+    const iv = setInterval(load, 30_000);
+    return () => clearInterval(iv);
   }, []);
 
   const startDrawing = useCallback(() => {
@@ -124,8 +122,6 @@ export function useFlightZones(): UseFlightZonesReturn {
   const deleteZone = useCallback(async (zoneId: string) => {
     await apiDeleteZone(zoneId);
     setZones(prev => prev.filter(z => z.id !== zoneId));
-    // Remove violations for this zone
-    setViolations(prev => prev.filter(v => v.zoneId !== zoneId));
   }, []);
 
   const updateZone = useCallback(async (zoneId: string, updates: Partial<Pick<FlightZone, 'name' | 'color' | 'polygon' | 'minAltitudeAGL' | 'maxAltitudeAGL'>>) => {
@@ -136,8 +132,6 @@ export function useFlightZones(): UseFlightZonesReturn {
   const assignDrones = useCallback(async (zoneId: string, droneIds: string[]) => {
     const updated = await assignDronesToZone(zoneId, droneIds);
     setZones(prev => prev.map(z => z.id === zoneId ? updated : z));
-    // Clear violations for newly assigned drones in this zone
-    setViolations(prev => prev.filter(v => !(v.zoneId === zoneId && droneIds.includes(v.droneId))));
   }, []);
 
   const unassignDrones = useCallback(async (zoneId: string, droneIds: string[]) => {
@@ -145,51 +139,8 @@ export function useFlightZones(): UseFlightZonesReturn {
     setZones(prev => prev.map(z => z.id === zoneId ? updated : z));
   }, []);
 
-  const checkViolations = useCallback((drones: Drone[]): ZoneViolation[] => {
-    const newViolations: ZoneViolation[] = [];
-    const now = Date.now() / 1000;
-
-    for (const zone of zones) {
-      if (zone.polygon.length < 3) continue;
-      const assigned = new Set(zone.assignedDrones);
-      const minAGL = zone.minAltitudeAGL;
-      const maxAGL = zone.maxAltitudeAGL;
-
-      for (const drone of drones) {
-        if (assigned.has(drone.id) || (drone.basic_id && assigned.has(drone.basic_id))) {
-          continue;
-        }
-
-        if (!pointInPolygon(drone.latitude, drone.longitude, zone.polygon)) {
-          continue;
-        }
-
-        // AGL altitude check: compare drone altitude - ground elevation
-        if (minAGL !== null || maxAGL !== null) {
-          const droneAlt = drone.altitude || 0;
-          const ground = getElevation(drone.latitude, drone.longitude) ?? 0;
-          const droneAGL = droneAlt - ground;
-          if (minAGL !== null && droneAGL < minAGL) continue;
-          if (maxAGL !== null && droneAGL > maxAGL) continue;
-        }
-
-        newViolations.push({
-          droneId: drone.id,
-          droneName: drone.name,
-          zoneId: zone.id,
-          zoneName: zone.name,
-          timestamp: now,
-        });
-      }
-    }
-
-    setViolations(newViolations);
-    return newViolations;
-  }, [zones]);
-
   return {
     zones,
-    violations,
     drawingMode,
     pendingPoints,
     snappable: pendingPoints.length >= 3,
@@ -202,7 +153,6 @@ export function useFlightZones(): UseFlightZonesReturn {
     updateZone,
     assignDrones,
     unassignDrones,
-    checkViolations,
     colorIndex: colorIndexRef.current,
   };
 }

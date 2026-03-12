@@ -11,13 +11,16 @@ import logging
 import time
 import threading
 import requests as http_requests
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, g, jsonify, request, send_from_directory
 from flask_cors import CORS
+from database import db, init_db
 from drone_simulator import DroneFleet
-from settings import SettingsManager
+from settings import SettingsManager, DEFAULT_SOURCES
 from providers import ProviderRegistry
-from trail_archive import TrailArchive
+from trail_archive import TrailArchiveManager
 from flight_zones import FlightZoneManager
+from auth import seed_super_admin, login_required
+from routes import register_blueprints
 
 # Logging setup
 logging.basicConfig(
@@ -50,21 +53,81 @@ CORS(app, origins=[
     "https://*.dasilvafelix.de",
 ])
 
+# Initialize database
+init_db(app)
+
+# Create tables and default tenant
+with app.app_context():
+    from models import Tenant, TenantSettings, User
+    db.create_all()
+
+    # Ensure default tenant exists
+    default_tenant = Tenant.query.filter_by(name="default").first()
+    if not default_tenant:
+        default_tenant = Tenant(name="default", display_name="Standard")
+        db.session.add(default_tenant)
+        db.session.flush()
+        default_settings = TenantSettings(
+            tenant_id=default_tenant.id,
+            sources=DEFAULT_SOURCES,
+            center_lat=DEFAULT_LAT,
+            center_lon=DEFAULT_LON,
+            radius=DEFAULT_RADIUS,
+        )
+        db.session.add(default_settings)
+        db.session.commit()
+        logger.info("Created default tenant: %s", default_tenant.id)
+    else:
+        logger.info("Default tenant exists: %s", default_tenant.id)
+
+    DEFAULT_TENANT_ID = default_tenant.id
+
+# Register blueprints (auth, admin)
+register_blueprints(app)
+
+# Seed super admin
+seed_super_admin(app)
+
 # Initialize drone fleet simulation
 fleet = DroneFleet(center_lat=DEFAULT_LAT, center_lon=DEFAULT_LON)
 fleet.start(interval=2.0)
 
-# Initialize settings, provider registry, and trail archive
+# Initialize settings, provider registry, trail archive, and flight zones
 settings = SettingsManager()
+settings.bind(DEFAULT_TENANT_ID, app)
+
 registry = ProviderRegistry(fleet)
-archive = TrailArchive(os.path.join(BASE_DIR, "data", "archives"))
-zones = FlightZoneManager(os.path.join(BASE_DIR, "data", "zones"))
+
+archive = TrailArchiveManager(app=app, tenant_id=DEFAULT_TENANT_ID)
+archive.bind(app, DEFAULT_TENANT_ID)
+
+zones = FlightZoneManager(app=app, tenant_id=DEFAULT_TENANT_ID)
+
+
+# ─── Violation check throttle (per-tenant, 2s minimum between checks) ─────
+_violation_check_lock = threading.Lock()
+_violation_check_times: dict[str, float] = {}
+VIOLATION_CHECK_INTERVAL = 2.0  # seconds
+
+
+def _maybe_check_violations(tenant_id: str, enabled_sources: list[str]):
+    """Run violation check at most once every VIOLATION_CHECK_INTERVAL per tenant."""
+    now = time.time()
+    with _violation_check_lock:
+        last = _violation_check_times.get(tenant_id, 0)
+        if now - last < VIOLATION_CHECK_INTERVAL:
+            return
+        _violation_check_times[tenant_id] = now
+    # Get ALL drones (radius=0) for violation checking
+    all_drones = registry.get_all_drones(DEFAULT_LAT, DEFAULT_LON, 0, enabled_sources)
+    zones.update_violations(all_drones, get_elevation=_get_cached_elevation, tenant_id=tenant_id)
 
 
 # ─── API Routes ────────────────────────────────────────────
 
 
 @app.route("/api/drones", methods=["GET"])
+@login_required
 def get_drones():
     """Get all drones from enabled sources, optionally filtered by location radius.
     radius=0 means no radius filter (all drones).
@@ -78,6 +141,10 @@ def get_drones():
 
     drones = registry.get_all_drones(lat, lon, radius, enabled)
 
+    # Side-effect: update shared violation records (throttled per tenant)
+    tid = g.tenant_id or DEFAULT_TENANT_ID
+    _maybe_check_violations(tid, enabled)
+
     return jsonify({
         "drones": drones,
         "count": len(drones),
@@ -87,6 +154,7 @@ def get_drones():
 
 
 @app.route("/api/drones/<drone_id>", methods=["GET"])
+@login_required
 def get_drone(drone_id: str):
     """Get single drone details (supports compound IDs)."""
     drone = registry.get_drone(drone_id)
@@ -98,6 +166,7 @@ def get_drone(drone_id: str):
 
 
 @app.route("/api/drones/<drone_id>/history", methods=["GET"])
+@login_required
 def get_drone_history(drone_id: str):
     """Get position history for a drone."""
     history = registry.get_drone_history(drone_id)
@@ -109,6 +178,7 @@ def get_drone_history(drone_id: str):
 
 
 @app.route("/api/fleet/center", methods=["POST"])
+@login_required
 def set_fleet_center():
     """Recenter the drone fleet around a new GPS position."""
     data = request.get_json()
@@ -121,12 +191,14 @@ def set_fleet_center():
 
 
 @app.route("/api/settings", methods=["GET"])
+@login_required
 def get_settings():
     """Get current data source settings."""
     return jsonify(settings.get_all())
 
 
 @app.route("/api/settings", methods=["POST"])
+@login_required
 def update_settings():
     """Update data source settings."""
     data = request.get_json()
@@ -137,6 +209,7 @@ def update_settings():
 
 
 @app.route("/api/status", methods=["GET"])
+@login_required
 def get_status():
     """Get simulation status."""
     return jsonify({
@@ -328,6 +401,7 @@ def _lookup_hexdb(hex_code: str) -> dict | None:
 
 
 @app.route("/api/aircraft/lookup/<identifier>", methods=["GET"])
+@login_required
 def lookup_aircraft(identifier: str):
     """Lookup aircraft info by hex code, registration, or callsign.
     Queries adsbdb.com (free, no API key) + OpenSky metadata + planespotters.net + OGN DDB.
@@ -485,6 +559,7 @@ trail_logger = logging.getLogger("trails")
 
 
 @app.route("/api/trails/archives", methods=["GET"])
+@login_required
 def list_trail_archives():
     """List all archived flight trails (metadata only)."""
     archives = archive.list_archives()
@@ -493,6 +568,7 @@ def list_trail_archives():
 
 
 @app.route("/api/trails/archives/<archive_id>", methods=["GET"])
+@login_required
 def get_trail_archive(archive_id: str):
     """Get a full archived trail including all points."""
     data = archive.get_archive(archive_id)
@@ -502,6 +578,7 @@ def get_trail_archive(archive_id: str):
 
 
 @app.route("/api/trails/archives", methods=["POST"])
+@login_required
 def save_trail_archive():
     """Save a tracked flight trail to the archive (7 day retention)."""
     data = request.get_json()
@@ -516,6 +593,7 @@ def save_trail_archive():
 
 
 @app.route("/api/trails/archives/<archive_id>", methods=["DELETE"])
+@login_required
 def delete_trail_archive(archive_id: str):
     """Delete an archived trail."""
     if archive.delete_archive(archive_id):
@@ -529,21 +607,23 @@ zone_logger = logging.getLogger("zones")
 
 
 @app.route("/api/zones", methods=["GET"])
+@login_required
 def list_zones():
     """List all flight zones."""
-    zone_list = zones.list_zones()
+    zone_list = zones.list_zones(tenant_id=g.tenant_id)
     zone_logger.debug("GET /api/zones - %d zones", len(zone_list))
     return jsonify(zone_list)
 
 
 @app.route("/api/zones", methods=["POST"])
+@login_required
 def create_zone():
     """Create a new flight zone."""
     data = request.get_json()
     if not data:
         return jsonify({"error": "Request body required"}), 400
     try:
-        zone = zones.create_zone(data)
+        zone = zones.create_zone(data, tenant_id=g.tenant_id)
         zone_logger.info("POST /api/zones - created %s: %s", zone["id"], zone["name"])
         return jsonify(zone), 201
     except ValueError as e:
@@ -552,36 +632,63 @@ def create_zone():
 
 
 @app.route("/api/zones/violations", methods=["GET"])
+@login_required
 def check_zone_violations():
-    """Check all zones for unauthorized drones (not assigned but inside zone)."""
-    lat = request.args.get("lat", type=float, default=DEFAULT_LAT)
-    lon = request.args.get("lon", type=float, default=DEFAULT_LON)
-    radius = request.args.get("radius", type=float, default=DEFAULT_RADIUS)
+    """Legacy endpoint — now returns stored violation records (same as /api/violations)."""
+    records = zones.list_violations(tenant_id=g.tenant_id)
+    return jsonify({"records": records, "count": len(records)})
 
-    enabled = settings.get_enabled_sources()
-    drones_list = registry.get_all_drones(lat, lon, radius, enabled)
-    violations = zones.check_violations(drones_list, get_elevation=_get_cached_elevation)
-    zone_logger.debug("GET /api/zones/violations - %d violations from %d drones", len(violations), len(drones_list))
-    return jsonify({"violations": violations, "count": len(violations)})
+
+# ─── Shared Violation Records ─────────────────────────────
+
+
+@app.route("/api/violations", methods=["GET"])
+@login_required
+def list_violations():
+    """Get all violation records for the current tenant (active + ended)."""
+    records = zones.list_violations(tenant_id=g.tenant_id)
+    zone_logger.debug("GET /api/violations - %d records", len(records))
+    return jsonify({"records": records, "count": len(records)})
+
+
+@app.route("/api/violations/<record_id>", methods=["DELETE"])
+@login_required
+def delete_violation(record_id: str):
+    """Delete a single violation record."""
+    if zones.delete_violation(record_id, tenant_id=g.tenant_id):
+        zone_logger.info("DELETE /api/violations/%s - deleted", record_id)
+        return jsonify({"status": "deleted"})
+    return jsonify({"error": "Record not found"}), 404
+
+
+@app.route("/api/violations", methods=["DELETE"])
+@login_required
+def clear_violations():
+    """Clear all violation records for the current tenant."""
+    count = zones.clear_violations(tenant_id=g.tenant_id)
+    zone_logger.info("DELETE /api/violations - cleared %d records", count)
+    return jsonify({"status": "cleared", "count": count})
 
 
 @app.route("/api/zones/<zone_id>", methods=["GET"])
+@login_required
 def get_zone(zone_id: str):
     """Get a single flight zone."""
-    zone = zones.get_zone(zone_id)
+    zone = zones.get_zone(zone_id, tenant_id=g.tenant_id)
     if not zone:
         return jsonify({"error": "Zone not found"}), 404
     return jsonify(zone)
 
 
 @app.route("/api/zones/<zone_id>", methods=["PUT"])
+@login_required
 def update_zone(zone_id: str):
     """Update a flight zone (name, color, polygon)."""
     data = request.get_json()
     if not data:
         return jsonify({"error": "Request body required"}), 400
     try:
-        zone = zones.update_zone(zone_id, data)
+        zone = zones.update_zone(zone_id, data, tenant_id=g.tenant_id)
         if not zone:
             return jsonify({"error": "Zone not found"}), 404
         zone_logger.info("PUT /api/zones/%s - updated", zone_id)
@@ -592,15 +699,17 @@ def update_zone(zone_id: str):
 
 
 @app.route("/api/zones/<zone_id>", methods=["DELETE"])
+@login_required
 def delete_zone(zone_id: str):
     """Delete a flight zone."""
-    if zones.delete_zone(zone_id):
+    if zones.delete_zone(zone_id, tenant_id=g.tenant_id):
         zone_logger.info("DELETE /api/zones/%s - deleted", zone_id)
         return jsonify({"status": "deleted"})
     return jsonify({"error": "Zone not found"}), 404
 
 
 @app.route("/api/zones/<zone_id>/assign", methods=["POST"])
+@login_required
 def assign_drones_to_zone(zone_id: str):
     """Assign drone(s) to a zone. Body: { "droneIds": ["..."] }"""
     data = request.get_json()
@@ -609,7 +718,7 @@ def assign_drones_to_zone(zone_id: str):
     drone_ids = data["droneIds"]
     if not isinstance(drone_ids, list):
         return jsonify({"error": "droneIds must be an array"}), 400
-    zone = zones.assign_drones(zone_id, drone_ids)
+    zone = zones.assign_drones(zone_id, drone_ids, tenant_id=g.tenant_id)
     if not zone:
         return jsonify({"error": "Zone not found"}), 404
     zone_logger.info("POST /api/zones/%s/assign - %d drone(s)", zone_id, len(drone_ids))
@@ -617,6 +726,7 @@ def assign_drones_to_zone(zone_id: str):
 
 
 @app.route("/api/zones/<zone_id>/unassign", methods=["POST"])
+@login_required
 def unassign_drones_from_zone(zone_id: str):
     """Unassign drone(s) from a zone. Body: { "droneIds": ["..."] }"""
     data = request.get_json()
@@ -625,7 +735,7 @@ def unassign_drones_from_zone(zone_id: str):
     drone_ids = data["droneIds"]
     if not isinstance(drone_ids, list):
         return jsonify({"error": "droneIds must be an array"}), 400
-    zone = zones.unassign_drones(zone_id, drone_ids)
+    zone = zones.unassign_drones(zone_id, drone_ids, tenant_id=g.tenant_id)
     if not zone:
         return jsonify({"error": "Zone not found"}), 404
     zone_logger.info("POST /api/zones/%s/unassign - %d drone(s)", zone_id, len(drone_ids))
@@ -681,6 +791,7 @@ def _fetch_elevations(coords: list[tuple[float, float]]) -> list[float | None]:
 
 
 @app.route("/api/elevation", methods=["GET"])
+@login_required
 def get_elevation():
     """Get terrain elevation for coordinates. Supports batch: ?locations=lat,lon|lat,lon
     Returns ground elevation in meters (above mean sea level).
@@ -733,6 +844,7 @@ def get_elevation():
 
 
 @app.route("/api/nofly/check", methods=["GET"])
+@login_required
 def check_nofly_wms():
     """Check DIPUL WMS service availability."""
     nofly_logger.debug("GET /api/nofly/check - checking WMS availability")
@@ -760,6 +872,7 @@ def check_nofly_wms():
 
 
 @app.route("/api/nofly/info", methods=["GET"])
+@login_required
 def get_nofly_feature_info():
     """Proxy DIPUL WMS GetFeatureInfo to avoid CORS.
     Query params: lat, lon, layers (comma-separated DIPUL layer names).

@@ -13,8 +13,8 @@ class TestHealthEndpoint:
 
 
 class TestGetDrones:
-    def test_returns_all_drones(self, client):
-        res = client.get("/api/drones")
+    def test_returns_all_drones(self, client, auth_headers):
+        res = client.get("/api/drones", headers=auth_headers)
         assert res.status_code == 200
         data = res.get_json()
         assert "drones" in data
@@ -23,61 +23,61 @@ class TestGetDrones:
         assert data["count"] == len(data["drones"])
         assert data["count"] == 5
 
-    def test_returns_center(self, client):
-        res = client.get("/api/drones")
+    def test_returns_center(self, client, auth_headers):
+        res = client.get("/api/drones", headers=auth_headers)
         data = res.get_json()
         assert "lat" in data["center"]
         assert "lon" in data["center"]
 
-    def test_with_location_filter(self, client):
-        res = client.get("/api/drones?lat=52.0302&lon=8.5325&radius=50000")
+    def test_with_location_filter(self, client, auth_headers):
+        res = client.get("/api/drones?lat=52.0302&lon=8.5325&radius=50000", headers=auth_headers)
         assert res.status_code == 200
         data = res.get_json()
         assert "drones" in data
         # All drones near center should be included with large radius
         assert data["count"] == 5
 
-    def test_with_radius_zero_returns_all(self, client):
+    def test_with_radius_zero_returns_all(self, client, auth_headers):
         """radius=0 means no filter - should return all simulator drones."""
-        res = client.get("/api/drones?lat=0&lon=0&radius=0")
+        res = client.get("/api/drones?lat=0&lon=0&radius=0", headers=auth_headers)
         assert res.status_code == 200
         data = res.get_json()
         # radius=0 disables filter, all 5 simulator drones visible regardless of position
         assert data["count"] == 5
 
-    def test_with_small_radius(self, client):
-        res = client.get("/api/drones?lat=52.0302&lon=8.5325&radius=1")
+    def test_with_small_radius(self, client, auth_headers):
+        res = client.get("/api/drones?lat=52.0302&lon=8.5325&radius=1", headers=auth_headers)
         assert res.status_code == 200
         data = res.get_json()
         assert data["count"] <= 5
 
-    def test_radius_toggle_sequence(self, client):
+    def test_radius_toggle_sequence(self, client, auth_headers):
         """Toggling radius between 0 and a value should give different results."""
         # With radius far away from drones -> 0 results
-        res1 = client.get("/api/drones?lat=0&lon=0&radius=1")
+        res1 = client.get("/api/drones?lat=0&lon=0&radius=1", headers=auth_headers)
         data1 = res1.get_json()
         assert data1["count"] == 0
 
         # Disable radius (radius=0) -> all drones visible
-        res2 = client.get("/api/drones?lat=0&lon=0&radius=0")
+        res2 = client.get("/api/drones?lat=0&lon=0&radius=0", headers=auth_headers)
         data2 = res2.get_json()
         assert data2["count"] == 5
 
         # Re-enable radius far away -> 0 again (cache should not interfere)
-        res3 = client.get("/api/drones?lat=0&lon=0&radius=1")
+        res3 = client.get("/api/drones?lat=0&lon=0&radius=1", headers=auth_headers)
         data3 = res3.get_json()
         assert data3["count"] == 0
 
-    def test_default_radius_applied(self, client):
+    def test_default_radius_applied(self, client, auth_headers):
         """Without explicit radius param, DEFAULT_RADIUS should be used."""
-        res = client.get("/api/drones")
+        res = client.get("/api/drones", headers=auth_headers)
         assert res.status_code == 200
         data = res.get_json()
         # Default is 50km around Bielefeld, simulator drones should be within
         assert data["count"] == 5
 
-    def test_drone_data_structure(self, client):
-        res = client.get("/api/drones")
+    def test_drone_data_structure(self, client, auth_headers):
+        res = client.get("/api/drones", headers=auth_headers)
         data = res.get_json()
         drone = data["drones"][0]
         required_fields = [
@@ -89,49 +89,54 @@ class TestGetDrones:
         for field in required_fields:
             assert field in drone, f"Missing field: {field}"
 
+    def test_unauthenticated_returns_401(self, client):
+        res = client.get("/api/drones")
+        assert res.status_code == 401
+
 
 class TestGetDrone:
-    def test_existing_drone(self, client):
-        res = client.get("/api/drones/AZTEST001")
+    def test_existing_drone(self, client, auth_headers):
+        res = client.get("/api/drones/AZTEST001", headers=auth_headers)
         assert res.status_code == 200
         data = res.get_json()
         assert data["name"] == "Desert Eagle"
         assert data["id"] == "AZTEST001"
 
-    def test_nonexistent_drone(self, client):
-        res = client.get("/api/drones/NONEXISTENT")
+    def test_nonexistent_drone(self, client, auth_headers):
+        res = client.get("/api/drones/NONEXISTENT", headers=auth_headers)
         assert res.status_code == 404
         data = res.get_json()
         assert "error" in data
 
-    def test_all_configured_drones(self, client):
+    def test_all_configured_drones(self, client, auth_headers):
         for drone_id in ["AZTEST001", "AZTEST002", "AZTEST003", "AZTEST004", "AZTEST005"]:
-            res = client.get(f"/api/drones/{drone_id}")
+            res = client.get(f"/api/drones/{drone_id}", headers=auth_headers)
             assert res.status_code == 200
 
 
 class TestGetDroneHistory:
-    def test_existing_drone_history(self, client):
-        res = client.get("/api/drones/AZTEST001/history")
+    def test_existing_drone_history(self, client, auth_headers):
+        res = client.get("/api/drones/AZTEST001/history", headers=auth_headers)
         assert res.status_code == 200
         data = res.get_json()
         assert data["drone_id"] == "AZTEST001"
         assert "history" in data
         assert isinstance(data["history"], list)
 
-    def test_nonexistent_drone_history(self, client):
-        res = client.get("/api/drones/NONEXISTENT/history")
+    def test_nonexistent_drone_history(self, client, auth_headers):
+        res = client.get("/api/drones/NONEXISTENT/history", headers=auth_headers)
         assert res.status_code == 404
         data = res.get_json()
         assert "error" in data
 
 
 class TestSetFleetCenter:
-    def test_valid_recenter(self, client):
+    def test_valid_recenter(self, client, auth_headers):
         res = client.post(
             "/api/fleet/center",
             data=json.dumps({"lat": 48.1351, "lon": 11.5820}),
             content_type="application/json",
+            headers=auth_headers,
         )
         assert res.status_code == 200
         data = res.get_json()
@@ -139,45 +144,49 @@ class TestSetFleetCenter:
         assert data["center"]["lat"] == 48.1351
         assert data["center"]["lon"] == 11.5820
 
-    def test_missing_lat(self, client):
+    def test_missing_lat(self, client, auth_headers):
         res = client.post(
             "/api/fleet/center",
             data=json.dumps({"lon": 11.0}),
             content_type="application/json",
+            headers=auth_headers,
         )
         assert res.status_code == 400
 
-    def test_missing_lon(self, client):
+    def test_missing_lon(self, client, auth_headers):
         res = client.post(
             "/api/fleet/center",
             data=json.dumps({"lat": 48.0}),
             content_type="application/json",
+            headers=auth_headers,
         )
         assert res.status_code == 400
 
-    def test_empty_body(self, client):
+    def test_empty_body(self, client, auth_headers):
         res = client.post(
             "/api/fleet/center",
             data="",
             content_type="application/json",
+            headers=auth_headers,
         )
         assert res.status_code == 400
 
-    def test_recenter_updates_drones(self, client):
+    def test_recenter_updates_drones(self, client, auth_headers):
         client.post(
             "/api/fleet/center",
             data=json.dumps({"lat": 48.0, "lon": 11.0}),
             content_type="application/json",
+            headers=auth_headers,
         )
-        res = client.get("/api/drones")
+        res = client.get("/api/drones", headers=auth_headers)
         data = res.get_json()
         assert data["center"]["lat"] == 48.0
         assert data["center"]["lon"] == 11.0
 
 
 class TestGetStatus:
-    def test_status_response(self, client):
-        res = client.get("/api/status")
+    def test_status_response(self, client, auth_headers):
+        res = client.get("/api/status", headers=auth_headers)
         assert res.status_code == 200
         data = res.get_json()
         assert "running" in data

@@ -53,8 +53,10 @@ class TestPointInPolygon:
 
 class TestFlightZoneManager:
     @pytest.fixture
-    def zone_mgr(self, tmp_path):
-        return FlightZoneManager(str(tmp_path / "zones"))
+    def zone_mgr(self, app, default_tenant_id):
+        """Create a FlightZoneManager bound to the test app and default tenant."""
+        mgr = FlightZoneManager(app=app, tenant_id=default_tenant_id)
+        return mgr
 
     @pytest.fixture
     def sample_polygon(self):
@@ -67,9 +69,6 @@ class TestFlightZoneManager:
         assert len(zone["polygon"]) == 4
         assert zone["assignedDrones"] == []
         assert zone["createdAt"] > 0
-        # Verify file was written
-        path = os.path.join(zone_mgr._dir, f"{zone['id']}.json")
-        assert os.path.exists(path)
 
     def test_create_zone_missing_name(self, zone_mgr, sample_polygon):
         with pytest.raises(ValueError, match="name"):
@@ -120,8 +119,6 @@ class TestFlightZoneManager:
         zone = zone_mgr.create_zone({"name": "Delete Me", "polygon": sample_polygon})
         assert zone_mgr.delete_zone(zone["id"]) is True
         assert zone_mgr.get_zone(zone["id"]) is None
-        path = os.path.join(zone_mgr._dir, f"{zone['id']}.json")
-        assert not os.path.exists(path)
 
     def test_delete_zone_not_found(self, zone_mgr):
         assert zone_mgr.delete_zone("nonexistent") is False
@@ -157,8 +154,8 @@ class TestFlightZoneManager:
 
 class TestViolationDetection:
     @pytest.fixture
-    def zone_mgr(self, tmp_path):
-        return FlightZoneManager(str(tmp_path / "zones"))
+    def zone_mgr(self, app, default_tenant_id):
+        return FlightZoneManager(app=app, tenant_id=default_tenant_id)
 
     @pytest.fixture
     def bielefeld_zone(self):
@@ -213,19 +210,19 @@ class TestViolationDetection:
         assert len(violations) == 0
 
 
-# ─── Unit Tests: Persistence ──────────────────────────────
+# ─── Unit Tests: Persistence (DB-backed) ────────────────────
 
 
 class TestPersistence:
-    def test_reload_from_disk(self, tmp_path):
-        data_dir = str(tmp_path / "zones")
-        mgr1 = FlightZoneManager(data_dir)
+    def test_data_persists_across_manager_instances(self, app, default_tenant_id):
+        """Data in DB is visible to new manager instances."""
         polygon = [[0, 0], [0, 10], [10, 10], [10, 0]]
+        mgr1 = FlightZoneManager(app=app, tenant_id=default_tenant_id)
         zone = mgr1.create_zone({"name": "Persist", "polygon": polygon})
         mgr1.assign_drones(zone["id"], ["DRONE1"])
 
-        # Create a new manager that loads from disk
-        mgr2 = FlightZoneManager(data_dir)
+        # New manager sees same data
+        mgr2 = FlightZoneManager(app=app, tenant_id=default_tenant_id)
         loaded = mgr2.get_zone(zone["id"])
         assert loaded is not None
         assert loaded["name"] == "Persist"
@@ -237,11 +234,11 @@ class TestPersistence:
 
 class TestZoneAPI:
     @pytest.fixture(autouse=True)
-    def clean_zones(self, client):
+    def clean_zones(self, client, auth_headers):
         """Clean up zones before each test."""
-        res = client.get("/api/zones")
+        res = client.get("/api/zones", headers=auth_headers)
         for zone in res.get_json():
-            client.delete(f"/api/zones/{zone['id']}")
+            client.delete(f"/api/zones/{zone['id']}", headers=auth_headers)
         yield
 
     def _sample_zone(self):
@@ -251,105 +248,105 @@ class TestZoneAPI:
             "polygon": [[52.025, 8.525], [52.025, 8.545], [52.035, 8.545], [52.035, 8.525]],
         }
 
-    def test_create_zone_valid(self, client):
-        res = client.post("/api/zones", data=json.dumps(self._sample_zone()), content_type="application/json")
+    def test_create_zone_valid(self, client, auth_headers):
+        res = client.post("/api/zones", data=json.dumps(self._sample_zone()), content_type="application/json", headers=auth_headers)
         assert res.status_code == 201
         data = res.get_json()
         assert data["name"] == "Test Zone"
         assert data["id"]
 
-    def test_create_zone_missing_name(self, client):
+    def test_create_zone_missing_name(self, client, auth_headers):
         zone = self._sample_zone()
         zone["name"] = ""
-        res = client.post("/api/zones", data=json.dumps(zone), content_type="application/json")
+        res = client.post("/api/zones", data=json.dumps(zone), content_type="application/json", headers=auth_headers)
         assert res.status_code == 400
 
-    def test_create_zone_too_few_points(self, client):
-        res = client.post("/api/zones", data=json.dumps({"name": "Bad", "polygon": [[0, 0]]}), content_type="application/json")
+    def test_create_zone_too_few_points(self, client, auth_headers):
+        res = client.post("/api/zones", data=json.dumps({"name": "Bad", "polygon": [[0, 0]]}), content_type="application/json", headers=auth_headers)
         assert res.status_code == 400
 
-    def test_create_zone_no_body(self, client):
-        res = client.post("/api/zones", data="", content_type="application/json")
+    def test_create_zone_no_body(self, client, auth_headers):
+        res = client.post("/api/zones", data="", content_type="application/json", headers=auth_headers)
         assert res.status_code == 400
 
-    def test_list_zones_empty(self, client):
-        res = client.get("/api/zones")
+    def test_list_zones_empty(self, client, auth_headers):
+        res = client.get("/api/zones", headers=auth_headers)
         assert res.status_code == 200
         assert res.get_json() == []
 
-    def test_list_zones_with_data(self, client):
-        client.post("/api/zones", data=json.dumps(self._sample_zone()), content_type="application/json")
-        res = client.get("/api/zones")
+    def test_list_zones_with_data(self, client, auth_headers):
+        client.post("/api/zones", data=json.dumps(self._sample_zone()), content_type="application/json", headers=auth_headers)
+        res = client.get("/api/zones", headers=auth_headers)
         assert res.status_code == 200
         assert len(res.get_json()) == 1
 
-    def test_get_zone_found(self, client):
-        create_res = client.post("/api/zones", data=json.dumps(self._sample_zone()), content_type="application/json")
+    def test_get_zone_found(self, client, auth_headers):
+        create_res = client.post("/api/zones", data=json.dumps(self._sample_zone()), content_type="application/json", headers=auth_headers)
         zone_id = create_res.get_json()["id"]
-        res = client.get(f"/api/zones/{zone_id}")
+        res = client.get(f"/api/zones/{zone_id}", headers=auth_headers)
         assert res.status_code == 200
         assert res.get_json()["name"] == "Test Zone"
 
-    def test_get_zone_not_found(self, client):
-        res = client.get("/api/zones/nonexistent")
+    def test_get_zone_not_found(self, client, auth_headers):
+        res = client.get("/api/zones/nonexistent", headers=auth_headers)
         assert res.status_code == 404
 
-    def test_update_zone(self, client):
-        create_res = client.post("/api/zones", data=json.dumps(self._sample_zone()), content_type="application/json")
+    def test_update_zone(self, client, auth_headers):
+        create_res = client.post("/api/zones", data=json.dumps(self._sample_zone()), content_type="application/json", headers=auth_headers)
         zone_id = create_res.get_json()["id"]
-        res = client.put(f"/api/zones/{zone_id}", data=json.dumps({"name": "Updated"}), content_type="application/json")
+        res = client.put(f"/api/zones/{zone_id}", data=json.dumps({"name": "Updated"}), content_type="application/json", headers=auth_headers)
         assert res.status_code == 200
         assert res.get_json()["name"] == "Updated"
 
-    def test_update_zone_not_found(self, client):
-        res = client.put("/api/zones/nonexistent", data=json.dumps({"name": "X"}), content_type="application/json")
+    def test_update_zone_not_found(self, client, auth_headers):
+        res = client.put("/api/zones/nonexistent", data=json.dumps({"name": "X"}), content_type="application/json", headers=auth_headers)
         assert res.status_code == 404
 
-    def test_delete_zone(self, client):
-        create_res = client.post("/api/zones", data=json.dumps(self._sample_zone()), content_type="application/json")
+    def test_delete_zone(self, client, auth_headers):
+        create_res = client.post("/api/zones", data=json.dumps(self._sample_zone()), content_type="application/json", headers=auth_headers)
         zone_id = create_res.get_json()["id"]
-        res = client.delete(f"/api/zones/{zone_id}")
+        res = client.delete(f"/api/zones/{zone_id}", headers=auth_headers)
         assert res.status_code == 200
-        assert client.get(f"/api/zones/{zone_id}").status_code == 404
+        assert client.get(f"/api/zones/{zone_id}", headers=auth_headers).status_code == 404
 
-    def test_delete_zone_not_found(self, client):
-        res = client.delete("/api/zones/nonexistent")
+    def test_delete_zone_not_found(self, client, auth_headers):
+        res = client.delete("/api/zones/nonexistent", headers=auth_headers)
         assert res.status_code == 404
 
-    def test_assign_drones(self, client):
-        create_res = client.post("/api/zones", data=json.dumps(self._sample_zone()), content_type="application/json")
+    def test_assign_drones(self, client, auth_headers):
+        create_res = client.post("/api/zones", data=json.dumps(self._sample_zone()), content_type="application/json", headers=auth_headers)
         zone_id = create_res.get_json()["id"]
-        res = client.post(f"/api/zones/{zone_id}/assign", data=json.dumps({"droneIds": ["D1", "D2"]}), content_type="application/json")
+        res = client.post(f"/api/zones/{zone_id}/assign", data=json.dumps({"droneIds": ["D1", "D2"]}), content_type="application/json", headers=auth_headers)
         assert res.status_code == 200
         assert set(res.get_json()["assignedDrones"]) == {"D1", "D2"}
 
-    def test_assign_drones_missing_body(self, client):
-        create_res = client.post("/api/zones", data=json.dumps(self._sample_zone()), content_type="application/json")
+    def test_assign_drones_missing_body(self, client, auth_headers):
+        create_res = client.post("/api/zones", data=json.dumps(self._sample_zone()), content_type="application/json", headers=auth_headers)
         zone_id = create_res.get_json()["id"]
-        res = client.post(f"/api/zones/{zone_id}/assign", data=json.dumps({}), content_type="application/json")
+        res = client.post(f"/api/zones/{zone_id}/assign", data=json.dumps({}), content_type="application/json", headers=auth_headers)
         assert res.status_code == 400
 
-    def test_assign_drones_zone_not_found(self, client):
-        res = client.post("/api/zones/nonexistent/assign", data=json.dumps({"droneIds": ["D1"]}), content_type="application/json")
+    def test_assign_drones_zone_not_found(self, client, auth_headers):
+        res = client.post("/api/zones/nonexistent/assign", data=json.dumps({"droneIds": ["D1"]}), content_type="application/json", headers=auth_headers)
         assert res.status_code == 404
 
-    def test_unassign_drones(self, client):
-        create_res = client.post("/api/zones", data=json.dumps(self._sample_zone()), content_type="application/json")
+    def test_unassign_drones(self, client, auth_headers):
+        create_res = client.post("/api/zones", data=json.dumps(self._sample_zone()), content_type="application/json", headers=auth_headers)
         zone_id = create_res.get_json()["id"]
-        client.post(f"/api/zones/{zone_id}/assign", data=json.dumps({"droneIds": ["D1", "D2"]}), content_type="application/json")
-        res = client.post(f"/api/zones/{zone_id}/unassign", data=json.dumps({"droneIds": ["D1"]}), content_type="application/json")
+        client.post(f"/api/zones/{zone_id}/assign", data=json.dumps({"droneIds": ["D1", "D2"]}), content_type="application/json", headers=auth_headers)
+        res = client.post(f"/api/zones/{zone_id}/unassign", data=json.dumps({"droneIds": ["D1"]}), content_type="application/json", headers=auth_headers)
         assert res.status_code == 200
         assert "D1" not in res.get_json()["assignedDrones"]
         assert "D2" in res.get_json()["assignedDrones"]
 
-    def test_violations_endpoint(self, client):
+    def test_violations_endpoint(self, client, auth_headers):
         """Violations endpoint returns correct structure."""
         zone = {
             "name": "Bielefeld Zone",
             "polygon": [[51.9, 8.4], [51.9, 8.7], [52.1, 8.7], [52.1, 8.4]],
         }
-        client.post("/api/zones", data=json.dumps(zone), content_type="application/json")
-        res = client.get("/api/zones/violations")
+        client.post("/api/zones", data=json.dumps(zone), content_type="application/json", headers=auth_headers)
+        res = client.get("/api/zones/violations", headers=auth_headers)
         assert res.status_code == 200
         data = res.get_json()
         assert "violations" in data

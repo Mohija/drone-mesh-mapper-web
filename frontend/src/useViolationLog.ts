@@ -1,5 +1,7 @@
 import { useState, useCallback, useRef, useMemo } from 'react';
-import type { Drone, FlightZone, ZoneViolation, ViolationRecord } from './types/drone';
+import type { Drone, ViolationRecord } from './types/drone';
+import type { ServerViolationRecord } from './api';
+import { fetchViolations, deleteViolationRecord, clearViolationRecords } from './api';
 
 /** Play a short alert beep for new violations */
 function playAlertSound() {
@@ -21,15 +23,14 @@ function playAlertSound() {
 
 export interface UseViolationLogReturn {
   records: ViolationRecord[];
-  update: (
-    activeViolations: ZoneViolation[],
+  /** Sync violation records from backend. Detects new violations for alerts/auto-tracking. */
+  sync: (
     drones: Drone[],
-    zones: FlightZone[],
     onAutoTrack?: (drone: Drone) => void,
-  ) => void;
-  deleteRecord: (recordId: string) => void;
+  ) => Promise<void>;
+  deleteRecord: (recordId: string) => Promise<void>;
   toggleTrackingVisible: (recordId: string) => void;
-  clearAll: () => void;
+  clearAll: () => Promise<void>;
   collapsed: boolean;
   setCollapsed: (v: boolean) => void;
   hiddenTrailDroneIds: Set<string>;
@@ -40,109 +41,112 @@ export interface UseViolationLogReturn {
 export function useViolationLog(): UseViolationLogReturn {
   const [records, setRecords] = useState<ViolationRecord[]>([]);
   const [collapsed, setCollapsed] = useState(true);
+  // Track which record IDs we already alerted on (survives re-renders)
   const alertedRef = useRef<Set<string>>(new Set());
+  // Local UI state: per-record trail visibility (not shared across users)
+  const trackingVisRef = useRef<Map<string, boolean>>(new Map());
+  // For getDroneIdForRecord / hasOtherRecords — keep in ref so callbacks are stable
+  const recordsRef = useRef(records);
+  recordsRef.current = records;
 
-  const update = useCallback((
-    activeViolations: ZoneViolation[],
+  /**
+   * Fetch violation records from backend and merge with local UI state.
+   * Detects NEW active violations (not yet alerted) → plays sound + auto-tracks.
+   */
+  const sync = useCallback(async (
     drones: Drone[],
-    zones: FlightZone[],
     onAutoTrack?: (drone: Drone) => void,
   ) => {
-    const now = Date.now() / 1000;
-    const activeKeys = new Set(activeViolations.map(v => `${v.droneId}::${v.zoneId}`));
-    const activeDroneIds = new Set(drones.map(d => d.id));
+    let serverRecords: ServerViolationRecord[];
+    try {
+      const data = await fetchViolations();
+      serverRecords = data.records;
+    } catch {
+      return; // API error — keep existing records
+    }
 
-    // Collect new violation keys for post-update side effects
+    const serverIds = new Set(serverRecords.map(r => r.id));
     const newAutoTrackDroneIds: string[] = [];
 
-    setRecords(prev => {
-      const next = prev.map(r => ({ ...r }));
-      let hasNew = false;
-      let hasEnded = false;
-
-      // Detect new violations
-      for (const v of activeViolations) {
-        const key = `${v.droneId}::${v.zoneId}`;
-        const hasActiveRecord = next.some(r =>
-          r.droneId === v.droneId && r.zoneId === v.zoneId && r.endTime === null
-        );
-        if (!hasActiveRecord) {
-          const zone = zones.find(z => z.id === v.zoneId);
-          next.push({
-            id: `${v.droneId}_${v.zoneId}_${Math.round(now * 1000)}`,
-            droneId: v.droneId,
-            droneName: v.droneName,
-            zoneId: v.zoneId,
-            zoneName: v.zoneName,
-            zoneColor: zone?.color || '#ef4444',
-            startTime: now,
-            endTime: null,
-            trackingVisible: true,
-          });
-          hasNew = true;
-
-          // Mark for auto-tracking (side effect happens AFTER setRecords)
-          if (!alertedRef.current.has(key)) {
-            newAutoTrackDroneIds.push(v.droneId);
-            alertedRef.current.add(key);
-          }
-        }
+    // Detect new active violations (record IDs we haven't alerted on yet)
+    for (const r of serverRecords) {
+      if (r.endTime === null && !alertedRef.current.has(r.id)) {
+        alertedRef.current.add(r.id);
+        newAutoTrackDroneIds.push(r.droneId);
       }
+    }
 
-      // End violations that are no longer active or drone disappeared
-      for (const record of next) {
-        if (record.endTime === null) {
-          const key = `${record.droneId}::${record.zoneId}`;
-          if (!activeKeys.has(key) || !activeDroneIds.has(record.droneId)) {
-            record.endTime = now;
-            hasEnded = true;
-            alertedRef.current.delete(key);
-          }
-        }
+    // Clean up alertedRef for records removed from backend
+    for (const id of alertedRef.current) {
+      if (!serverIds.has(id)) {
+        alertedRef.current.delete(id);
       }
+    }
 
-      if (!hasNew && !hasEnded) return prev;
-      return next;
-    });
+    // Clean up trackingVis for deleted records
+    for (const id of trackingVisRef.current.keys()) {
+      if (!serverIds.has(id)) {
+        trackingVisRef.current.delete(id);
+      }
+    }
 
-    // Side effects OUTSIDE the state updater — safe from React re-runs
+    // Merge server records with local trackingVisible
+    const merged: ViolationRecord[] = serverRecords.map(r => ({
+      ...r,
+      trackingVisible: trackingVisRef.current.get(r.id) ?? true,
+    }));
+
+    setRecords(merged);
+
+    // Side effects: alert sound + auto-tracking for new violations
     if (newAutoTrackDroneIds.length > 0) {
       playAlertSound();
-      for (const droneId of newAutoTrackDroneIds) {
-        const drone = drones.find(d => d.id === droneId);
-        if (drone && onAutoTrack) onAutoTrack(drone);
+      if (onAutoTrack) {
+        const seen = new Set<string>();
+        for (const droneId of newAutoTrackDroneIds) {
+          if (seen.has(droneId)) continue;
+          seen.add(droneId);
+          const drone = drones.find(d => d.id === droneId);
+          if (drone) onAutoTrack(drone);
+        }
       }
     }
   }, []);
 
-  const deleteRecord = useCallback((recordId: string) => {
-    setRecords(prev => {
-      const record = prev.find(r => r.id === recordId);
-      if (record) {
-        alertedRef.current.delete(`${record.droneId}::${record.zoneId}`);
-      }
-      return prev.filter(r => r.id !== recordId);
-    });
+  const deleteRecord = useCallback(async (recordId: string) => {
+    // Optimistic: remove locally first, then sync to backend
+    alertedRef.current.delete(recordId);
+    trackingVisRef.current.delete(recordId);
+    setRecords(prev => prev.filter(r => r.id !== recordId));
+    try {
+      await deleteViolationRecord(recordId);
+    } catch { /* best-effort — next sync will reconcile */ }
   }, []);
 
   const toggleTrackingVisible = useCallback((recordId: string) => {
+    const current = trackingVisRef.current.get(recordId) ?? true;
+    trackingVisRef.current.set(recordId, !current);
     setRecords(prev => prev.map(r =>
       r.id === recordId ? { ...r, trackingVisible: !r.trackingVisible } : r
     ));
   }, []);
 
-  const clearAll = useCallback(() => {
+  const clearAll = useCallback(async () => {
     setRecords([]);
     alertedRef.current.clear();
+    trackingVisRef.current.clear();
+    try {
+      await clearViolationRecords();
+    } catch { /* best-effort */ }
   }, []);
 
   const getDroneIdForRecord = useCallback((recordId: string) => {
-    return records.find(r => r.id === recordId)?.droneId;
-  }, [records]);
+    return recordsRef.current.find(r => r.id === recordId)?.droneId;
+  }, []);
 
   const hasOtherRecords = useCallback((droneId: string, excludeRecordId: string) => {
-    return records.some(r => r.droneId === droneId && r.id !== excludeRecordId);
-  }, [records]);
+    return recordsRef.current.some(r => r.droneId === droneId && r.id !== excludeRecordId);
+  }, []);
 
   // A drone's trail is hidden only if ALL its records have trackingVisible=false
   const hiddenTrailDroneIds = useMemo(() => {
@@ -160,7 +164,7 @@ export function useViolationLog(): UseViolationLogReturn {
 
   return {
     records,
-    update,
+    sync,
     deleteRecord,
     toggleTrackingVisible,
     clearAll,

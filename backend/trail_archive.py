@@ -1,13 +1,13 @@
 """
-Trail Archive — persists tracked flight trails as JSON files for up to 7 days.
+Trail Archive — persists tracked flight trails in database with 7-day retention.
 """
 
-import json
 import logging
-import os
 import threading
 import time
-import uuid
+from contextlib import contextmanager
+
+from flask import has_app_context
 
 logger = logging.getLogger("trail_archive")
 
@@ -16,134 +16,125 @@ MAX_POINTS = 10000
 CLEANUP_INTERVAL = 3600  # 1 hour
 
 
-class TrailArchive:
-    def __init__(self, data_dir: str):
-        self._dir = data_dir
-        self._lock = threading.Lock()
-        self._index: dict[str, dict] = {}
-        os.makedirs(data_dir, exist_ok=True)
-        self._load_index()
+class TrailArchiveManager:
+    def __init__(self, app=None, tenant_id=None):
+        self._app = app
+        self._default_tenant_id = tenant_id
+        self._cleanup_timer = None
+
+    def bind(self, app, tenant_id):
+        self._app = app
+        self._default_tenant_id = tenant_id
         self._schedule_cleanup()
 
-    def _load_index(self):
-        """Scan JSON files and build in-memory index (metadata only)."""
-        count = 0
-        for fname in os.listdir(self._dir):
-            if not fname.endswith(".json"):
-                continue
-            path = os.path.join(self._dir, fname)
-            try:
-                with open(path, "r") as f:
-                    data = json.load(f)
-                archive_id = data.get("id", fname.replace(".json", ""))
-                self._index[archive_id] = {
-                    "id": archive_id,
-                    "droneId": data.get("droneId", ""),
-                    "droneName": data.get("droneName", ""),
-                    "source": data.get("source"),
-                    "color": data.get("color", "#f97316"),
-                    "startedAt": data.get("startedAt", 0),
-                    "archivedAt": data.get("archivedAt", 0),
-                    "expiresAt": data.get("expiresAt", 0),
-                    "pointCount": len(data.get("trail", [])),
-                }
-                count += 1
-            except Exception as e:
-                logger.warning("Failed to load archive %s: %s", fname, e)
-        if count:
-            logger.info("Loaded %d archived trails", count)
+    @contextmanager
+    def _ctx(self):
+        """Provide app context, reusing current one if available."""
+        if has_app_context():
+            yield
+        elif self._app:
+            with self._app.app_context():
+                yield
+        else:
+            raise RuntimeError("No Flask app context available")
 
-    def list_archives(self) -> list[dict]:
-        with self._lock:
-            now = time.time()
-            return [
-                m for m in self._index.values()
-                if m.get("expiresAt", 0) > now
-            ]
+    def _schedule_cleanup(self):
+        if self._cleanup_timer:
+            self._cleanup_timer.cancel()
+        self._cleanup_timer = threading.Timer(CLEANUP_INTERVAL, self._cleanup_expired)
+        self._cleanup_timer.daemon = True
+        self._cleanup_timer.start()
 
-    def get_archive(self, archive_id: str) -> dict | None:
-        with self._lock:
-            if archive_id not in self._index:
-                return None
-        path = os.path.join(self._dir, f"{archive_id}.json")
-        if not os.path.exists(path):
-            return None
+    def _cleanup_expired(self):
+        from models import TrailArchive
+        from database import db
+
+        if not self._app:
+            return
         try:
-            with open(path, "r") as f:
-                return json.load(f)
-        except Exception as e:
-            logger.warning("Failed to read archive %s: %s", archive_id, e)
-            return None
+            with self._app.app_context():
+                now = time.time()
+                expired = TrailArchive.query.filter(TrailArchive.expires_at <= now).all()
+                count = len(expired)
+                for archive in expired:
+                    db.session.delete(archive)
+                db.session.commit()
+                if count:
+                    logger.info("Cleaned up %d expired archives", count)
+        except Exception:
+            logger.exception("Failed to clean up expired archives")
+        self._schedule_cleanup()
 
-    def save_archive(self, data: dict) -> dict:
+    def list_archives(self, tenant_id=None) -> list[dict]:
+        from models import TrailArchive
+        tid = tenant_id or self._default_tenant_id
+        with self._ctx():
+            now = time.time()
+            archives = TrailArchive.query.filter(
+                TrailArchive.tenant_id == tid,
+                TrailArchive.expires_at > now,
+            ).all()
+            return [a.to_dict(include_trail=False) for a in archives]
+
+    def get_archive(self, archive_id: str, tenant_id=None) -> dict | None:
+        from models import TrailArchive
+        from database import db
+        tid = tenant_id or self._default_tenant_id
+        with self._ctx():
+            archive = db.session.get(TrailArchive, archive_id)
+            if not archive:
+                return None
+            if tid and archive.tenant_id != tid:
+                return None
+            return archive.to_dict(include_trail=True)
+
+    def save_archive(self, data: dict, tenant_id=None) -> dict:
+        from models import TrailArchive
+        from database import db
+
         trail = data.get("trail", [])
         if len(trail) > MAX_POINTS:
             raise ValueError(f"Trail too large: {len(trail)} points (max {MAX_POINTS})")
         if len(trail) < 2:
             raise ValueError("Trail must have at least 2 points")
 
-        archive_id = str(uuid.uuid4())[:8]
+        tid = tenant_id or self._default_tenant_id
         now = time.time()
-        archive = {
-            "id": archive_id,
-            "droneId": data.get("droneId", ""),
-            "droneName": data.get("droneName", ""),
-            "source": data.get("source"),
-            "color": data.get("color", "#f97316"),
-            "trail": trail,
-            "startedAt": data.get("startedAt", now),
-            "archivedAt": now,
-            "expiresAt": now + ARCHIVE_TTL,
-        }
 
-        path = os.path.join(self._dir, f"{archive_id}.json")
-        with open(path, "w") as f:
-            json.dump(archive, f)
-
-        meta = {k: v for k, v in archive.items() if k != "trail"}
-        meta["pointCount"] = len(trail)
-
-        with self._lock:
-            self._index[archive_id] = meta
+        with self._ctx():
+            archive = TrailArchive(
+                tenant_id=tid,
+                drone_id=data.get("droneId", ""),
+                drone_name=data.get("droneName", ""),
+                source=data.get("source"),
+                color=data.get("color", "#f97316"),
+                trail=trail,
+                started_at=data.get("startedAt", now),
+                archived_at=now,
+                expires_at=now + ARCHIVE_TTL,
+            )
+            db.session.add(archive)
+            db.session.commit()
+            result = archive.to_dict(include_trail=True)
 
         logger.info(
             "Archived trail %s: drone=%s points=%d",
-            archive_id, archive["droneId"], len(trail),
+            result["id"], result["droneId"], len(trail),
         )
-        return archive
+        return result
 
-    def delete_archive(self, archive_id: str) -> bool:
-        with self._lock:
-            if archive_id not in self._index:
+    def delete_archive(self, archive_id: str, tenant_id=None) -> bool:
+        from models import TrailArchive
+        from database import db
+        tid = tenant_id or self._default_tenant_id
+        with self._ctx():
+            archive = db.session.get(TrailArchive, archive_id)
+            if not archive:
                 return False
-            del self._index[archive_id]
-        path = os.path.join(self._dir, f"{archive_id}.json")
-        try:
-            os.remove(path)
-        except FileNotFoundError:
-            pass
+            if tid and archive.tenant_id != tid:
+                return False
+            db.session.delete(archive)
+            db.session.commit()
+
         logger.info("Deleted archive %s", archive_id)
         return True
-
-    def _cleanup_expired(self):
-        now = time.time()
-        expired = []
-        with self._lock:
-            for aid, meta in list(self._index.items()):
-                if meta.get("expiresAt", 0) <= now:
-                    expired.append(aid)
-                    del self._index[aid]
-        for aid in expired:
-            path = os.path.join(self._dir, f"{aid}.json")
-            try:
-                os.remove(path)
-            except FileNotFoundError:
-                pass
-        if expired:
-            logger.info("Cleaned up %d expired archives", len(expired))
-        self._schedule_cleanup()
-
-    def _schedule_cleanup(self):
-        t = threading.Timer(CLEANUP_INTERVAL, self._cleanup_expired)
-        t.daemon = True
-        t.start()

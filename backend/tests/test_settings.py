@@ -57,18 +57,19 @@ class TestSettingsManager:
 
 
 class TestSettingsAPI:
-    def test_get_settings(self, client):
-        res = client.get("/api/settings")
+    def test_get_settings(self, client, auth_headers):
+        res = client.get("/api/settings", headers=auth_headers)
         assert res.status_code == 200
         data = res.get_json()
         assert "sources" in data
         assert "simulator" in data["sources"]
 
-    def test_post_settings_enable(self, client):
+    def test_post_settings_enable(self, client, auth_headers):
         res = client.post(
             "/api/settings",
             data=json.dumps({"sources": {"opensky": {"enabled": True}}}),
             content_type="application/json",
+            headers=auth_headers,
         )
         assert res.status_code == 200
         data = res.get_json()
@@ -78,21 +79,24 @@ class TestSettingsAPI:
             "/api/settings",
             data=json.dumps({"sources": {"opensky": {"enabled": False}}}),
             content_type="application/json",
+            headers=auth_headers,
         )
 
-    def test_post_settings_empty_body(self, client):
+    def test_post_settings_empty_body(self, client, auth_headers):
         res = client.post(
             "/api/settings",
             data="",
             content_type="application/json",
+            headers=auth_headers,
         )
         assert res.status_code == 400
 
-    def test_post_settings_preserves_labels(self, client):
+    def test_post_settings_preserves_labels(self, client, auth_headers):
         res = client.post(
             "/api/settings",
             data=json.dumps({"sources": {"opensky": {"enabled": True}}}),
             content_type="application/json",
+            headers=auth_headers,
         )
         data = res.get_json()
         assert data["sources"]["opensky"]["label"] == "OpenSky Network"
@@ -101,19 +105,20 @@ class TestSettingsAPI:
             "/api/settings",
             data=json.dumps({"sources": {"opensky": {"enabled": False}}}),
             content_type="application/json",
+            headers=auth_headers,
         )
 
 
 class TestDronesWithSources:
-    def test_drones_response_has_sources_field(self, client):
-        res = client.get("/api/drones")
+    def test_drones_response_has_sources_field(self, client, auth_headers):
+        res = client.get("/api/drones", headers=auth_headers)
         data = res.get_json()
         assert "sources" in data
         assert isinstance(data["sources"], list)
         assert "simulator" in data["sources"]
 
-    def test_simulator_drones_have_source_field(self, client):
-        res = client.get("/api/drones")
+    def test_simulator_drones_have_source_field(self, client, auth_headers):
+        res = client.get("/api/drones", headers=auth_headers)
         data = res.get_json()
         for drone in data["drones"]:
             assert "source" in drone
@@ -121,8 +126,8 @@ class TestDronesWithSources:
             assert "source_label" in drone
             assert drone["source_label"] == "Simulator"
 
-    def test_single_drone_has_source_field(self, client):
-        res = client.get("/api/drones/AZTEST001")
+    def test_single_drone_has_source_field(self, client, auth_headers):
+        res = client.get("/api/drones/AZTEST001", headers=auth_headers)
         assert res.status_code == 200
         data = res.get_json()
         assert data["source"] == "simulator"

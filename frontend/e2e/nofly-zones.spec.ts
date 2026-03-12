@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { apiLogin } from './helpers';
 
 test.describe('No-Fly Zones UI', () => {
   test.beforeEach(async ({ page }) => {
@@ -272,8 +273,14 @@ test.describe('No-Fly Zones UI', () => {
 });
 
 test.describe('No-Fly Zones API', () => {
+  let authHeaders: Record<string, string>;
+
+  test.beforeAll(async ({ request }) => {
+    authHeaders = await apiLogin(request);
+  });
+
   test('GET /api/nofly/check returns availability status', async ({ request }) => {
-    const res = await request.get('/api/nofly/check');
+    const res = await request.get('/api/nofly/check', { headers: authHeaders });
     expect(res.status()).toBe(200);
     const data = await res.json();
     expect(data).toHaveProperty('available');
@@ -286,19 +293,19 @@ test.describe('No-Fly Zones API', () => {
   });
 
   test('GET /api/nofly/info returns 400 without params', async ({ request }) => {
-    const res = await request.get('/api/nofly/info');
+    const res = await request.get('/api/nofly/info', { headers: authHeaders });
     expect(res.status()).toBe(400);
     const data = await res.json();
     expect(data).toHaveProperty('error');
   });
 
   test('GET /api/nofly/info returns 400 without layers', async ({ request }) => {
-    const res = await request.get('/api/nofly/info?lat=52.0&lon=8.0');
+    const res = await request.get('/api/nofly/info?lat=52.0&lon=8.0', { headers: authHeaders });
     expect(res.status()).toBe(400);
   });
 
   test('GET /api/nofly/info with valid params returns response', async ({ request }) => {
-    const res = await request.get('/api/nofly/info?lat=50.03&lon=8.57&layers=dipul:flughaefen');
+    const res = await request.get('/api/nofly/info?lat=50.03&lon=8.57&layers=dipul:flughaefen', { headers: authHeaders });
     // Could be 200 (success) or 502/504 (WMS unreachable) - both are valid responses
     expect([200, 502, 504]).toContain(res.status());
     const data = await res.json();
@@ -313,7 +320,7 @@ test.describe('No-Fly Zones API', () => {
 
   test('GET /api/nofly/info with multiple layers', async ({ request }) => {
     const layers = 'dipul:flughaefen,dipul:kontrollzonen';
-    const res = await request.get(`/api/nofly/info?lat=50.03&lon=8.57&layers=${layers}`);
+    const res = await request.get(`/api/nofly/info?lat=50.03&lon=8.57&layers=${layers}`, { headers: authHeaders });
     expect([200, 502, 504]).toContain(res.status());
   });
 });

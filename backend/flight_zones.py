@@ -1,62 +1,60 @@
 """
 Flight Zones — user-defined flight zones with drone assignment and violation detection.
-Persists zones as individual JSON files.
+Now backed by SQLAlchemy database instead of JSON files.
 """
 
-import json
 import logging
-import os
-import threading
 import time
-import uuid
+from contextlib import contextmanager
+
+from flask import has_app_context
 
 logger = logging.getLogger("flight_zones")
 
 
 class FlightZoneManager:
-    def __init__(self, data_dir: str):
-        self._dir = data_dir
-        self._lock = threading.Lock()
-        self._zones: dict[str, dict] = {}
-        os.makedirs(data_dir, exist_ok=True)
-        self._load_all()
+    def __init__(self, app=None, tenant_id=None):
+        self._app = app
+        self._default_tenant_id = tenant_id
 
-    def _load_all(self):
-        """Load all zone JSON files into memory."""
-        count = 0
-        for fname in os.listdir(self._dir):
-            if not fname.endswith(".json"):
-                continue
-            path = os.path.join(self._dir, fname)
-            try:
-                with open(path, "r") as f:
-                    data = json.load(f)
-                zone_id = data.get("id", fname.replace(".json", ""))
-                # Ensure altitude fields exist (backward compat)
-                data.setdefault("minAltitudeAGL", None)
-                data.setdefault("maxAltitudeAGL", None)
-                self._zones[zone_id] = data
-                count += 1
-            except Exception as e:
-                logger.warning("Failed to load zone %s: %s", fname, e)
-        if count:
-            logger.info("Loaded %d flight zones", count)
+    def bind(self, app, tenant_id):
+        self._app = app
+        self._default_tenant_id = tenant_id
 
-    def _save_zone(self, zone: dict):
-        """Write a zone to disk."""
-        path = os.path.join(self._dir, f"{zone['id']}.json")
-        with open(path, "w") as f:
-            json.dump(zone, f)
+    @contextmanager
+    def _ctx(self):
+        """Provide app context, reusing current one if available."""
+        if has_app_context():
+            yield
+        elif self._app:
+            with self._app.app_context():
+                yield
+        else:
+            raise RuntimeError("No Flask app context available")
 
-    def list_zones(self) -> list[dict]:
-        with self._lock:
-            return list(self._zones.values())
+    def list_zones(self, tenant_id=None) -> list[dict]:
+        from models import FlightZone as FZModel
+        tid = tenant_id or self._default_tenant_id
+        with self._ctx():
+            zones = FZModel.query.filter_by(tenant_id=tid).all()
+            return [z.to_dict() for z in zones]
 
-    def get_zone(self, zone_id: str) -> dict | None:
-        with self._lock:
-            return self._zones.get(zone_id)
+    def get_zone(self, zone_id: str, tenant_id=None) -> dict | None:
+        from models import FlightZone as FZModel
+        from database import db
+        tid = tenant_id or self._default_tenant_id
+        with self._ctx():
+            zone = db.session.get(FZModel, zone_id)
+            if not zone:
+                return None
+            if tid and zone.tenant_id != tid:
+                return None
+            return zone.to_dict()
 
-    def create_zone(self, data: dict) -> dict:
+    def create_zone(self, data: dict, tenant_id=None) -> dict:
+        from models import FlightZone as FZModel
+        from database import db
+
         polygon = data.get("polygon", [])
         if len(polygon) < 3:
             raise ValueError("Polygon must have at least 3 points")
@@ -65,110 +63,122 @@ class FlightZoneManager:
         if not name:
             raise ValueError("Zone name is required")
 
-        zone_id = str(uuid.uuid4())[:8]
-        now = time.time()
-        zone = {
-            "id": zone_id,
-            "name": name,
-            "color": data.get("color", "#3b82f6"),
-            "polygon": polygon,
-            "minAltitudeAGL": data.get("minAltitudeAGL"),
-            "maxAltitudeAGL": data.get("maxAltitudeAGL"),
-            "assignedDrones": data.get("assignedDrones", []),
-            "createdAt": now,
-            "updatedAt": now,
-        }
+        tid = tenant_id or self._default_tenant_id
+        with self._ctx():
+            zone = FZModel(
+                tenant_id=tid,
+                name=name,
+                color=data.get("color", "#3b82f6"),
+                polygon=polygon,
+                min_altitude_agl=data.get("minAltitudeAGL"),
+                max_altitude_agl=data.get("maxAltitudeAGL"),
+                assigned_drones=data.get("assignedDrones", []),
+            )
+            db.session.add(zone)
+            db.session.commit()
+            result = zone.to_dict()
 
-        self._save_zone(zone)
-        with self._lock:
-            self._zones[zone_id] = zone
+        logger.info("Created zone %s: name=%s points=%d", result["id"], name, len(polygon))
+        return result
 
-        logger.info("Created zone %s: name=%s points=%d", zone_id, name, len(polygon))
-        return zone
+    def update_zone(self, zone_id: str, data: dict, tenant_id=None) -> dict | None:
+        from models import FlightZone as FZModel
+        from database import db
 
-    def update_zone(self, zone_id: str, data: dict) -> dict | None:
-        with self._lock:
-            zone = self._zones.get(zone_id)
+        tid = tenant_id or self._default_tenant_id
+        with self._ctx():
+            zone = db.session.get(FZModel, zone_id)
             if not zone:
                 return None
-            zone = dict(zone)  # copy
+            if tid and zone.tenant_id != tid:
+                return None
 
-        if "name" in data:
-            name = data["name"].strip()
-            if not name:
-                raise ValueError("Zone name is required")
-            zone["name"] = name
-        if "color" in data:
-            zone["color"] = data["color"]
-        if "polygon" in data:
-            if len(data["polygon"]) < 3:
-                raise ValueError("Polygon must have at least 3 points")
-            zone["polygon"] = data["polygon"]
-        if "minAltitudeAGL" in data:
-            zone["minAltitudeAGL"] = data["minAltitudeAGL"]
-        if "maxAltitudeAGL" in data:
-            zone["maxAltitudeAGL"] = data["maxAltitudeAGL"]
-        zone["updatedAt"] = time.time()
+            if "name" in data:
+                name = data["name"].strip()
+                if not name:
+                    raise ValueError("Zone name is required")
+                zone.name = name
+            if "color" in data:
+                zone.color = data["color"]
+            if "polygon" in data:
+                if len(data["polygon"]) < 3:
+                    raise ValueError("Polygon must have at least 3 points")
+                zone.polygon = data["polygon"]
+            if "minAltitudeAGL" in data:
+                zone.min_altitude_agl = data["minAltitudeAGL"]
+            if "maxAltitudeAGL" in data:
+                zone.max_altitude_agl = data["maxAltitudeAGL"]
+            zone.updated_at = time.time()
 
-        self._save_zone(zone)
-        with self._lock:
-            self._zones[zone_id] = zone
+            db.session.commit()
+            result = zone.to_dict()
 
         logger.info("Updated zone %s", zone_id)
-        return zone
+        return result
 
-    def delete_zone(self, zone_id: str) -> bool:
-        with self._lock:
-            if zone_id not in self._zones:
+    def delete_zone(self, zone_id: str, tenant_id=None) -> bool:
+        from models import FlightZone as FZModel
+        from database import db
+
+        tid = tenant_id or self._default_tenant_id
+        with self._ctx():
+            zone = db.session.get(FZModel, zone_id)
+            if not zone:
                 return False
-            del self._zones[zone_id]
-        path = os.path.join(self._dir, f"{zone_id}.json")
-        try:
-            os.remove(path)
-        except FileNotFoundError:
-            pass
+            if tid and zone.tenant_id != tid:
+                return False
+            db.session.delete(zone)
+            db.session.commit()
+
         logger.info("Deleted zone %s", zone_id)
         return True
 
-    def assign_drones(self, zone_id: str, drone_ids: list[str]) -> dict | None:
-        with self._lock:
-            zone = self._zones.get(zone_id)
+    def assign_drones(self, zone_id: str, drone_ids: list[str], tenant_id=None) -> dict | None:
+        from models import FlightZone as FZModel
+        from database import db
+
+        tid = tenant_id or self._default_tenant_id
+        with self._ctx():
+            zone = db.session.get(FZModel, zone_id)
             if not zone:
                 return None
-            zone = dict(zone)
-            existing = set(zone.get("assignedDrones", []))
+            if tid and zone.tenant_id != tid:
+                return None
+
+            existing = set(zone.assigned_drones or [])
             existing.update(drone_ids)
-            zone["assignedDrones"] = list(existing)
-            zone["updatedAt"] = time.time()
-            self._zones[zone_id] = zone
+            zone.assigned_drones = list(existing)
+            zone.updated_at = time.time()
+            db.session.commit()
+            result = zone.to_dict()
 
-        self._save_zone(zone)
         logger.info("Assigned %d drone(s) to zone %s", len(drone_ids), zone_id)
-        return zone
+        return result
 
-    def unassign_drones(self, zone_id: str, drone_ids: list[str]) -> dict | None:
-        with self._lock:
-            zone = self._zones.get(zone_id)
+    def unassign_drones(self, zone_id: str, drone_ids: list[str], tenant_id=None) -> dict | None:
+        from models import FlightZone as FZModel
+        from database import db
+
+        tid = tenant_id or self._default_tenant_id
+        with self._ctx():
+            zone = db.session.get(FZModel, zone_id)
             if not zone:
                 return None
-            zone = dict(zone)
+            if tid and zone.tenant_id != tid:
+                return None
+
             to_remove = set(drone_ids)
-            zone["assignedDrones"] = [d for d in zone.get("assignedDrones", []) if d not in to_remove]
-            zone["updatedAt"] = time.time()
-            self._zones[zone_id] = zone
+            zone.assigned_drones = [d for d in (zone.assigned_drones or []) if d not in to_remove]
+            zone.updated_at = time.time()
+            db.session.commit()
+            result = zone.to_dict()
 
-        self._save_zone(zone)
         logger.info("Unassigned %d drone(s) from zone %s", len(drone_ids), zone_id)
-        return zone
+        return result
 
-    def check_violations(self, drones: list[dict], get_elevation=None) -> list[dict]:
-        """Check all zones for drones that are inside but not assigned.
-        get_elevation: optional callable(lat, lon) -> float|None for AGL checks.
-        Returns list of violation dicts: {droneId, droneName, zoneId, zoneName, timestamp}.
-        """
-        with self._lock:
-            zones = list(self._zones.values())
-
+    def check_violations(self, drones: list[dict], get_elevation=None, tenant_id=None) -> list[dict]:
+        """Check all zones for drones that are inside but not assigned."""
+        zones = self.list_zones(tenant_id=tenant_id)
         violations = []
         now = time.time()
 
@@ -193,7 +203,6 @@ class FlightZoneManager:
                 if not point_in_polygon(lat, lon, polygon):
                     continue
 
-                # AGL altitude check if zone has altitude limits
                 if min_agl is not None or max_agl is not None:
                     drone_alt = drone.get("altitude", 0) or 0
                     ground = 0.0
@@ -203,9 +212,9 @@ class FlightZoneManager:
                             ground = elev
                     drone_agl = drone_alt - ground
                     if min_agl is not None and drone_agl < min_agl:
-                        continue  # below zone floor
+                        continue
                     if max_agl is not None and drone_agl > max_agl:
-                        continue  # above zone ceiling
+                        continue
 
                 violations.append({
                     "droneId": drone_id,
@@ -218,10 +227,135 @@ class FlightZoneManager:
         return violations
 
 
+    # ── Shared Violation Records ────────────────────────────────
+
+    def update_violations(self, drones: list[dict], get_elevation=None, tenant_id=None):
+        """Check all zones and update violation records in the DB.
+
+        - New violations → create record (start_time=now, end_time=NULL)
+        - Drone leaves zone → set end_time on existing active record
+        - Drone re-enters zone → create a NEW record
+        This is idempotent — safe to call from multiple concurrent requests.
+        """
+        from models import ViolationRecord as VR
+        from database import db
+
+        tid = tenant_id or self._default_tenant_id
+        now = time.time()
+
+        # 1. Compute currently active violation pairs
+        zones_list = self.list_zones(tenant_id=tid)
+        active_pairs: dict[tuple[str, str], dict] = {}  # (drone_id, zone_id) -> details
+
+        for zone in zones_list:
+            polygon = zone.get("polygon", [])
+            if len(polygon) < 3:
+                continue
+            assigned = set(zone.get("assignedDrones", []))
+            min_agl = zone.get("minAltitudeAGL")
+            max_agl = zone.get("maxAltitudeAGL")
+
+            for drone in drones:
+                drone_id = drone.get("id", "")
+                if drone_id in assigned:
+                    continue
+                basic_id = drone.get("basic_id", "")
+                if basic_id and basic_id in assigned:
+                    continue
+
+                lat = drone.get("latitude", 0)
+                lon = drone.get("longitude", 0)
+                if not point_in_polygon(lat, lon, polygon):
+                    continue
+
+                if min_agl is not None or max_agl is not None:
+                    drone_alt = drone.get("altitude", 0) or 0
+                    ground = 0.0
+                    if get_elevation:
+                        elev = get_elevation(lat, lon)
+                        if elev is not None:
+                            ground = elev
+                    drone_agl = drone_alt - ground
+                    if min_agl is not None and drone_agl < min_agl:
+                        continue
+                    if max_agl is not None and drone_agl > max_agl:
+                        continue
+
+                active_pairs[(drone_id, zone["id"])] = {
+                    "drone_name": drone.get("name", drone_id),
+                    "zone_name": zone["name"],
+                    "zone_color": zone.get("color", "#ef4444"),
+                }
+
+        # 2. Update DB records atomically
+        with self._ctx():
+            active_records = VR.query.filter_by(tenant_id=tid, end_time=None).all()
+            existing_keys: dict[tuple[str, str], "VR"] = {}
+            for record in active_records:
+                existing_keys[(record.drone_id, record.zone_id)] = record
+
+            # End violations where drone left zone
+            for key, record in existing_keys.items():
+                if key not in active_pairs:
+                    record.end_time = now
+
+            # Create new violations
+            for key, details in active_pairs.items():
+                if key not in existing_keys:
+                    drone_id, zone_id = key
+                    db.session.add(VR(
+                        tenant_id=tid,
+                        drone_id=drone_id,
+                        drone_name=details["drone_name"],
+                        zone_id=zone_id,
+                        zone_name=details["zone_name"],
+                        zone_color=details["zone_color"],
+                        start_time=now,
+                    ))
+
+            db.session.commit()
+
+        logger.debug("update_violations tenant=%s: %d active pairs, %d db records",
+                      tid, len(active_pairs), len(existing_keys))
+
+    def list_violations(self, tenant_id=None) -> list[dict]:
+        """Get all violation records for a tenant (active + ended)."""
+        from models import ViolationRecord as VR
+
+        tid = tenant_id or self._default_tenant_id
+        with self._ctx():
+            records = VR.query.filter_by(tenant_id=tid).order_by(VR.start_time.desc()).all()
+            return [r.to_dict() for r in records]
+
+    def delete_violation(self, record_id: str, tenant_id=None) -> bool:
+        """Delete a single violation record."""
+        from models import ViolationRecord as VR
+        from database import db
+
+        tid = tenant_id or self._default_tenant_id
+        with self._ctx():
+            record = db.session.get(VR, record_id)
+            if not record or (tid and record.tenant_id != tid):
+                return False
+            db.session.delete(record)
+            db.session.commit()
+        return True
+
+    def clear_violations(self, tenant_id=None) -> int:
+        """Delete all violation records for a tenant. Returns count deleted."""
+        from models import ViolationRecord as VR
+        from database import db
+
+        tid = tenant_id or self._default_tenant_id
+        with self._ctx():
+            count = VR.query.filter_by(tenant_id=tid).delete()
+            db.session.commit()
+        logger.info("Cleared %d violation records for tenant %s", count, tid)
+        return count
+
+
 def point_in_polygon(lat: float, lon: float, polygon: list[list[float]]) -> bool:
-    """Ray-casting algorithm to check if a point is inside a polygon.
-    polygon is a list of [lat, lon] pairs. The polygon is automatically closed.
-    """
+    """Ray-casting algorithm to check if a point is inside a polygon."""
     n = len(polygon)
     if n < 3:
         return False

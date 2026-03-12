@@ -20,7 +20,6 @@ async function clickDroneMarker(page: any) {
 test.describe('Map Page', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    // Wait for drones API to respond
     await page.waitForResponse(resp => resp.url().includes('/api/drones') && resp.status() === 200);
   });
 

@@ -11,6 +11,18 @@ vi.mock('./components/DroneDetailPage', () => ({
   default: () => <div data-testid="detail-page">DroneDetailPage</div>,
 }));
 
+// Mock AuthContext to bypass auth for routing tests
+vi.mock('./AuthContext', () => ({
+  useAuth: () => ({
+    user: { id: '1', username: 'test', role: 'user', display_name: 'Test', email: 'test@test.com', tenant_id: '1', is_active: true },
+    isAuthenticated: true,
+    isLoading: false,
+    login: vi.fn(),
+    logout: vi.fn(),
+  }),
+  AuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
 describe('App Routing', () => {
   it('renders MapPage at root', () => {
     render(

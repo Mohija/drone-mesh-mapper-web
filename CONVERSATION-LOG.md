@@ -2,10 +2,37 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-12
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-12 (Zone Violations Fix + Multi-Tenant Sync)
 - **Typ:** Projekt | **Status:** Development
 
 ## Änderungshistorie
+
+### 2026-03-12 - Fix: Zone Violations nur für erste Zone + Multi-Tenant Sync
+**Änderungen:**
+- **Bug-Fix:** Violations/Alarme wurden nur für die erste Flight Zone ausgelöst, nicht für nachfolgende. Ursache: `checkViolations` in `useFlightZones.ts` nutzte `zones` aus dem `useCallback`-Closure (Dependency `[zones]`). Bei React State-Batching konnte der Polling-Intervall die veraltete `checkViolations`-Funktion aufrufen bevor die Ref aktualisiert wurde. Fix: `zonesRef` (Ref) statt Closure — `checkViolations` liest immer `zonesRef.current` und hat Dependency `[]` (stabile Referenz).
+- **Multi-Tenant Sync:** Zones werden jetzt alle 30s vom Backend nachgeladen, damit alle User im gleichen Tenant Zones sehen die von anderen Usern erstellt wurden (ohne Page Reload).
+**Dateien:** `frontend/src/useFlightZones.ts`
+
+### 2026-03-12 - Multi-Tenant Zone Isolation + E2E Tests
+**Änderungen:**
+- **Bug-Fix (kritisch):** Zone-Routes in `app.py` nutzten nicht `g.tenant_id` aus dem JWT — alle Zonen wurden dem Default-Tenant zugeordnet statt dem Tenant des eingeloggten Users. Fix: Alle Zone-Operationen (`list_zones`, `create_zone`, `get_zone`, `update_zone`, `delete_zone`, `assign_drones`, `unassign_drones`, `check_violations`) übergeben jetzt `tenant_id=g.tenant_id`.
+- **Neue E2E Tests (35 Tests):** Multi-Tenant-Isolation umfassend getestet:
+  - Zone-Isolation: Nutzer im gleichen Tenant sehen gleiche Zonen, verschiedene Tenants sehen nichts voneinander
+  - Cross-Tenant-Schutz: Zugriff, Update, Delete, Assign auf fremde Zonen → 404
+  - Violation-Isolation: Nur eigene Tenant-Zonen erzeugen Violations
+  - Role-Based Access: Regular User → 403 auf Admin-Endpoints, Tenant-Admin sieht nur eigene Tenant-User
+  - Admin Board: Tenant/User-Counts, User-Filter, Passwort-Reset
+  - UI-Tests: Gleicher Tenant sieht gleiche Zonen/Violations im Browser, anderer Tenant nicht
+- **Gesamt: 178 E2E Tests bestanden** (144 bestehende + 34 neue)
+**Dateien:** `backend/app.py` (tenant_id fix), `frontend/e2e/multi-tenant.spec.ts` (neu)
+
+### 2026-03-12 - Fix: Polling-Performance + Auto-Tracking bei Zone-Violations
+**Änderungen:**
+- **Performance:** `loadDrones` wurde bei jedem Poll-Zyklus neu erstellt weil `tracking.isTracked` sich bei jeder Trail-Änderung änderte → Polling-Intervall wurde ständig zurückgesetzt → unkontrolliertes Re-Polling. Fix: Refs (`trackingRef`, `flightZonesRef`, `violationLogRef`) statt direkte Hook-Abhängigkeiten in `loadDrones`. Dependencies reduziert auf `[userLocation, radiusEnabled, radius]`.
+- **Auto-Tracking:** Stale-Closure-Problem in `onAutoTrack`-Callback — nutzte veraltete `tracking.isTracked` aus dem Closure. Fix: `trackingRef.current.isTracked()` für immer aktuelle State-Referenz.
+- **Violation Log Optimierung:** Records werden nicht mehr bei jedem Poll komplett kopiert (`prev.map(r => ({...r}))`), sondern nur geänderte Records kopiert.
+- **Unnötiger Re-Render entfernt:** `setViolations()` in `checkViolations` entfernt — Violations werden direkt zurückgegeben und vom ViolationLog verwaltet.
+**Dateien:** `frontend/src/components/MapPage.tsx`, `frontend/src/useViolationLog.ts`, `frontend/src/useFlightZones.ts`
 
 ### 2026-03-04 - Initiale Projekterstellung
 **Änderungen:**
@@ -694,6 +721,45 @@
 - `frontend/src/components/MapPage.tsx` - REFRESH_RATES Config, refreshRate State, effectiveInterval, Dropdown-UI
 - `frontend/dist/` - Rebuild
 
+### 2026-03-12 - Mandantensystem mit Login, Berechtigungen & Datenbank (Phasen 1-8)
+**Änderungen:**
+- **Phase 1: Datenbank-Layer:** SQLite + SQLAlchemy + Alembic, WAL-Modus, Models (Tenant, User, TenantSettings, FlightZone, TrailArchive), JSON-Speicherung durch DB ersetzt
+- **Phase 2: Auth-System:** JWT-basierte Authentifizierung (PyJWT + bcrypt), Login/Refresh/Me Endpoints, `@login_required` und `@role_required` Decorators, 3 Rollen (super_admin, tenant_admin, user)
+- **Phase 3: Admin-API:** CRUD für Mandanten und Benutzer, Berechtigungsregeln, Cascade Delete, Passwort-Reset
+- **Phase 4: Mandanten-Scoping:** Blueprint-Extraktion aus monolithischer app.py, `@login_required` auf alle Endpoints, Mandanten-gefilterte Daten (Zonen, Trails, Settings), Ownership-Checks
+- **Phase 5: Frontend Auth:** LoginPage, AuthContext mit JWT-Management, ProtectedRoute mit Rollen-Hierarchie, authFetch Wrapper mit Token-Refresh, User-Info + Admin-Link + Logout in MapPage Header
+- **Phase 6: Frontend Admin-Bereich:** AdminLayout mit Sidebar, AdminDashboard mit Stats, TenantList/UserList CRUD, Inline-Styles passend zum bestehenden Design
+- **Phase 7: Frontend Integration + E2E:** localStorage-Namespacing per User (userStorage.ts), Playwright auth setup project mit storageState, loginAs/apiLogin Helpers, 12 Auth E2E-Tests, 19 Admin E2E-Tests, alle bestehenden E2E-Tests mit Auth aktualisiert
+- **Phase 8: JSON-zu-DB Migration:** Auto-Migration beim ersten Start, bestehende zones/archives/settings werden in DB importiert
+- **Tests:** 280 Backend-Tests, 144 E2E-Tests — alle bestanden
+
+**Dateien (Auswahl):**
+- `backend/database.py` - NEU: SQLAlchemy Init + WAL Config
+- `backend/models.py` - NEU: Alle SQLAlchemy Models
+- `backend/auth.py` - NEU: JWT Auth + Decorators
+- `backend/routes/` - NEU: Blueprints (auth, admin, drone, zone, trail, settings, lookup)
+- `backend/scripts/migrate_json_to_db.py` - NEU: JSON → DB Migration
+- `backend/tests/test_auth.py` - NEU: 30 Auth-Tests
+- `backend/tests/test_admin.py` - NEU: 45 Admin-Tests
+- `backend/tests/test_models.py` - NEU: 20 Model-Tests
+- `backend/tests/test_database.py` - NEU: 10 DB-Tests
+- `frontend/src/AuthContext.tsx` - NEU: Auth State Management
+- `frontend/src/components/LoginPage.tsx` - NEU: Login-Formular
+- `frontend/src/components/ProtectedRoute.tsx` - NEU: Route-Schutz
+- `frontend/src/components/admin/` - NEU: AdminLayout, Dashboard, TenantList, UserList
+- `frontend/src/userStorage.ts` - NEU: User-scoped localStorage
+- `frontend/src/api.ts` - MODIFIZIERT: authFetch, Auth+Admin Endpoints
+- `frontend/src/main.tsx` - MODIFIZIERT: AuthProvider
+- `frontend/src/App.tsx` - MODIFIZIERT: Login/Admin Routes
+- `frontend/e2e/auth.setup.ts` - NEU: Playwright auth setup
+- `frontend/e2e/auth.spec.ts` - NEU: 12 Auth E2E-Tests
+- `frontend/e2e/admin.spec.ts` - NEU: 19 Admin E2E-Tests
+- `frontend/e2e/helpers.ts` - NEU: loginAs, apiLogin Helpers
+- `frontend/e2e/flight-zones.spec.ts` - MODIFIZIERT: Auth Headers
+- `frontend/e2e/nofly-zones.spec.ts` - MODIFIZIERT: Auth Headers
+- `frontend/e2e/api.spec.ts` - MODIFIZIERT: Auth Headers
+- `frontend/dist/` - Rebuild
+
 ## Offene Aufgaben
 - [ ] WebSocket-Integration für echte Push-Updates statt Polling
 - [ ] ESP 8266 MicroPython-Anpassung
@@ -710,7 +776,7 @@
 - DIPUL WMS rendert in dunklen Farben → CSS `filter: invert(1) hue-rotate(180deg) brightness(1.3)` nur im Dark Theme, Light Theme zeigt Originalfarben
 - Hover-Tooltip: Zeigt Zonenname, Typ, Hoehengrenzen, Rechtsgrundlage. Klick-Popup: Vollstaendige Details inkl. Referenz
 - FFH-Gebiete: WMS-Layer heisst `dipul:ffh-gebiete` (Bindestrich!), nicht `dipul:ffh_gebiete`
-- Test-Abdeckung: 180 Backend-Tests, 73 Frontend Unit-Tests, 113 E2E-Tests (30 NFZ, 44 Flight Zones, 15 Map Page)
+- Test-Abdeckung: 280 Backend-Tests, 73 Frontend Unit-Tests, 144 E2E-Tests (44 Flight Zones, 30 NFZ, 19 Admin, 15 Map Page, 12 Auth, restl. API/Detail/NFZ-Verify)
 - Aircraft Lookup Quellen (7): adsbdb.com, OpenSky Network, hexdb.io, OGN DDB, adsbdb Callsign, planespotters.net, airport-data.com
 - OGN Aircraft Type Codes: 0=Unknown, 1=Segelflugzeug, 3=Helikopter, 8=Motorflugzeug, 9=Jet, 13=UAV/Drohne, etc.
 - OGN Feld 12 = ICAO Hex (Mode-S), Feld 10 = Aircraft Type Code, Feld 13 = OGN/FLARM Device ID

@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { ThemeProvider } from './ThemeContext';
+import { AuthProvider } from './AuthContext';
 import './index.css';
 
 function getBasename(): string {
@@ -14,9 +15,11 @@ function getBasename(): string {
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ThemeProvider>
-      <BrowserRouter basename={getBasename()}>
-        <App />
-      </BrowserRouter>
+      <AuthProvider>
+        <BrowserRouter basename={getBasename()}>
+          <App />
+        </BrowserRouter>
+      </AuthProvider>
     </ThemeProvider>
   </React.StrictMode>
 );

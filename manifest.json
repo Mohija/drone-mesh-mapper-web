@@ -7,7 +7,14 @@
   "category": "web",
   "icon": "radar",
   "status": "development",
-  "techStack": ["react", "typescript", "python", "flask", "leaflet-js", "vite"],
+  "techStack": [
+    "react",
+    "typescript",
+    "python",
+    "flask",
+    "leaflet-js",
+    "vite"
+  ],
   "services": [
     {
       "id": "server",
@@ -61,11 +68,23 @@
   },
   "verification": {
     "endpoints": [
-      { "path": "/", "expectedStatus": 200, "description": "Frontend" },
-      { "path": "/api/drones", "expectedStatus": 200, "description": "Drones API" },
-      { "path": "/health", "expectedStatus": 200, "description": "Health Check" }
+      {
+        "path": "/",
+        "expectedStatus": 200,
+        "description": "Frontend"
+      },
+      {
+        "path": "/api/drones",
+        "expectedStatus": 401,
+        "description": "Drones API (requires auth)"
+      },
+      {
+        "path": "/health",
+        "expectedStatus": 200,
+        "description": "Health Check"
+      }
     ]
   },
   "created": "2026-03-04T00:00:00Z",
-  "lastModified": "2026-03-12T17:00:00Z"
+  "lastModified": "2026-03-12T15:15:00Z"
 }

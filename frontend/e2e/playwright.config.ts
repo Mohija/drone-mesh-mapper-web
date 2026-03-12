@@ -10,9 +10,20 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   projects: [
+    // Setup project: logs in and saves storage state
+    {
+      name: 'setup',
+      testMatch: /auth\.setup\.ts/,
+    },
+    // Main tests: run after setup, use saved auth state
     {
       name: 'chromium',
-      use: { browserName: 'chromium' },
+      use: {
+        browserName: 'chromium',
+        storageState: 'e2e/.auth/user.json',
+      },
+      dependencies: ['setup'],
+      testIgnore: /auth\.setup\.ts/,
     },
   ],
   webServer: {

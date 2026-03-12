@@ -39,7 +39,10 @@ def move_point(lat: float, lon: float, bearing_deg: float, distance_m: float) ->
     return math.degrees(lat2), math.degrees(lon2)
 
 
-FLIGHT_PATTERNS = ["linear", "circular", "waypoint", "search_pattern", "hover"]
+FLIGHT_PATTERNS = [
+    "linear", "circular", "waypoint", "search_pattern", "hover",
+    "figure_eight", "spiral", "random_walk",
+]
 
 MANUFACTURERS = ["DJI", "Autel", "Parrot", "Skydio", "Yuneec"]
 MODELS = {
@@ -62,6 +65,9 @@ class DroneSimulator:
         basic_id: str,
         center_lat: float,
         center_lon: float,
+        flight_pattern: str | None = None,
+        speed: float | None = None,
+        altitude: float | None = None,
     ):
         self.drone_id = drone_id
         self.name = name
@@ -78,11 +84,11 @@ class DroneSimulator:
         self.pilot_lat = self.lat + random.uniform(-0.005, 0.005)
         self.pilot_lon = self.lon + random.uniform(-0.005, 0.005)
 
-        # Flight parameters
-        self.altitude = random.uniform(30, 200)
-        self.speed = random.uniform(5, 25)
+        # Flight parameters (accept overrides from config)
+        self.altitude = altitude if altitude is not None else random.uniform(30, 200)
+        self.speed = speed if speed is not None else random.uniform(5, 25)
         self.bearing = random.uniform(0, 360)
-        self.flight_pattern = random.choice(FLIGHT_PATTERNS)
+        self.flight_pattern = flight_pattern or random.choice(FLIGHT_PATTERNS)
 
         # Circular pattern params
         self.circle_center_lat = self.lat
@@ -105,6 +111,23 @@ class DroneSimulator:
         self.search_origin_lon = self.lon
         self.search_leg = 0
         self.search_direction = 0
+
+        # Figure-eight pattern params
+        self.fig8_center_lat = self.lat
+        self.fig8_center_lon = self.lon
+        self.fig8_radius = random.uniform(200, 600)
+        self.fig8_angle = 0.0
+
+        # Spiral pattern params
+        self.spiral_center_lat = self.lat
+        self.spiral_center_lon = self.lon
+        self.spiral_angle = 0.0
+        self.spiral_radius = 50.0  # starts small, grows
+        self.spiral_expanding = True
+
+        # Random walk params
+        self.walk_turn_timer = 0.0
+        self.walk_turn_interval = random.uniform(5, 15)
 
         # Battery simulation
         self.battery = random.uniform(60, 100)
@@ -193,6 +216,45 @@ class DroneSimulator:
                 self.search_direction = (self.search_direction + 90) % 360
                 self.search_leg += 1
 
+        elif self.flight_pattern == "figure_eight":
+            # Lemniscate (figure-eight) using parametric equations
+            self.fig8_angle += (distance / self.fig8_radius) * (180 / math.pi)
+            angle_rad = math.radians(self.fig8_angle)
+            # Parametric figure-eight: x = sin(t), y = sin(t)*cos(t)
+            r = self.fig8_radius / 111320  # convert meters to degrees
+            cos_center = math.cos(math.radians(self.fig8_center_lat))
+            self.lat = self.fig8_center_lat + r * math.sin(angle_rad)
+            self.lon = self.fig8_center_lon + (r * math.sin(angle_rad) * math.cos(angle_rad)) / cos_center
+
+        elif self.flight_pattern == "spiral":
+            # Expanding/contracting spiral
+            self.spiral_angle += (distance / max(self.spiral_radius, 30)) * (180 / math.pi)
+            if self.spiral_expanding:
+                self.spiral_radius += distance * 0.3
+                if self.spiral_radius > 800:
+                    self.spiral_expanding = False
+            else:
+                self.spiral_radius -= distance * 0.3
+                if self.spiral_radius < 50:
+                    self.spiral_expanding = True
+
+            r = self.spiral_radius / 111320
+            cos_center = math.cos(math.radians(self.spiral_center_lat))
+            self.lat = self.spiral_center_lat + r * math.cos(math.radians(self.spiral_angle))
+            self.lon = self.spiral_center_lon + (r * math.sin(math.radians(self.spiral_angle))) / cos_center
+
+        elif self.flight_pattern == "random_walk":
+            # Random direction changes at intervals, simulates exploring
+            self.walk_turn_timer += dt
+            if self.walk_turn_timer >= self.walk_turn_interval:
+                self.walk_turn_timer = 0.0
+                self.walk_turn_interval = random.uniform(5, 15)
+                self.bearing += random.uniform(-120, 120)
+                self.speed = random.uniform(8, 20)
+            self.lat, self.lon = move_point(self.lat, self.lon, self.bearing, distance)
+            # Small bearing drift between turns
+            self.bearing += random.uniform(-3, 3)
+
         elif self.flight_pattern == "hover":
             self.lat += random.uniform(-0.00001, 0.00001)
             self.lon += random.uniform(-0.00001, 0.00001)
@@ -253,11 +315,16 @@ class DroneFleet:
     """Manages a fleet of simulated drones."""
 
     DRONE_CONFIGS = [
-        {"id": 1, "name": "Desert Eagle", "mac": "AA:BB:CC:DD:EE:01", "basic_id": "AZTEST001"},
-        {"id": 2, "name": "Cactus Hawk", "mac": "AA:BB:CC:DD:EE:02", "basic_id": "AZTEST002"},
-        {"id": 3, "name": "Saguaro Scout", "mac": "AA:BB:CC:DD:EE:03", "basic_id": "AZTEST003"},
-        {"id": 4, "name": "Mesa Phantom", "mac": "AA:BB:CC:DD:EE:04", "basic_id": "AZTEST004"},
-        {"id": 5, "name": "Sonoran Surveyor", "mac": "AA:BB:CC:DD:EE:05", "basic_id": "AZTEST005"},
+        {"id": 1, "name": "Desert Eagle",     "mac": "AA:BB:CC:DD:EE:01", "basic_id": "AZTEST001",
+         "pattern": "linear",         "speed": 22, "altitude": 120},
+        {"id": 2, "name": "Cactus Hawk",      "mac": "AA:BB:CC:DD:EE:02", "basic_id": "AZTEST002",
+         "pattern": "circular",       "speed": 15, "altitude": 80},
+        {"id": 3, "name": "Saguaro Scout",    "mac": "AA:BB:CC:DD:EE:03", "basic_id": "AZTEST003",
+         "pattern": "waypoint",       "speed": 18, "altitude": 100},
+        {"id": 4, "name": "Mesa Phantom",     "mac": "AA:BB:CC:DD:EE:04", "basic_id": "AZTEST004",
+         "pattern": "figure_eight",   "speed": 12, "altitude": 60},
+        {"id": 5, "name": "Sonoran Surveyor", "mac": "AA:BB:CC:DD:EE:05", "basic_id": "AZTEST005",
+         "pattern": "search_pattern", "speed": 10, "altitude": 45},
     ]
 
     def __init__(self, center_lat: float = 50.1109, center_lon: float = 8.6821):
@@ -277,6 +344,9 @@ class DroneFleet:
                 basic_id=cfg["basic_id"],
                 center_lat=center_lat,
                 center_lon=center_lon,
+                flight_pattern=cfg.get("pattern"),
+                speed=cfg.get("speed"),
+                altitude=cfg.get("altitude"),
             )
             self.drones.append(drone)
 
@@ -355,6 +425,9 @@ class DroneFleet:
                 basic_id=cfg["basic_id"],
                 center_lat=lat,
                 center_lon=lon,
+                flight_pattern=cfg.get("pattern"),
+                speed=cfg.get("speed"),
+                altitude=cfg.get("altitude"),
             )
             self.drones.append(drone)
         if was_running:
