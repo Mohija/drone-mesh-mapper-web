@@ -216,19 +216,21 @@ export default function StatusPanel({ drone, onClose, enabledNoFlyLayers, tracki
   }, [drone.latitude, drone.longitude, enabledNoFlyLayers]);
 
   return (
-    <div style={{
-      position: 'absolute',
-      top: 0,
-      right: 0,
-      bottom: 0,
-      width: 350,
-      background: 'var(--bg-secondary)',
-      borderLeft: '1px solid var(--border)',
-      zIndex: 1001,
-      display: 'flex',
-      flexDirection: 'column',
-      overflow: 'hidden',
-    }}>
+    <div
+      data-testid="status-panel"
+      style={{
+        position: 'absolute',
+        top: 0,
+        right: 0,
+        bottom: 0,
+        width: 350,
+        background: 'var(--bg-secondary)',
+        borderLeft: '1px solid var(--border)',
+        zIndex: 1001,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}>
       {/* Header */}
       <div style={{
         padding: '16px',

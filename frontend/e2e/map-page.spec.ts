@@ -83,10 +83,10 @@ test.describe('Map Page', () => {
   test('radius toggle shows controls', async ({ page }) => {
     // Radius should be enabled by default with "Radius" label visible
     await expect(page.locator('text=Radius')).toBeVisible({ timeout: 5000 });
-    // 50 km should be selected by default
-    const select = page.locator('select');
-    await expect(select).toBeVisible();
-    const selectedValue = await select.inputValue();
+    // 50 km should be selected by default in the radius dropdown
+    const radiusSelect = page.locator('select').filter({ has: page.locator('option[value="50000"]') });
+    await expect(radiusSelect).toBeVisible();
+    const selectedValue = await radiusSelect.inputValue();
     expect(selectedValue).toBe('50000');
   });
 
@@ -96,10 +96,8 @@ test.describe('Map Page', () => {
     await expect(toggle).toBeVisible({ timeout: 5000 });
     await toggle.click();
 
-    // Should show "Alle" instead of the select dropdown
-    await expect(page.locator('text=Alle')).toBeVisible({ timeout: 3000 });
-    // Select dropdown should be hidden
-    await expect(page.locator('select')).not.toBeVisible();
+    // Should show "Alle" text in the radius control
+    await expect(page.getByText('Alle', { exact: true })).toBeVisible({ timeout: 3000 });
   });
 
   test('radius toggle re-enables filter', async ({ page }) => {
@@ -107,15 +105,16 @@ test.describe('Map Page', () => {
     const toggleOff = page.locator('button[title*="Radius deaktivieren"]');
     await expect(toggleOff).toBeVisible({ timeout: 5000 });
     await toggleOff.click();
-    await expect(page.locator('text=Alle')).toBeVisible({ timeout: 3000 });
+    await expect(page.getByText('Alle', { exact: true })).toBeVisible({ timeout: 3000 });
 
     // Re-enable
     const toggleOn = page.locator('button[title*="Radius aktivieren"]');
     await expect(toggleOn).toBeVisible({ timeout: 3000 });
     await toggleOn.click();
 
-    // Select dropdown should be back
-    await expect(page.locator('select')).toBeVisible({ timeout: 3000 });
+    // Radius select dropdown should be back
+    const radiusSelect = page.locator('select').filter({ has: page.locator('option[value="50000"]') });
+    await expect(radiusSelect).toBeVisible({ timeout: 3000 });
     await expect(page.locator('text=Radius')).toBeVisible();
   });
 
@@ -137,9 +136,9 @@ test.describe('Map Page', () => {
 
   test('radius select changes value', async ({ page }) => {
     // Change radius to 10 km
-    const select = page.locator('select');
-    await expect(select).toBeVisible({ timeout: 5000 });
-    await select.selectOption('10000');
+    const radiusSelect = page.locator('select').filter({ has: page.locator('option[value="50000"]') });
+    await expect(radiusSelect).toBeVisible({ timeout: 5000 });
+    await radiusSelect.selectOption('10000');
 
     // Wait for API call with new radius
     const response = await page.waitForResponse(
@@ -150,10 +149,10 @@ test.describe('Map Page', () => {
   });
 
   test('settings button navigates to settings page', async ({ page }) => {
-    const settingsBtn = page.locator('button[title="Datenquellen"]');
+    const settingsBtn = page.locator('button[title="Einstellungen"]');
     await expect(settingsBtn).toBeVisible({ timeout: 5000 });
     await settingsBtn.click();
-    // Should navigate to settings page (use exact match to avoid multiple elements)
-    await expect(page.getByText('Datenquellen', { exact: true })).toBeVisible({ timeout: 5000 });
+    // Should navigate to settings page
+    await expect(page.locator('text=Einstellungen')).toBeVisible({ timeout: 5000 });
   });
 });

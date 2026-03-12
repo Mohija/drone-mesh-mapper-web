@@ -664,6 +664,22 @@
 - `frontend/src/components/MapPage.tsx` - selectedViolationRecordId State, Trail-Filterung nach Selektion, Record-Cleanup useEffect
 - `frontend/dist/` - Rebuild
 
+### 2026-03-12 - Umfassende E2E-Tests: Selektion, Re-detection, Refresh Rate
+**Änderungen:**
+- **12 neue E2E-Tests** fuer alle neuen Features:
+  - **Violation Selection (4):** Zeilen-Highlight, Wechsel zwischen Verstoessen, Trail-Filterung bei Selektion, Trail-Wechsel bei Selektion
+  - **Clear & Re-detection (3):** Alle Drohnen nach "Alle loeschen" werden erneut erkannt, einzelne Drohne nach Loeschen wird erneut erkannt, Selektion wird zurueckgesetzt
+  - **Refresh Rate (5):** Dropdown sichtbar, Default 2s, alle Preset-Werte vorhanden, localStorage-Persistenz, Pollfrequenz aendert sich
+- **Pre-existing Test-Fixes:** map-page.spec.ts Selektoren repariert (ambigue `select`/`text=Alle` Locators, Settings-Button Titel)
+- **StatusPanel data-testid:** `data-testid="status-panel"` hinzugefuegt fuer zuverlaessige E2E-Erkennung
+- **Test-Ergebnisse:** 113 E2E-Tests (44 Flight Zones, 30 NFZ, 15 Map Page, restliche API/Detail)
+
+**Dateien:**
+- `frontend/e2e/flight-zones.spec.ts` - 12 neue Tests (Selection, Re-detection, Refresh Rate)
+- `frontend/e2e/map-page.spec.ts` - Locator-Fixes fuer ambigue Selektoren
+- `frontend/src/components/StatusPanel.tsx` - data-testid hinzugefuegt
+- `frontend/dist/` - Rebuild
+
 ### 2026-03-12 - Konfigurierbare Aktualisierungsrate
 **Änderungen:**
 - **Refresh-Rate Dropdown in der Top-Bar:** Benutzer kann Polling-Intervall anpassen
@@ -694,7 +710,7 @@
 - DIPUL WMS rendert in dunklen Farben → CSS `filter: invert(1) hue-rotate(180deg) brightness(1.3)` nur im Dark Theme, Light Theme zeigt Originalfarben
 - Hover-Tooltip: Zeigt Zonenname, Typ, Hoehengrenzen, Rechtsgrundlage. Klick-Popup: Vollstaendige Details inkl. Referenz
 - FFH-Gebiete: WMS-Layer heisst `dipul:ffh-gebiete` (Bindestrich!), nicht `dipul:ffh_gebiete`
-- Test-Abdeckung: 180 Backend-Tests, 73 Frontend Unit-Tests, 100 E2E-Tests (30 NFZ, 31 Flight Zones)
+- Test-Abdeckung: 180 Backend-Tests, 73 Frontend Unit-Tests, 113 E2E-Tests (30 NFZ, 44 Flight Zones, 15 Map Page)
 - Aircraft Lookup Quellen (7): adsbdb.com, OpenSky Network, hexdb.io, OGN DDB, adsbdb Callsign, planespotters.net, airport-data.com
 - OGN Aircraft Type Codes: 0=Unknown, 1=Segelflugzeug, 3=Helikopter, 8=Motorflugzeug, 9=Jet, 13=UAV/Drohne, etc.
 - OGN Feld 12 = ICAO Hex (Mode-S), Feld 10 = Aircraft Type Code, Feld 13 = OGN/FLARM Device ID

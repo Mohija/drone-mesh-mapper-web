@@ -9,8 +9,30 @@ async function findZone(request: any, name: string) {
   return all.find((z: any) => z.name === name);
 }
 
+/** Helper: wait for violation table to appear and expand it */
+async function expandViolationTable(page: any) {
+  const table = page.locator('[data-testid="violation-table"]');
+  await expect(table).toBeVisible({ timeout: 10000 });
+  // Expand if collapsed
+  const body = page.locator('[data-testid="violation-table-body"]');
+  if (!(await body.isVisible().catch(() => false))) {
+    await page.locator('[data-testid="violation-table-header"]').click();
+  }
+  await expect(body).toBeVisible({ timeout: 3000 });
+  return { table, body };
+}
+
+/** Helper: wait for at least N violation rows */
+async function waitForViolationRows(page: any, minCount: number, timeout = 15000) {
+  const { body } = await expandViolationTable(page);
+  await expect(body.locator('tr[data-testid^="violation-row-"]').nth(minCount - 1))
+    .toBeVisible({ timeout });
+  return body;
+}
+
+// ─── API Tests ─────────────────────────────────────────────────
+
 test.describe('Flight Zones API', () => {
-  // Clean up test zones after all API tests
   test.afterAll(async ({ request }) => {
     const all = await (await request.get('/api/zones')).json();
     for (const z of all) {
@@ -78,6 +100,23 @@ test.describe('Flight Zones API', () => {
     });
   });
 
+  test('PUT /api/zones/:id updates AGL range', async ({ request }) => {
+    const zone = await findZone(request, `E2E-Zone-${uid}`);
+
+    const res = await request.put(`/api/zones/${zone.id}`, {
+      data: { minAltitudeAGL: 10, maxAltitudeAGL: 120 },
+    });
+    expect(res.status()).toBe(200);
+    const data = await res.json();
+    expect(data.minAltitudeAGL).toBe(10);
+    expect(data.maxAltitudeAGL).toBe(120);
+
+    // Reset AGL
+    await request.put(`/api/zones/${zone.id}`, {
+      data: { minAltitudeAGL: null, maxAltitudeAGL: null },
+    });
+  });
+
   test('POST /api/zones/:id/assign assigns drones', async ({ request }) => {
     const zone = await findZone(request, `E2E-Zone-${uid}`);
 
@@ -109,7 +148,6 @@ test.describe('Flight Zones API', () => {
     expect(data).toHaveProperty('violations');
     expect(Array.isArray(data.violations)).toBe(true);
     expect(data).toHaveProperty('count');
-    // Each violation has required fields
     for (const v of data.violations) {
       expect(v).toHaveProperty('droneId');
       expect(v).toHaveProperty('droneName');
@@ -148,14 +186,14 @@ test.describe('Flight Zones API', () => {
     const res = await request.delete(`/api/zones/${zone.id}`);
     expect(res.status()).toBe(200);
 
-    // Verify gone
     const after = await request.get(`/api/zones/${zone.id}`);
     expect(after.status()).toBe(404);
   });
 });
 
+// ─── UI Tests ──────────────────────────────────────────────────
+
 test.describe('Flight Zones UI', () => {
-  // Cleanup: delete all E2E zones before/after suite
   test.beforeAll(async ({ request }) => {
     const all = await (await request.get('/api/zones')).json();
     for (const z of all) {
@@ -189,7 +227,6 @@ test.describe('Flight Zones UI', () => {
   });
 
   test('panel shows empty state when no zones exist', async ({ page, request }) => {
-    // Ensure no zones exist
     const all = await (await request.get('/api/zones')).json();
     for (const z of all) {
       await request.delete(`/api/zones/${z.id}`);
@@ -197,7 +234,6 @@ test.describe('Flight Zones UI', () => {
 
     await page.goto('/');
     await page.waitForResponse(resp => resp.url().includes('/api/drones') && resp.status() === 200);
-    // Wait for zones to load
     await page.waitForTimeout(500);
     await page.locator('[data-testid="zones-toggle"]').click();
     await expect(page.locator('[data-testid="zones-empty"]')).toBeVisible({ timeout: 3000 });
@@ -211,9 +247,7 @@ test.describe('Flight Zones UI', () => {
     await expect(page.locator('[data-testid="start-drawing-btn"]')).toBeVisible({ timeout: 3000 });
     await page.locator('[data-testid="start-drawing-btn"]').click();
 
-    // Drawing mode UI should appear
     await expect(page.locator('[data-testid="drawing-mode-ui"]')).toBeVisible({ timeout: 3000 });
-    // ZEICHNEN badge visible
     await expect(page.locator('text=ZEICHNEN')).toBeVisible();
   });
 
@@ -226,23 +260,20 @@ test.describe('Flight Zones UI', () => {
 
     await page.locator('[data-testid="cancel-drawing-btn"]').click();
 
-    // Should be back to normal
     await expect(page.locator('[data-testid="start-drawing-btn"]')).toBeVisible({ timeout: 3000 });
-    // The green ZEICHNEN badge on the zones toggle should disappear
     await expect(page.locator('[data-testid="drawing-mode-ui"]')).not.toBeVisible();
   });
 
   test('create zone by clicking map points', async ({ page }) => {
     await page.goto('/');
     await page.waitForResponse(resp => resp.url().includes('/api/drones') && resp.status() === 200);
-    await page.waitForTimeout(1000); // let map initialize
+    await page.waitForTimeout(1000);
 
-    // Open zones panel and start drawing
     await page.locator('[data-testid="zones-toggle"]').click();
     await page.locator('[data-testid="start-drawing-btn"]').click();
     await expect(page.locator('[data-testid="drawing-mode-ui"]')).toBeVisible({ timeout: 3000 });
 
-    // Click 4 points on the map via Leaflet API to create a polygon
+    // Click 4 points on the map via Leaflet API
     await page.evaluate(() => {
       const container = document.querySelector('.leaflet-container') as any;
       if (!container?._leaflet_map) return;
@@ -267,15 +298,12 @@ test.describe('Flight Zones UI', () => {
 
     await page.waitForTimeout(500);
 
-    // Fill in zone name
     await page.locator('[data-testid="zone-name-input"]').fill('E2E-TestZone');
 
-    // Finish button should be enabled now
     const finishBtn = page.locator('[data-testid="finish-drawing-btn"]');
     await expect(finishBtn).toBeEnabled({ timeout: 3000 });
     await finishBtn.click();
 
-    // Wait for zone to be saved — check within panel to avoid matching map tooltip
     const panel = page.locator('[data-testid="flight-zones-panel"]');
     await expect(panel.locator('text=E2E-TestZone')).toBeVisible({ timeout: 5000 });
     await expect(panel.locator('[data-testid="zones-empty"]')).not.toBeVisible();
@@ -325,10 +353,8 @@ test.describe('Flight Zones UI', () => {
     const panel = page.locator('[data-testid="flight-zones-panel"]');
     await expect(panel.locator('text=E2E-DeleteMe')).toBeVisible({ timeout: 5000 });
 
-    // Click delete button
     await page.locator(`[data-testid="delete-btn-${zone.id}"]`).click();
 
-    // Zone should disappear from panel
     await expect(panel.locator('text=E2E-DeleteMe')).not.toBeVisible({ timeout: 5000 });
   });
 
@@ -354,14 +380,11 @@ test.describe('Flight Zones UI', () => {
     const panel = page.locator('[data-testid="flight-zones-panel"]');
     await expect(panel.locator('text=E2E-AssignTest')).toBeVisible({ timeout: 5000 });
 
-    // Click assign/edit button
     await page.locator(`[data-testid="assign-btn-${zone.id}"]`).click();
 
-    // Modal should show "Zone bearbeiten" header and drone assignment section
     await expect(page.locator('text=Zone bearbeiten')).toBeVisible({ timeout: 3000 });
     await expect(page.locator('text=Drohnen zuweisen')).toBeVisible({ timeout: 3000 });
 
-    // Edit fields should be pre-filled
     const nameInput = page.locator('[data-testid="edit-zone-name"]');
     await expect(nameInput).toBeVisible();
     await expect(nameInput).toHaveValue('E2E-AssignTest');
@@ -392,29 +415,23 @@ test.describe('Flight Zones UI', () => {
     const zonesPanel = page.locator('[data-testid="flight-zones-panel"]');
     await expect(zonesPanel.locator('text=E2E-EditMe')).toBeVisible({ timeout: 5000 });
 
-    // Open edit modal
     await page.locator(`[data-testid="assign-btn-${zone.id}"]`).click();
     await expect(page.locator('text=Zone bearbeiten')).toBeVisible({ timeout: 3000 });
 
-    // Change name
     const nameInput = page.locator('[data-testid="edit-zone-name"]');
     await nameInput.clear();
     await nameInput.fill('E2E-Edited');
 
-    // Save
     await page.locator('[data-testid="save-assignments-btn"]').click();
 
-    // Verify via API
     await page.waitForTimeout(500);
     const updated = await (await request.get(`/api/zones/${zone.id}`)).json();
     expect(updated.name).toBe('E2E-Edited');
 
-    // Zone name should be updated in the panel
     await expect(zonesPanel.locator('text=E2E-Edited')).toBeVisible({ timeout: 3000 });
   });
 
   test('zone badge shows count on button', async ({ page, request }) => {
-    // Ensure at least one zone exists
     const zones = await (await request.get('/api/zones')).json();
     if (zones.length === 0) {
       await request.post('/api/zones', {
@@ -433,10 +450,8 @@ test.describe('Flight Zones UI', () => {
 
     await page.goto('/');
     await page.waitForResponse(resp => resp.url().includes('/api/drones') && resp.status() === 200);
-    // Wait for zones to load
     await page.waitForTimeout(1000);
 
-    // The zones-toggle button should have a badge span with a count number
     const toggle = page.locator('[data-testid="zones-toggle"]');
     await expect(toggle).toBeVisible({ timeout: 5000 });
     const badgeSpan = toggle.locator('span').filter({ hasText: /^\d+$/ });
@@ -451,14 +466,14 @@ test.describe('Flight Zones UI', () => {
     const panel = page.locator('[data-testid="flight-zones-panel"]');
     await expect(panel).toBeVisible({ timeout: 3000 });
 
-    // Close via the × button in the panel header
     await panel.locator('button:has-text("×")').click();
     await expect(panel).not.toBeVisible({ timeout: 3000 });
   });
 });
 
+// ─── Violation Table ───────────────────────────────────────────
+
 test.describe('Violation Table', () => {
-  // Create a large zone covering the simulator area to trigger violations
   let testZoneId: string;
 
   test.beforeAll(async ({ request }) => {
@@ -497,11 +512,9 @@ test.describe('Violation Table', () => {
     await page.goto('/');
     await page.waitForResponse(resp => resp.url().includes('/api/drones') && resp.status() === 200);
 
-    // Wait for violation detection (polls every 2s)
     const table = page.locator('[data-testid="violation-table"]');
     await expect(table).toBeVisible({ timeout: 10000 });
 
-    // Header shows count
     const header = page.locator('[data-testid="violation-table-header"]');
     await expect(header).toBeVisible();
     await expect(header).toContainText('Zonenverstoesze');
@@ -516,12 +529,12 @@ test.describe('Violation Table', () => {
 
     const header = page.locator('[data-testid="violation-table-header"]');
 
-    // Click to expand (starts collapsed)
+    // Expand
     await header.click();
     const body = page.locator('[data-testid="violation-table-body"]');
     await expect(body).toBeVisible({ timeout: 3000 });
 
-    // Click to collapse
+    // Collapse
     await header.click();
     await expect(body).not.toBeVisible({ timeout: 3000 });
   });
@@ -530,19 +543,11 @@ test.describe('Violation Table', () => {
     await page.goto('/');
     await page.waitForResponse(resp => resp.url().includes('/api/drones') && resp.status() === 200);
 
-    const table = page.locator('[data-testid="violation-table"]');
-    await expect(table).toBeVisible({ timeout: 10000 });
+    const { body } = await expandViolationTable(page);
 
-    // Expand table
-    await page.locator('[data-testid="violation-table-header"]').click();
-    const body = page.locator('[data-testid="violation-table-body"]');
-    await expect(body).toBeVisible({ timeout: 3000 });
-
-    // Should have at least one violation row
     const rows = body.locator('tr[data-testid^="violation-row-"]');
     await expect(rows.first()).toBeVisible({ timeout: 5000 });
 
-    // Row should contain zone name
     await expect(body).toContainText('E2E-ViolationZone');
   });
 
@@ -553,7 +558,6 @@ test.describe('Violation Table', () => {
     const table = page.locator('[data-testid="violation-table"]');
     await expect(table).toBeVisible({ timeout: 10000 });
 
-    // Active violations badge
     const badge = page.locator('[data-testid="active-violations-badge"]');
     await expect(badge).toBeVisible({ timeout: 5000 });
     await expect(badge).toContainText('aktiv');
@@ -563,15 +567,8 @@ test.describe('Violation Table', () => {
     await page.goto('/');
     await page.waitForResponse(resp => resp.url().includes('/api/drones') && resp.status() === 200);
 
-    const table = page.locator('[data-testid="violation-table"]');
-    await expect(table).toBeVisible({ timeout: 10000 });
+    const { body } = await expandViolationTable(page);
 
-    // Expand table
-    await page.locator('[data-testid="violation-table-header"]').click();
-    const body = page.locator('[data-testid="violation-table-body"]');
-    await expect(body).toBeVisible({ timeout: 3000 });
-
-    // Find first trail toggle button
     const toggleBtn = body.locator('button[data-testid^="toggle-trail-"]').first();
     await expect(toggleBtn).toBeVisible({ timeout: 5000 });
 
@@ -591,24 +588,15 @@ test.describe('Violation Table', () => {
     await page.goto('/');
     await page.waitForResponse(resp => resp.url().includes('/api/drones') && resp.status() === 200);
 
-    const table = page.locator('[data-testid="violation-table"]');
-    await expect(table).toBeVisible({ timeout: 10000 });
+    const { body } = await expandViolationTable(page);
 
-    // Expand table
-    await page.locator('[data-testid="violation-table-header"]').click();
-    const body = page.locator('[data-testid="violation-table-body"]');
-    await expect(body).toBeVisible({ timeout: 3000 });
-
-    // Get the specific row ID of the first violation
     const firstRow = body.locator('tr[data-testid^="violation-row-"]').first();
     await expect(firstRow).toBeVisible({ timeout: 5000 });
     const rowTestId = await firstRow.getAttribute('data-testid');
 
-    // Delete that specific violation
     const deleteBtn = body.locator('button[data-testid^="delete-violation-"]').first();
     await deleteBtn.click();
 
-    // The specific row should disappear
     if (rowTestId) {
       await expect(page.locator(`[data-testid="${rowTestId}"]`)).not.toBeVisible({ timeout: 3000 });
     }
@@ -621,33 +609,425 @@ test.describe('Violation Table', () => {
     const table = page.locator('[data-testid="violation-table"]');
     await expect(table).toBeVisible({ timeout: 10000 });
 
-    // Click clear all
     await page.locator('[data-testid="clear-all-violations-btn"]').click();
 
-    // Table should disappear (no more records)
+    // Table should disappear briefly (no more records)
     await expect(table).not.toBeVisible({ timeout: 3000 });
   });
 
-  test('clicking drone name in violation opens status panel', async ({ page }) => {
+  test('clicking violation row opens status panel for that drone', async ({ page }) => {
     await page.goto('/');
     await page.waitForResponse(resp => resp.url().includes('/api/drones') && resp.status() === 200);
 
-    const table = page.locator('[data-testid="violation-table"]');
-    await expect(table).toBeVisible({ timeout: 10000 });
+    const { body } = await expandViolationTable(page);
 
-    // Expand table
-    await page.locator('[data-testid="violation-table-header"]').click();
-    const body = page.locator('[data-testid="violation-table-body"]');
-    await expect(body).toBeVisible({ timeout: 3000 });
+    // Get drone name from first row
+    const droneNameEl = body.locator('div[data-testid^="violation-drone-"]').first();
+    await expect(droneNameEl).toBeVisible({ timeout: 5000 });
+    const droneName = await droneNameEl.locator('div').first().textContent();
 
-    // Click drone name
-    const droneLink = body.locator('div[data-testid^="violation-drone-"]').first();
-    await expect(droneLink).toBeVisible({ timeout: 5000 });
-    await droneLink.click();
+    // Click the row (not just the drone name)
+    const firstRow = body.locator('tr[data-testid^="violation-row-"]').first();
+    await firstRow.click();
 
-    // Status panel should appear
-    await expect(page.locator('.status-panel, [class*="StatusPanel"]')).toBeVisible({ timeout: 3000 }).catch(() => {
-      // StatusPanel might not have a specific class/testid, check for known content
+    // Status panel should appear with the drone name
+    const statusPanel = page.locator('[data-testid="status-panel"]');
+    await expect(statusPanel).toBeVisible({ timeout: 3000 });
+    if (droneName) {
+      await expect(statusPanel).toContainText(droneName);
+    }
+  });
+});
+
+// ─── Violation Row Selection & Trail Filtering ─────────────────
+
+test.describe('Violation Selection & Trails', () => {
+  let testZoneId: string;
+
+  test.beforeAll(async ({ request }) => {
+    const all = await (await request.get('/api/zones')).json();
+    for (const z of all) {
+      if (z.name.startsWith('E2E-SelectZone')) {
+        await request.delete(`/api/zones/${z.id}`);
+      }
+    }
+
+    // Large zone covering all simulated drones
+    const res = await request.post('/api/zones', {
+      data: {
+        name: 'E2E-SelectZone',
+        color: '#3b82f6',
+        polygon: [
+          [51.9, 8.3],
+          [52.2, 8.3],
+          [52.2, 8.7],
+          [51.9, 8.7],
+        ],
+      },
     });
+    const zone = await res.json();
+    testZoneId = zone.id;
+  });
+
+  test.afterAll(async ({ request }) => {
+    if (testZoneId) {
+      await request.delete(`/api/zones/${testZoneId}`);
+    }
+  });
+
+  test('clicking a row visually selects it', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForResponse(resp => resp.url().includes('/api/drones') && resp.status() === 200);
+
+    const body = await waitForViolationRows(page, 1);
+
+    const firstRow = body.locator('tr[data-testid^="violation-row-"]').first();
+    await firstRow.click();
+
+    // Selected row should have blue highlight (outline)
+    const outline = await firstRow.evaluate(el => getComputedStyle(el).outline);
+    expect(outline).toContain('rgb(');  // Has an outline set
+  });
+
+  test('can switch between violations by clicking different rows', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForResponse(resp => resp.url().includes('/api/drones') && resp.status() === 200);
+
+    // Wait for at least 2 violations
+    const body = await waitForViolationRows(page, 2);
+
+    const rows = body.locator('tr[data-testid^="violation-row-"]');
+    const firstRow = rows.nth(0);
+    const secondRow = rows.nth(1);
+
+    // Click first row
+    await firstRow.click();
+
+    // Get drone name from first row
+    const firstDroneName = await firstRow.locator('div[data-testid^="violation-drone-"] div').first().textContent();
+
+    // Status panel should show first drone
+    const statusPanel = page.locator('[data-testid="status-panel"]');
+    await expect(statusPanel).toBeVisible({ timeout: 3000 });
+    if (firstDroneName) {
+      await expect(statusPanel).toContainText(firstDroneName);
+    }
+
+    // Click second row
+    await secondRow.click();
+
+    // Get drone name from second row
+    const secondDroneName = await secondRow.locator('div[data-testid^="violation-drone-"] div').first().textContent();
+
+    // Status panel should now show second drone
+    if (secondDroneName && secondDroneName !== firstDroneName) {
+      await expect(statusPanel).toContainText(secondDroneName);
+    }
+
+    // First row should no longer be highlighted, second should be
+    const firstOutline = await firstRow.evaluate(el => getComputedStyle(el).outlineStyle);
+    const secondOutline = await secondRow.evaluate(el => getComputedStyle(el).outlineStyle);
+    expect(firstOutline).toBe('none');
+    expect(secondOutline).not.toBe('none');
+  });
+
+  test('selected row shows only that drone trail on map', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForResponse(resp => resp.url().includes('/api/drones') && resp.status() === 200);
+
+    const body = await waitForViolationRows(page, 2);
+
+    // Click first row to select a drone
+    const firstRow = body.locator('tr[data-testid^="violation-row-"]').first();
+    await firstRow.click();
+
+    // Wait for trail rendering
+    await page.waitForTimeout(1000);
+
+    // Get the number of trail polylines on the map
+    const trailCount = await page.evaluate(() => {
+      const container = document.querySelector('.leaflet-container') as any;
+      if (!container?._leaflet_map) return 0;
+      const map = container._leaflet_map;
+      let count = 0;
+      map.eachLayer((layer: any) => {
+        // Polylines in the overlay pane (not zone polygons, not circles)
+        if (layer instanceof (window as any).L.Polyline
+          && !(layer instanceof (window as any).L.Polygon)
+          && !(layer instanceof (window as any).L.Circle)) {
+          count++;
+        }
+      });
+      return count;
+    });
+
+    // With a row selected, only 1 trail should be visible (the selected drone's)
+    // Could be 0 if tracking hasn't accumulated enough points yet
+    expect(trailCount).toBeLessThanOrEqual(1);
+  });
+
+  test('selecting different rows switches the visible trail', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForResponse(resp => resp.url().includes('/api/drones') && resp.status() === 200);
+
+    const body = await waitForViolationRows(page, 2);
+
+    const rows = body.locator('tr[data-testid^="violation-row-"]');
+
+    // Click first row
+    await rows.nth(0).click();
+    await page.waitForTimeout(500);
+
+    // Get trail info for first selection
+    const getTrailDroneId = async () => {
+      return page.evaluate(() => {
+        const container = document.querySelector('.leaflet-container') as any;
+        if (!container?._leaflet_map) return null;
+        const map = container._leaflet_map;
+        let trailTooltip: string | null = null;
+        map.eachLayer((layer: any) => {
+          if (layer instanceof (window as any).L.Polyline
+            && !(layer instanceof (window as any).L.Polygon)
+            && !(layer instanceof (window as any).L.Circle)
+            && layer.getTooltip()) {
+            trailTooltip = layer.getTooltip().getContent();
+          }
+        });
+        return trailTooltip;
+      });
+    };
+
+    const trail1 = await getTrailDroneId();
+
+    // Click second row
+    await rows.nth(1).click();
+    await page.waitForTimeout(500);
+
+    const trail2 = await getTrailDroneId();
+
+    // If both rows are different drones, trails should differ (or be null if not enough points)
+    const drone1 = await rows.nth(0).locator('div[data-testid^="violation-drone-"] div').first().textContent();
+    const drone2 = await rows.nth(1).locator('div[data-testid^="violation-drone-"] div').first().textContent();
+
+    if (drone1 !== drone2 && trail1 && trail2) {
+      expect(trail1).not.toBe(trail2);
+    }
+  });
+});
+
+// ─── Clear All & Re-detection ──────────────────────────────────
+
+test.describe('Violation Clear & Re-detection', () => {
+  let testZoneId: string;
+
+  test.beforeAll(async ({ request }) => {
+    const all = await (await request.get('/api/zones')).json();
+    for (const z of all) {
+      if (z.name.startsWith('E2E-RedetectZone')) {
+        await request.delete(`/api/zones/${z.id}`);
+      }
+    }
+
+    const res = await request.post('/api/zones', {
+      data: {
+        name: 'E2E-RedetectZone',
+        color: '#f59e0b',
+        polygon: [
+          [51.9, 8.3],
+          [52.2, 8.3],
+          [52.2, 8.7],
+          [51.9, 8.7],
+        ],
+      },
+    });
+    const zone = await res.json();
+    testZoneId = zone.id;
+  });
+
+  test.afterAll(async ({ request }) => {
+    if (testZoneId) {
+      await request.delete(`/api/zones/${testZoneId}`);
+    }
+  });
+
+  test('after clear all, all violating drones are re-detected', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForResponse(resp => resp.url().includes('/api/drones') && resp.status() === 200);
+
+    // Wait for violations to appear and count them
+    const body = await waitForViolationRows(page, 2, 15000);
+    const initialCount = await body.locator('tr[data-testid^="violation-row-"]').count();
+
+    // Clear all
+    await page.locator('[data-testid="clear-all-violations-btn"]').click();
+
+    // Table should disappear
+    const table = page.locator('[data-testid="violation-table"]');
+    await expect(table).not.toBeVisible({ timeout: 3000 });
+
+    // Wait for re-detection (violations should reappear within a few poll cycles)
+    await expect(table).toBeVisible({ timeout: 15000 });
+
+    // Expand and verify count matches or exceeds initial
+    const bodyAfter = await waitForViolationRows(page, 2, 15000);
+    const redetectedCount = await bodyAfter.locator('tr[data-testid^="violation-row-"]').count();
+
+    // All drones should be re-detected (same or more due to timing)
+    expect(redetectedCount).toBeGreaterThanOrEqual(initialCount);
+  });
+
+  test('after deleting single violation, drone is re-detected', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForResponse(resp => resp.url().includes('/api/drones') && resp.status() === 200);
+
+    const body = await waitForViolationRows(page, 2);
+
+    // Remember first row's drone ID
+    const firstDroneTestId = await body.locator('div[data-testid^="violation-drone-"]').first().getAttribute('data-testid');
+    const droneId = firstDroneTestId?.replace('violation-drone-', '');
+
+    // Delete the first violation
+    const deleteBtn = body.locator('button[data-testid^="delete-violation-"]').first();
+    await deleteBtn.click();
+
+    // Wait for re-detection — the same drone should reappear
+    await page.waitForTimeout(5000);
+
+    // Check if a new violation for that drone was created
+    if (droneId) {
+      const droneCell = page.locator(`[data-testid="violation-drone-${droneId}"]`);
+      await expect(droneCell).toBeVisible({ timeout: 10000 });
+    }
+  });
+
+  test('clear all resets selection state', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForResponse(resp => resp.url().includes('/api/drones') && resp.status() === 200);
+
+    const body = await waitForViolationRows(page, 1);
+
+    // Select a row
+    const firstRow = body.locator('tr[data-testid^="violation-row-"]').first();
+    await firstRow.click();
+
+    // Status panel should be open
+    await expect(page.locator('[data-testid="status-panel"]')).toBeVisible({ timeout: 3000 });
+
+    // Clear all
+    await page.locator('[data-testid="clear-all-violations-btn"]').click();
+
+    // Table disappears
+    await expect(page.locator('[data-testid="violation-table"]')).not.toBeVisible({ timeout: 3000 });
+
+    // After re-detection, no row should be pre-selected (no outline)
+    const bodyAfter = await waitForViolationRows(page, 1, 15000);
+
+    const firstNewRow = bodyAfter.locator('tr[data-testid^="violation-row-"]').first();
+    await expect(firstNewRow).toBeVisible({ timeout: 5000 });
+
+    // No row should have selection outline
+    const outline = await firstNewRow.evaluate(el => getComputedStyle(el).outlineStyle);
+    expect(outline).toBe('none');
+  });
+});
+
+// ─── Refresh Rate ──────────────────────────────────────────────
+
+test.describe('Refresh Rate Control', () => {
+  test('refresh rate dropdown is visible', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForResponse(resp => resp.url().includes('/api/drones') && resp.status() === 200);
+
+    const select = page.locator('[data-testid="refresh-rate-select"]');
+    await expect(select).toBeVisible({ timeout: 5000 });
+  });
+
+  test('refresh rate has correct default (2s)', async ({ page }) => {
+    // Clear stored value
+    await page.goto('/');
+    await page.evaluate(() => localStorage.removeItem('refresh-rate'));
+    await page.reload();
+    await page.waitForResponse(resp => resp.url().includes('/api/drones') && resp.status() === 200);
+
+    const select = page.locator('[data-testid="refresh-rate-select"]');
+    await expect(select).toHaveValue('2000');
+  });
+
+  test('refresh rate options include all preset values', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForResponse(resp => resp.url().includes('/api/drones') && resp.status() === 200);
+
+    const select = page.locator('[data-testid="refresh-rate-select"]');
+    const options = select.locator('option');
+
+    const values = await options.evaluateAll(opts =>
+      (opts as HTMLOptionElement[]).map(o => Number(o.value))
+    );
+    expect(values).toContain(1000);
+    expect(values).toContain(2000);
+    expect(values).toContain(5000);
+    expect(values).toContain(10000);
+    expect(values).toContain(30000);
+  });
+
+  test('changing refresh rate persists in localStorage', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForResponse(resp => resp.url().includes('/api/drones') && resp.status() === 200);
+
+    const select = page.locator('[data-testid="refresh-rate-select"]');
+    await select.selectOption('5000');
+
+    // Verify localStorage
+    const stored = await page.evaluate(() => localStorage.getItem('refresh-rate'));
+    expect(stored).toBe('5000');
+
+    // Reload and verify persistence
+    await page.reload();
+    await page.waitForResponse(resp => resp.url().includes('/api/drones') && resp.status() === 200);
+    await expect(select).toHaveValue('5000');
+
+    // Reset
+    await select.selectOption('2000');
+  });
+
+  test('faster refresh rate increases poll frequency', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForResponse(resp => resp.url().includes('/api/drones') && resp.status() === 200);
+
+    // Set to 1s and count polls over 5 seconds
+    const select = page.locator('[data-testid="refresh-rate-select"]');
+    await select.selectOption('1000');
+
+    let fastPollCount = 0;
+    page.on('response', resp => {
+      if (resp.url().includes('/api/drones') && resp.status() === 200) {
+        fastPollCount++;
+      }
+    });
+
+    await page.waitForTimeout(5000);
+
+    // At 1s interval, expect ~4-6 polls in 5 seconds (minus startup)
+    expect(fastPollCount).toBeGreaterThanOrEqual(3);
+
+    // Now set to 5s and count
+    let slowPollCount = 0;
+    await select.selectOption('5000');
+
+    // Reset counter
+    page.removeAllListeners('response');
+    page.on('response', resp => {
+      if (resp.url().includes('/api/drones') && resp.status() === 200) {
+        slowPollCount++;
+      }
+    });
+
+    await page.waitForTimeout(5000);
+
+    // At 5s interval, expect ~1-2 polls in 5 seconds
+    expect(slowPollCount).toBeLessThan(fastPollCount);
+
+    // Reset
+    await select.selectOption('2000');
   });
 });
