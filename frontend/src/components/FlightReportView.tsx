@@ -465,11 +465,11 @@ ${hasPilotData ? (() => {
       return `<h2>Pilot / Fernsteuerungsposition</h2>
 <div class="grid">
   <div class="card"><div class="card-label">Position</div><div class="card-value" style="font-family:monospace;font-size:14px">${pilotPt.pilot_lat.toFixed(6)}, ${pilotPt.pilot_lon.toFixed(6)}</div>${pilotAddress ? `<div class="card-sub">${pilotAddress.replace(/</g, '&lt;')}</div>` : ''}</div>
-  <div class="card"><div class="card-label">Status</div><div class="card-value">Stationaer</div><div class="card-sub">Pilot-Position aus Drohnendaten</div></div>
+  <div class="card"><div class="card-label">Status</div><div class="card-value">Stationär</div><div class="card-sub">Pilot-Position aus Drohnendaten</div></div>
 </div>`;
     })() : ''}
 
-<h2>Verstosz-Details</h2>
+<h2>Verstoß-Details</h2>
 <div class="grid">
   <div class="card"><div class="card-label">Zone</div><div class="card-value" style="color:${data.zoneColor}">${data.zoneName}</div><div class="card-sub">Zone-ID: ${data.zoneId}</div></div>
   <div class="card"><div class="card-label">Zeitraum</div><div class="card-value">${formatTime(data.startTime)} - ${data.endTime ? formatTime(data.endTime) : 'aktiv'}</div><div class="card-sub">${formatDate(data.startTime)} | Dauer: ${formatDuration(dur)}</div></div>
@@ -477,7 +477,7 @@ ${hasPilotData ? (() => {
 
 <h2>Flugstatistik</h2>
 <div class="grid">
-  <div class="card"><div class="card-label">Hoehe (m)</div><div class="card-value">${stats ? `${stats.minAlt.toFixed(1)} - ${stats.maxAlt.toFixed(1)}` : '-'}</div><div class="card-sub">Durchschnitt: ${stats ? stats.avgAlt.toFixed(1) : '-'}m</div></div>
+  <div class="card"><div class="card-label">Höhe (m)</div><div class="card-value">${stats ? `${stats.minAlt.toFixed(1)} - ${stats.maxAlt.toFixed(1)}` : '-'}</div><div class="card-sub">Durchschnitt: ${stats ? stats.avgAlt.toFixed(1) : '-'}m</div></div>
   <div class="card"><div class="card-label">Geschwindigkeit (m/s)</div><div class="card-value">max. ${stats ? stats.maxSpeed.toFixed(1) : '-'}</div><div class="card-sub">Durchschnitt: ${stats ? stats.avgSpeed.toFixed(1) : '-'} m/s</div></div>
   <div class="card"><div class="card-label">Batterie</div><div class="card-value">${stats?.startBattery != null ? `${stats.startBattery.toFixed(1)}%` : '-'} &rarr; ${stats?.endBattery != null ? `${stats.endBattery.toFixed(1)}%` : '-'}</div></div>
   <div class="card"><div class="card-label">Messpunkte</div><div class="card-value">${trail.length}</div><div class="card-sub">Abtastrate: ~${duration > 0 && trail.length > 1 ? (duration / (trail.length - 1)).toFixed(1) : '-'}s</div></div>
@@ -485,7 +485,7 @@ ${hasPilotData ? (() => {
 
 <h2>Flugdaten (Messpunkte)</h2>
 <table>
-  <thead><tr><th>#</th><th>Zeit</th><th>Lat</th><th>Lon</th><th>Hoehe (m)</th><th>Speed (m/s)</th><th>Batterie</th><th>Signal (dBm)</th></tr></thead>
+  <thead><tr><th>#</th><th>Zeit</th><th>Lat</th><th>Lon</th><th>Höhe (m)</th><th>Speed (m/s)</th><th>Batterie</th><th>Signal (dBm)</th></tr></thead>
   <tbody>
     ${trail.map((p, i) => `<tr><td>${i + 1}</td><td>${formatTime(p.ts)}</td><td>${p.lat.toFixed(6)}</td><td>${p.lon.toFixed(6)}</td><td>${p.alt.toFixed(1)}</td><td>${p.speed.toFixed(1)}</td><td>${p.battery != null ? p.battery.toFixed(1) + '%' : '-'}</td><td>${p.signal != null ? p.signal.toFixed(1) : '-'}</td></tr>`).join('\n    ')}
   </tbody>
@@ -494,7 +494,7 @@ ${hasPilotData ? (() => {
 ${comments.trim() ? `<h2>Kommentare</h2><div class="comments">${comments.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>` : ''}
 
 <div class="footer">
-  Generiert von FlightArc | ${new Date().toLocaleString('de-DE')} | Verstosz-ID: ${data.id}
+  Generiert von FlightArc | ${new Date().toLocaleString('de-DE')} | Verstoß-ID: ${data.id}
 </div>
 
 <div class="no-print" style="text-align:center;margin-top:24px">
@@ -509,7 +509,7 @@ ${comments.trim() ? `<h2>Kommentare</h2><div class="comments">${comments.replace
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
         <div style={{ textAlign: 'center' }}>
           <p style={{ color: 'var(--status-error)', marginBottom: 16 }}>{error}</p>
-          <button onClick={() => navigate(-1)} style={{ padding: '8px 20px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Zurueck</button>
+          <button onClick={() => navigate(-1)} style={{ padding: '8px 20px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Zurück</button>
         </div>
       </div>
     );
@@ -527,7 +527,7 @@ ${comments.trim() ? `<h2>Kommentare</h2><div class="comments">${comments.replace
           <button onClick={() => navigate(-1)} style={{
             background: 'none', border: '1px solid var(--border)', color: 'var(--text-secondary)',
             padding: '4px 12px', borderRadius: 4, cursor: 'pointer', fontSize: 13,
-          }}>&#8592; Zurueck</button>
+          }}>&#8592; Zurück</button>
           <span style={{ fontWeight: 600, fontSize: 15 }}>Flugbericht</span>
           {data && (
             <>
@@ -579,7 +579,7 @@ ${comments.trim() ? `<h2>Kommentare</h2><div class="comments">${comments.replace
               borderRadius: 8, padding: '10px 14px', fontSize: 12,
               display: 'flex', gap: 16, opacity: 0.95,
             }}>
-              <div><span style={{ color: 'var(--text-muted)' }}>Hoehe:</span> {stats.minAlt.toFixed(0)}-{stats.maxAlt.toFixed(0)}m</div>
+              <div><span style={{ color: 'var(--text-muted)' }}>Höhe:</span> {stats.minAlt.toFixed(0)}-{stats.maxAlt.toFixed(0)}m</div>
               <div><span style={{ color: 'var(--text-muted)' }}>Speed:</span> avg {stats.avgSpeed.toFixed(1)} m/s</div>
               <div><span style={{ color: 'var(--text-muted)' }}>Punkte:</span> {totalPoints}</div>
               <div><span style={{ color: 'var(--text-muted)' }}>Dauer:</span> {formatDuration(duration)}</div>
@@ -609,7 +609,7 @@ ${comments.trim() ? `<h2>Kommentare</h2><div class="comments">${comments.replace
                     <span style={{ fontSize: 10, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{droneAddress}</span>
                   </>
                 )}
-                <span style={{ color: 'var(--text-muted)' }}>Hoehe:</span>
+                <span style={{ color: 'var(--text-muted)' }}>Höhe:</span>
                 <span>{currentPoint.alt.toFixed(1)} m</span>
                 <span style={{ color: 'var(--text-muted)' }}>Speed:</span>
                 <span>{currentPoint.speed.toFixed(1)} m/s ({(currentPoint.speed * 3.6).toFixed(0)} km/h)</span>
@@ -774,7 +774,7 @@ ${comments.trim() ? `<h2>Kommentare</h2><div class="comments">${comments.replace
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px', fontSize: 12 }}>
                 <div><span style={{ color: 'var(--text-muted)' }}>Zeit:</span> {formatTime(currentPoint.ts)}</div>
-                <div><span style={{ color: 'var(--text-muted)' }}>Hoehe:</span> {currentPoint.alt.toFixed(1)}m</div>
+                <div><span style={{ color: 'var(--text-muted)' }}>Höhe:</span> {currentPoint.alt.toFixed(1)}m</div>
                 <div><span style={{ color: 'var(--text-muted)' }}>Lat:</span> {currentPoint.lat.toFixed(6)}</div>
                 <div><span style={{ color: 'var(--text-muted)' }}>Speed:</span> {currentPoint.speed.toFixed(1)} m/s</div>
                 <div><span style={{ color: 'var(--text-muted)' }}>Lon:</span> {currentPoint.lon.toFixed(6)}</div>
@@ -799,7 +799,7 @@ ${comments.trim() ? `<h2>Kommentare</h2><div class="comments">${comments.replace
                   <tr style={{ background: 'var(--bg-tertiary)', position: 'sticky', top: 0, zIndex: 1 }}>
                     <th style={{ padding: '4px 8px', textAlign: 'left', fontWeight: 600, fontSize: 10, color: 'var(--text-muted)' }}>#</th>
                     <th style={{ padding: '4px 8px', textAlign: 'left', fontWeight: 600, fontSize: 10, color: 'var(--text-muted)' }}>Zeit</th>
-                    <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 600, fontSize: 10, color: 'var(--text-muted)' }}>Hoehe</th>
+                    <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 600, fontSize: 10, color: 'var(--text-muted)' }}>Höhe</th>
                     <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 600, fontSize: 10, color: 'var(--text-muted)' }}>Speed</th>
                     <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 600, fontSize: 10, color: 'var(--text-muted)' }}>Bat</th>
                   </tr>
@@ -833,7 +833,7 @@ ${comments.trim() ? `<h2>Kommentare</h2><div class="comments">${comments.replace
             <textarea
               value={comments}
               onChange={e => setComments(e.target.value)}
-              placeholder="Kommentar zum Verstosz..."
+              placeholder="Kommentar zum Verstoß..."
               style={{
                 width: '100%', height: 60, resize: 'vertical',
                 background: 'var(--bg-tertiary)', color: 'var(--text-primary)',

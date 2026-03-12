@@ -19,7 +19,7 @@ from settings import SettingsManager, DEFAULT_SOURCES
 from providers import ProviderRegistry
 from trail_archive import TrailArchiveManager
 from flight_zones import FlightZoneManager
-from auth import seed_super_admin, login_required
+from auth import seed_super_admin, login_required, role_required
 from routes import register_blueprints
 
 # Logging setup
@@ -58,7 +58,7 @@ init_db(app)
 
 # Create tables and default tenant
 with app.app_context():
-    from models import Tenant, TenantSettings, User
+    from models import Tenant, TenantSettings, User, UserTenantMembership
     db.create_all()
 
     # Ensure default tenant exists
@@ -81,6 +81,27 @@ with app.app_context():
         logger.info("Default tenant exists: %s", default_tenant.id)
 
     DEFAULT_TENANT_ID = default_tenant.id
+
+    # Migration: seed existing users into UserTenantMembership table
+    users_without_membership = (
+        User.query
+        .filter(User.tenant_id.isnot(None))
+        .filter(User.role != "super_admin")
+        .all()
+    )
+    for u in users_without_membership:
+        existing = UserTenantMembership.query.filter_by(
+            user_id=u.id, tenant_id=u.tenant_id
+        ).first()
+        if not existing:
+            m = UserTenantMembership(
+                user_id=u.id,
+                tenant_id=u.tenant_id,
+                role=u.role,
+            )
+            db.session.add(m)
+            logger.info("Created membership for user %s in tenant %s (role=%s)", u.username, u.tenant_id, u.role)
+    db.session.commit()
 
 # Register blueprints (auth, admin)
 register_blueprints(app)
@@ -132,23 +153,28 @@ def get_drones():
     """Get all drones from enabled sources, optionally filtered by location radius.
     radius=0 means no radius filter (all drones).
     """
-    lat = request.args.get("lat", type=float, default=DEFAULT_LAT)
-    lon = request.args.get("lon", type=float, default=DEFAULT_LON)
-    radius = request.args.get("radius", type=float, default=DEFAULT_RADIUS)
+    tid = g.tenant_id or DEFAULT_TENANT_ID
+    tenant_settings = settings.get_all(tenant_id=tid)
 
-    enabled = settings.get_enabled_sources()
-    logger.debug("GET /api/drones lat=%.4f lon=%.4f radius=%.0f sources=%s", lat, lon, radius, enabled)
+    lat = request.args.get("lat", type=float, default=tenant_settings.get("center_lat") or DEFAULT_LAT)
+    lon = request.args.get("lon", type=float, default=tenant_settings.get("center_lon") or DEFAULT_LON)
+    radius = request.args.get("radius", type=float, default=tenant_settings.get("radius") or DEFAULT_RADIUS)
+
+    enabled = settings.get_enabled_sources(tenant_id=tid)
+    logger.debug("GET /api/drones tenant=%s lat=%.4f lon=%.4f radius=%.0f sources=%s", tid, lat, lon, radius, enabled)
 
     drones = registry.get_all_drones(lat, lon, radius, enabled)
 
     # Side-effect: update shared violation records (throttled per tenant)
-    tid = g.tenant_id or DEFAULT_TENANT_ID
     _maybe_check_violations(tid, enabled)
+
+    center_lat = tenant_settings.get("center_lat") or fleet.center_lat
+    center_lon = tenant_settings.get("center_lon") or fleet.center_lon
 
     return jsonify({
         "drones": drones,
         "count": len(drones),
-        "center": {"lat": fleet.center_lat, "lon": fleet.center_lon},
+        "center": {"lat": center_lat, "lon": center_lon},
         "sources": enabled,
     })
 
@@ -180,32 +206,36 @@ def get_drone_history(drone_id: str):
 @app.route("/api/fleet/center", methods=["POST"])
 @login_required
 def set_fleet_center():
-    """Recenter the drone fleet around a new GPS position."""
+    """Recenter the map view for the current tenant."""
     data = request.get_json()
     if not data or "lat" not in data or "lon" not in data:
         logger.warning("POST /api/fleet/center - missing lat/lon in request body")
         return jsonify({"error": "lat and lon required"}), 400
-    logger.info("POST /api/fleet/center - recentering to lat=%.6f lon=%.6f", data["lat"], data["lon"])
-    fleet.set_center(data["lat"], data["lon"])
+    tid = g.tenant_id or DEFAULT_TENANT_ID
+    logger.info("POST /api/fleet/center tenant=%s - recentering to lat=%.6f lon=%.6f", tid, data["lat"], data["lon"])
+    settings.update({"center_lat": data["lat"], "center_lon": data["lon"]}, tenant_id=tid)
     return jsonify({"status": "ok", "center": {"lat": data["lat"], "lon": data["lon"]}})
 
 
 @app.route("/api/settings", methods=["GET"])
 @login_required
 def get_settings():
-    """Get current data source settings."""
-    return jsonify(settings.get_all())
+    """Get current data source settings for the authenticated tenant."""
+    tid = g.tenant_id or DEFAULT_TENANT_ID
+    return jsonify(settings.get_all(tenant_id=tid))
 
 
 @app.route("/api/settings", methods=["POST"])
 @login_required
+@role_required("tenant_admin")
 def update_settings():
-    """Update data source settings."""
+    """Update data source settings for the authenticated tenant."""
     data = request.get_json()
     if not data:
         return jsonify({"error": "Request body required"}), 400
-    settings.update(data)
-    return jsonify(settings.get_all())
+    tid = g.tenant_id or DEFAULT_TENANT_ID
+    settings.update(data, tenant_id=tid)
+    return jsonify(settings.get_all(tenant_id=tid))
 
 
 @app.route("/api/status", methods=["GET"])
@@ -561,9 +591,10 @@ trail_logger = logging.getLogger("trails")
 @app.route("/api/trails/archives", methods=["GET"])
 @login_required
 def list_trail_archives():
-    """List all archived flight trails (metadata only)."""
-    archives = archive.list_archives()
-    trail_logger.debug("GET /api/trails/archives - %d archives", len(archives))
+    """List all archived flight trails for the current tenant (metadata only)."""
+    tid = g.tenant_id or DEFAULT_TENANT_ID
+    archives = archive.list_archives(tenant_id=tid)
+    trail_logger.debug("GET /api/trails/archives tenant=%s - %d archives", tid, len(archives))
     return jsonify(archives)
 
 
@@ -571,7 +602,8 @@ def list_trail_archives():
 @login_required
 def get_trail_archive(archive_id: str):
     """Get a full archived trail including all points."""
-    data = archive.get_archive(archive_id)
+    tid = g.tenant_id or DEFAULT_TENANT_ID
+    data = archive.get_archive(archive_id, tenant_id=tid)
     if not data:
         return jsonify({"error": "Archive not found"}), 404
     return jsonify(data)
@@ -584,8 +616,9 @@ def save_trail_archive():
     data = request.get_json()
     if not data:
         return jsonify({"error": "Request body required"}), 400
+    tid = g.tenant_id or DEFAULT_TENANT_ID
     try:
-        result = archive.save_archive(data)
+        result = archive.save_archive(data, tenant_id=tid)
         return jsonify(result), 201
     except ValueError as e:
         trail_logger.warning("Archive rejected: %s", e)
@@ -596,7 +629,8 @@ def save_trail_archive():
 @login_required
 def delete_trail_archive(archive_id: str):
     """Delete an archived trail."""
-    if archive.delete_archive(archive_id):
+    tid = g.tenant_id or DEFAULT_TENANT_ID
+    if archive.delete_archive(archive_id, tenant_id=tid):
         return jsonify({"status": "deleted"})
     return jsonify({"error": "Archive not found"}), 404
 
@@ -617,6 +651,7 @@ def list_zones():
 
 @app.route("/api/zones", methods=["POST"])
 @login_required
+@role_required("tenant_admin")
 def create_zone():
     """Create a new flight zone."""
     data = request.get_json()
@@ -674,6 +709,7 @@ def update_violation_comments(record_id: str):
 
 @app.route("/api/violations/<record_id>", methods=["DELETE"])
 @login_required
+@role_required("tenant_admin")
 def delete_violation(record_id: str):
     """Delete a single violation record."""
     if zones.delete_violation(record_id, tenant_id=g.tenant_id):
@@ -684,6 +720,7 @@ def delete_violation(record_id: str):
 
 @app.route("/api/violations", methods=["DELETE"])
 @login_required
+@role_required("tenant_admin")
 def clear_violations():
     """Clear all violation records for the current tenant."""
     count = zones.clear_violations(tenant_id=g.tenant_id)
@@ -703,6 +740,7 @@ def get_zone(zone_id: str):
 
 @app.route("/api/zones/<zone_id>", methods=["PUT"])
 @login_required
+@role_required("tenant_admin")
 def update_zone(zone_id: str):
     """Update a flight zone (name, color, polygon)."""
     data = request.get_json()
@@ -721,6 +759,7 @@ def update_zone(zone_id: str):
 
 @app.route("/api/zones/<zone_id>", methods=["DELETE"])
 @login_required
+@role_required("tenant_admin")
 def delete_zone(zone_id: str):
     """Delete a flight zone."""
     if zones.delete_zone(zone_id, tenant_id=g.tenant_id):
@@ -731,6 +770,7 @@ def delete_zone(zone_id: str):
 
 @app.route("/api/zones/<zone_id>/assign", methods=["POST"])
 @login_required
+@role_required("tenant_admin")
 def assign_drones_to_zone(zone_id: str):
     """Assign drone(s) to a zone. Body: { "droneIds": ["..."] }"""
     data = request.get_json()
@@ -748,6 +788,7 @@ def assign_drones_to_zone(zone_id: str):
 
 @app.route("/api/zones/<zone_id>/unassign", methods=["POST"])
 @login_required
+@role_required("tenant_admin")
 def unassign_drones_from_zone(zone_id: str):
     """Unassign drone(s) from a zone. Body: { "droneIds": ["..."] }"""
     data = request.get_json()

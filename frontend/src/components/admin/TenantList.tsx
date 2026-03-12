@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { fetchTenants, createTenant, deleteTenant } from '../../api';
 import type { Tenant } from '../../api';
+import { useAuth } from '../../AuthContext';
 
 export default function TenantList() {
+  const { refreshUser } = useAuth();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState('');
@@ -25,6 +27,7 @@ export default function TenantList() {
       setDisplayName('');
       setShowForm(false);
       load();
+      refreshUser(); // Update tenant list in AuthContext (sidebar switcher)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Fehler');
     }
@@ -35,6 +38,7 @@ export default function TenantList() {
     try {
       await deleteTenant(id);
       load();
+      refreshUser(); // Update tenant list in AuthContext
     } catch { /* silent */ }
   };
 

@@ -210,7 +210,7 @@ export default function TrackingPanel({
               </div>
               <button
                 onClick={() => onDeleteArchive(a.id)}
-                title="Archiv loeschen"
+                title="Archiv löschen"
                 style={{
                   background: 'rgba(239, 68, 68, 0.1)',
                   border: '1px solid var(--status-error)',

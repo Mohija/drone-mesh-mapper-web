@@ -1,5 +1,5 @@
 import type { DronesResponse, Drone, DroneHistoryEntry, DataSourceSettings, AircraftLookup, ArchivedTrailSummary, ArchivedTrail, TrailPoint, FlightZone, ZoneViolation } from './types/drone';
-import type { User, LoginResponse } from './types/auth';
+import type { User, LoginResponse, TenantInfo } from './types/auth';
 
 function getApiBase(): string {
   const path = window.location.pathname;
@@ -66,15 +66,37 @@ export async function authFetch(input: RequestInfo | URL, init?: RequestInit): P
 
 // ─── Auth API ─────────────────────────────────────────────
 
-export async function login(username: string, password: string): Promise<LoginResponse> {
+/** Public: fetch all active tenants for the login form dropdown. */
+export async function fetchLoginTenants(): Promise<TenantInfo[]> {
+  const res = await fetch(`${API_BASE}/auth/tenants`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function login(username: string, password: string, tenantId?: string): Promise<LoginResponse> {
+  const body: Record<string, string> = { username, password };
+  if (tenantId) body.tenant_id = tenantId;
   const res = await fetch(`${API_BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({ error: 'Login fehlgeschlagen' }));
     throw new Error(data.error || `Login fehlgeschlagen (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function switchTenant(tenantId: string): Promise<LoginResponse> {
+  const res = await authFetch(`${API_BASE}/auth/switch-tenant`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tenant_id: tenantId }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({ error: 'Mandantenwechsel fehlgeschlagen' }));
+    throw new Error(data.error || `Fehler (${res.status})`);
   }
   return res.json();
 }
@@ -467,7 +489,7 @@ export async function reverseGeocode(lat: number, lon: number): Promise<string |
   try {
     const res = await fetch(
       `https://nominatim.openstreetmap.org/reverse?lat=${lat.toFixed(6)}&lon=${lon.toFixed(6)}&format=json&addressdetails=1&zoom=18`,
-      { headers: { 'User-Agent': 'FlightArc/1.3 (drone monitoring)' } },
+      { headers: { 'User-Agent': 'FlightArc/1.4 (drone monitoring)' } },
     );
     if (!res.ok) return null;
     const data = await res.json();

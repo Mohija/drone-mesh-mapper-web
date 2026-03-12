@@ -15,6 +15,8 @@ interface Props {
   onSelectZone: (zoneId: string) => void;
   onAssignZone: (zoneId: string) => void;
   onClose: () => void;
+  /** If true, hide zone management controls (create, delete, assign) */
+  readOnly?: boolean;
 }
 
 export default function FlightZonesPanel({
@@ -30,6 +32,7 @@ export default function FlightZonesPanel({
   onSelectZone,
   onAssignZone,
   onClose,
+  readOnly = false,
 }: Props) {
   const [newName, setNewName] = useState('');
   const [newColor, setNewColor] = useState(ZONE_COLORS[zones.length % ZONE_COLORS.length]);
@@ -104,12 +107,12 @@ export default function FlightZonesPanel({
       </div>
 
       <div style={{ maxHeight: 400, overflow: 'auto', padding: '8px 14px' }}>
-        {/* Drawing mode UI */}
-        {drawingMode ? (
+        {/* Drawing mode UI (only for admins) */}
+        {!readOnly && drawingMode ? (
           <div data-testid="drawing-mode-ui" style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
               {snappable
-                ? 'Klicke auf den ersten Punkt (gruen) zum Schliessen'
+                ? 'Klicke auf den ersten Punkt (grün) zum Schließen'
                 : `Klicke auf die Karte um Punkte zu setzen (${pendingPoints.length} Punkt${pendingPoints.length !== 1 ? 'e' : ''})`
               }
             </div>
@@ -218,7 +221,7 @@ export default function FlightZonesPanel({
               </button>
             </div>
           </div>
-        ) : (
+        ) : !readOnly && !drawingMode ? (
           <button
             onClick={onStartDrawing}
             data-testid="start-drawing-btn"
@@ -237,7 +240,7 @@ export default function FlightZonesPanel({
           >
             + Neue Zone zeichnen
           </button>
-        )}
+        ) : null}
 
         {/* Zone list */}
         {zones.length === 0 && !drawingMode && (
@@ -265,38 +268,40 @@ export default function FlightZonesPanel({
               >
                 <span style={{ fontWeight: 600, fontSize: 12 }}>{zone.name}</span>
               </div>
-              <div style={{ display: 'flex', gap: 4 }}>
-                <button
-                  onClick={() => onAssignZone(zone.id)}
-                  title="Drohnen zuweisen"
-                  data-testid={`assign-btn-${zone.id}`}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'var(--text-secondary)',
-                    fontSize: 14,
-                    cursor: 'pointer',
-                    padding: '2px 4px',
-                  }}
-                >
-                  &#9874;
-                </button>
-                <button
-                  onClick={() => onDeleteZone(zone.id)}
-                  title="Zone loeschen"
-                  data-testid={`delete-btn-${zone.id}`}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'var(--status-error)',
-                    fontSize: 14,
-                    cursor: 'pointer',
-                    padding: '2px 4px',
-                  }}
-                >
-                  &#10005;
-                </button>
-              </div>
+              {!readOnly && (
+                <div style={{ display: 'flex', gap: 4 }}>
+                  <button
+                    onClick={() => onAssignZone(zone.id)}
+                    title="Drohnen zuweisen"
+                    data-testid={`assign-btn-${zone.id}`}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--text-secondary)',
+                      fontSize: 14,
+                      cursor: 'pointer',
+                      padding: '2px 4px',
+                    }}
+                  >
+                    &#9874;
+                  </button>
+                  <button
+                    onClick={() => onDeleteZone(zone.id)}
+                    title="Zone löschen"
+                    data-testid={`delete-btn-${zone.id}`}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--status-error)',
+                      fontSize: 14,
+                      cursor: 'pointer',
+                      padding: '2px 4px',
+                    }}
+                  >
+                    &#10005;
+                  </button>
+                </div>
+              )}
             </div>
             <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
               {zone.polygon.length} Punkte &middot; {zone.assignedDrones.length} Drohne{zone.assignedDrones.length !== 1 ? 'n' : ''} zugewiesen

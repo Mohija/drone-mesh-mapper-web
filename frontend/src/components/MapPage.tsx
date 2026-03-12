@@ -50,7 +50,7 @@ const ALTITUDE_ZONES = [
 
 export default function MapPage() {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, canManage } = useAuth();
   const [drones, setDrones] = useState<Drone[]>([]);
   const [selectedDrone, setSelectedDrone] = useState<Drone | null>(null);
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
@@ -774,6 +774,7 @@ export default function MapPage() {
               onSelectZone={() => {}}
               onAssignZone={(zoneId) => setAssignZoneId(zoneId)}
               onClose={() => setZonesPanelOpen(false)}
+              readOnly={!canManage}
             />
           )}
         </div>
@@ -818,7 +819,7 @@ export default function MapPage() {
               )}
             </span>
           )}
-          {user && (user.role === 'super_admin' || user.role === 'tenant_admin') && (
+          {canManage && (
             <button
               onClick={() => navigate('/admin')}
               title="Administration"
@@ -932,6 +933,7 @@ export default function MapPage() {
           }
         }}
         onOpenReport={(recordId) => navigate(`/report/${recordId}`)}
+        readOnly={!canManage}
       />
     </div>
   );

@@ -12,6 +12,8 @@ interface Props {
   onSelectRecord: (recordId: string) => void;
   onOpenReport: (recordId: string) => void;
   onHeightChange?: (height: number) => void;
+  /** If true, hide delete buttons */
+  readOnly?: boolean;
 }
 
 function formatTime(epoch: number): string {
@@ -54,6 +56,7 @@ export default function ViolationTable({
   onSelectRecord,
   onOpenReport,
   onHeightChange,
+  readOnly = false,
 }: Props) {
   // Force re-render every second for live duration updates
   const [, setTick] = useState(0);
@@ -121,7 +124,7 @@ export default function ViolationTable({
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ color: 'var(--status-error)', fontSize: 14 }}>&#9888;</span>
           <span style={{ fontWeight: 600, fontSize: 13 }}>
-            Zonenverstoesze ({records.length})
+            Zonenverstöße ({records.length})
           </span>
           {activeCount > 0 && (
             <span
@@ -141,21 +144,23 @@ export default function ViolationTable({
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button
-            onClick={(e) => { e.stopPropagation(); onClearAll(); }}
-            data-testid="clear-all-violations-btn"
-            style={{
-              background: 'none',
-              border: '1px solid var(--border)',
-              color: 'var(--text-muted)',
-              fontSize: 10,
-              padding: '2px 8px',
-              borderRadius: 4,
-              cursor: 'pointer',
-            }}
-          >
-            Alle loeschen
-          </button>
+          {!readOnly && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onClearAll(); }}
+              data-testid="clear-all-violations-btn"
+              style={{
+                background: 'none',
+                border: '1px solid var(--border)',
+                color: 'var(--text-muted)',
+                fontSize: 10,
+                padding: '2px 8px',
+                borderRadius: 4,
+                cursor: 'pointer',
+              }}
+            >
+              Alle löschen
+            </button>
+          )}
           <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600 }}>
             {collapsed ? '\u25B2' : '\u25BC'}
           </span>
@@ -175,7 +180,7 @@ export default function ViolationTable({
                 <th style={thStyle}>Dauer</th>
                 <th style={{ ...thStyle, textAlign: 'center' }}>Trail</th>
                 <th style={{ ...thStyle, textAlign: 'center' }}>Bericht</th>
-                <th style={{ ...thStyle, textAlign: 'center' }}></th>
+                {!readOnly && <th style={{ ...thStyle, textAlign: 'center' }}></th>}
               </tr>
             </thead>
             <tbody>
@@ -272,23 +277,25 @@ export default function ViolationTable({
                         &#128196;
                       </button>
                     </td>
-                    <td style={{ ...tdStyle, textAlign: 'center' }}>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onDeleteRecord(record.id); }}
-                        data-testid={`delete-violation-${record.id}`}
-                        title="Verstosz loeschen"
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: 'var(--status-error)',
-                          fontSize: 13,
-                          cursor: 'pointer',
-                          padding: '2px 6px',
-                        }}
-                      >
-                        &#10005;
-                      </button>
-                    </td>
+                    {!readOnly && (
+                      <td style={{ ...tdStyle, textAlign: 'center' }}>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onDeleteRecord(record.id); }}
+                          data-testid={`delete-violation-${record.id}`}
+                          title="Verstoß löschen"
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--status-error)',
+                            fontSize: 13,
+                            cursor: 'pointer',
+                            padding: '2px 6px',
+                          }}
+                        >
+                          &#10005;
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 );
               })}

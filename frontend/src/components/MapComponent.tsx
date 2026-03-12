@@ -31,9 +31,9 @@ const TYPE_CODE_LABELS: Record<string, string> = {
   FLUGHAFEN: 'Flughafen',
   FLUGPLATZ: 'Flugplatz',
   KONTROLLZONE: 'Kontrollzone',
-  FLUGBESCHRAENKUNGSGEBIET: 'Flugbeschraenkungsgebiet',
+  FLUGBESCHRAENKUNGSGEBIET: 'Flugbeschränkungsgebiet',
   MODELLFLUGPLATZ: 'Modellflugplatz',
-  TEMPORAERE_BETRIEBSEINSCHRAENKUNG: 'Temporaere Einschraenkung',
+  TEMPORAERE_BETRIEBSEINSCHRAENKUNG: 'Temporäre Einschränkung',
   NATURSCHUTZGEBIET: 'Naturschutzgebiet',
   NATIONALPARK: 'Nationalpark',
   VOGELSCHUTZGEBIET: 'Vogelschutzgebiet',
@@ -42,7 +42,7 @@ const TYPE_CODE_LABELS: Record<string, string> = {
   BUNDESAUTOBAHN: 'Bundesautobahn',
   STROMLEITUNG: 'Stromleitung',
   WINDKRAFTANLAGE: 'Windkraftanlage',
-  MILITAERISCHE_ANLAGE: 'Militaerische Anlage',
+  MILITAERISCHE_ANLAGE: 'Militärische Anlage',
   KRANKENHAUS: 'Krankenhaus',
   JUSTIZVOLLZUGSANSTALT: 'Justizvollzugsanstalt',
 };
@@ -109,7 +109,7 @@ function buildPopup(drone: Drone): string {
         ${signalText}
         <span style="color: var(--text-muted);">Batterie:</span>
         <span>${batteryText}</span>
-        <span style="color: var(--text-muted);">H&ouml;he MSL:</span>
+        <span style="color: var(--text-muted);">Höhe MSL:</span>
         <span>${Math.round(drone.altitude_baro ?? drone.altitude)} m</span>
         <span style="color: var(--text-muted);">Speed:</span>
         <span>${drone.speed.toFixed(1)} m/s (${(drone.speed * 3.6).toFixed(0)} km/h)</span>
@@ -212,7 +212,7 @@ function buildNfzTooltipHtml(features: Array<{ properties: Record<string, unknow
       <div style="margin-bottom:4px;${idx > 0 ? 'padding-top:4px;border-top:1px solid var(--popup-divider);' : ''}">
         <div style="font-weight:600;font-size:12px;color:var(--popup-text);">${name}</div>
         ${typeLabel ? `<div style="font-size:11px;color:${typeColor};margin-top:1px;">${typeLabel}</div>` : ''}
-        ${altText ? `<div style="font-size:10px;color:var(--popup-text-secondary);margin-top:1px;">Hoehe: ${altText}</div>` : ''}
+        ${altText ? `<div style="font-size:10px;color:var(--popup-text-secondary);margin-top:1px;">Höhe: ${altText}</div>` : ''}
         ${legal ? `<div style="font-size:10px;color:var(--popup-text-muted);margin-top:1px;">${legal}</div>` : ''}
       </div>
     `;
@@ -240,7 +240,7 @@ function buildNfzPopupHtml(features: Array<{ properties: Record<string, unknown>
 
     const rows: string[] = [];
     if (typeLabel) rows.push(`<span style="color:var(--text-muted);">Typ:</span><span style="color:${typeColor};">${typeLabel}</span>`);
-    if (altText) rows.push(`<span style="color:var(--text-muted);">Hoehe:</span><span>${altText}</span>`);
+    if (altText) rows.push(`<span style="color:var(--text-muted);">Höhe:</span><span>${altText}</span>`);
     if (legal) rows.push(`<span style="color:var(--text-muted);">Rechtsgrundlage:</span><span>${legal}</span>`);
     if (extRef) rows.push(`<span style="color:var(--text-muted);">Referenz:</span><span>${extRef}</span>`);
 

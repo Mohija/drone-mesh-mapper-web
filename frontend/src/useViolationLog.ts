@@ -2,9 +2,11 @@ import { useState, useCallback, useRef, useMemo } from 'react';
 import type { Drone, ViolationRecord } from './types/drone';
 import type { ServerViolationRecord } from './api';
 import { fetchViolations, deleteViolationRecord, clearViolationRecords } from './api';
+import { getUserItem } from './userStorage';
 
-/** Play a short alert beep for new violations */
+/** Play a short alert beep for new violations (respects user setting) */
 function playAlertSound() {
+  if (getUserItem('violation-sound') === 'off') return;
   try {
     const ctx = new AudioContext();
     const osc = ctx.createOscillator();

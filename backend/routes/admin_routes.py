@@ -1,4 +1,4 @@
-"""Admin routes — tenant and user management."""
+"""Admin routes — tenant, user, and membership management."""
 
 import logging
 import re
@@ -20,12 +20,12 @@ admin_bp = Blueprint("admin", __name__, url_prefix="/api/admin")
 @role_required("super_admin")
 def list_tenants():
     """List all tenants with user/zone counts."""
-    from models import Tenant, User, FlightZone
+    from models import Tenant, User, FlightZone, UserTenantMembership
     tenants = Tenant.query.all()
     result = []
     for t in tenants:
         d = t.to_dict()
-        d["user_count"] = User.query.filter_by(tenant_id=t.id).count()
+        d["user_count"] = UserTenantMembership.query.filter_by(tenant_id=t.id).count()
         d["zone_count"] = FlightZone.query.filter_by(tenant_id=t.id).count()
         result.append(d)
     return jsonify(result)
@@ -62,6 +62,9 @@ def create_tenant():
     settings = TenantSettings(
         tenant_id=tenant.id,
         sources=json.loads(json.dumps(DEFAULT_SOURCES)),
+        center_lat=52.0302,
+        center_lon=8.5325,
+        radius=50000,
     )
     db.session.add(settings)
     db.session.commit()
@@ -75,12 +78,12 @@ def create_tenant():
 @role_required("super_admin")
 def get_tenant(tenant_id):
     """Get tenant details."""
-    from models import Tenant, User, FlightZone
+    from models import Tenant, FlightZone, UserTenantMembership
     tenant = db.session.get(Tenant, tenant_id)
     if not tenant:
         return jsonify({"error": "Mandant nicht gefunden"}), 404
     d = tenant.to_dict()
-    d["user_count"] = User.query.filter_by(tenant_id=tenant.id).count()
+    d["user_count"] = UserTenantMembership.query.filter_by(tenant_id=tenant.id).count()
     d["zone_count"] = FlightZone.query.filter_by(tenant_id=tenant.id).count()
     return jsonify(d)
 
@@ -116,7 +119,7 @@ def update_tenant(tenant_id):
 @login_required
 @role_required("super_admin")
 def delete_tenant(tenant_id):
-    """Delete a tenant (cascade: users, zones, trails, settings)."""
+    """Delete a tenant (cascade: users, zones, trails, settings, memberships)."""
     from models import Tenant
     tenant = db.session.get(Tenant, tenant_id)
     if not tenant:
@@ -138,26 +141,47 @@ def delete_tenant(tenant_id):
 @login_required
 @role_required("tenant_admin")
 def list_users():
-    """List users. super_admin sees all, tenant_admin sees own tenant only."""
-    from models import User
+    """List users. super_admin sees all, tenant_admin sees own tenant only (via memberships)."""
+    from models import User, UserTenantMembership
     if g.current_user.role == "super_admin":
         tenant_filter = request.args.get("tenant_id")
         if tenant_filter:
-            users = User.query.filter_by(tenant_id=tenant_filter).all()
+            # Get users who are members of this tenant
+            memberships = UserTenantMembership.query.filter_by(tenant_id=tenant_filter).all()
+            user_ids = [m.user_id for m in memberships]
+            users = User.query.filter(User.id.in_(user_ids)).all() if user_ids else []
+            # Include membership role info
+            membership_roles = {m.user_id: m.role for m in memberships}
+            result = []
+            for u in users:
+                d = u.to_dict(include_tenant=True, tenant_id=tenant_filter)
+                d["membership_role"] = membership_roles.get(u.id, u.role)
+                result.append(d)
+            return jsonify(result)
         else:
             users = User.query.all()
+            return jsonify([u.to_dict(include_tenant=True) for u in users])
     else:
-        users = User.query.filter_by(tenant_id=g.current_user.tenant_id).all()
-
-    return jsonify([u.to_dict(include_tenant=True) for u in users])
+        # tenant_admin: show users in current tenant via memberships
+        tenant_id = g.tenant_id
+        memberships = UserTenantMembership.query.filter_by(tenant_id=tenant_id).all()
+        user_ids = [m.user_id for m in memberships]
+        users = User.query.filter(User.id.in_(user_ids)).all() if user_ids else []
+        membership_roles = {m.user_id: m.role for m in memberships}
+        result = []
+        for u in users:
+            d = u.to_dict(include_tenant=True, tenant_id=tenant_id)
+            d["membership_role"] = membership_roles.get(u.id, u.role)
+            result.append(d)
+        return jsonify(result)
 
 
 @admin_bp.route("/users", methods=["POST"])
 @login_required
 @role_required("tenant_admin")
 def create_user():
-    """Create a new user."""
-    from models import User, Tenant
+    """Create a new user and add membership to the specified tenant."""
+    from models import User, Tenant, UserTenantMembership
 
     data = request.get_json()
     if not data:
@@ -186,9 +210,9 @@ def create_user():
 
     # Permission checks
     if g.current_user.role != "super_admin":
-        if role in ("super_admin", "tenant_admin"):
+        if role == "super_admin":
             return jsonify({"error": "Keine Berechtigung für diese Rolle"}), 403
-        if tenant_id != g.current_user.tenant_id:
+        if tenant_id != g.tenant_id:
             return jsonify({"error": "Keine Berechtigung für diesen Mandanten"}), 403
 
     # Validate tenant exists
@@ -208,10 +232,21 @@ def create_user():
         email=email,
         password_hash=hash_password(password),
         display_name=display_name,
-        role=role,
+        role=role if role == "super_admin" else "user",  # global role
         tenant_id=tenant_id if role != "super_admin" else None,
     )
     db.session.add(user)
+    db.session.flush()
+
+    # Create membership (unless super_admin)
+    if role != "super_admin" and tenant_id:
+        membership = UserTenantMembership(
+            user_id=user.id,
+            tenant_id=tenant_id,
+            role=role,  # per-tenant role
+        )
+        db.session.add(membership)
+
     db.session.commit()
 
     logger.info("User created: %s (role=%s, tenant=%s)", username, role, tenant_id)
@@ -228,11 +263,14 @@ def get_user(user_id):
     if not user:
         return jsonify({"error": "Benutzer nicht gefunden"}), 404
 
-    # tenant_admin can only see own tenant's users
-    if g.current_user.role != "super_admin" and user.tenant_id != g.current_user.tenant_id:
-        return jsonify({"error": "Benutzer nicht gefunden"}), 404
+    # tenant_admin can only see users in their tenant (via memberships)
+    if g.current_user.role != "super_admin":
+        if not user.get_role_for_tenant(g.tenant_id):
+            return jsonify({"error": "Benutzer nicht gefunden"}), 404
 
-    return jsonify(user.to_dict(include_tenant=True))
+    result = user.to_dict(include_tenant=True)
+    result["memberships"] = [m.to_dict() for m in user.memberships]
+    return jsonify(result)
 
 
 @admin_bp.route("/users/<user_id>", methods=["PUT"])
@@ -240,14 +278,15 @@ def get_user(user_id):
 @role_required("tenant_admin")
 def update_user(user_id):
     """Update a user."""
-    from models import User
+    from models import User, UserTenantMembership
     user = db.session.get(User, user_id)
     if not user:
         return jsonify({"error": "Benutzer nicht gefunden"}), 404
 
-    # tenant_admin can only edit own tenant's users
-    if g.current_user.role != "super_admin" and user.tenant_id != g.current_user.tenant_id:
-        return jsonify({"error": "Keine Berechtigung"}), 403
+    # tenant_admin can only edit users in their tenant
+    if g.current_user.role != "super_admin":
+        if not user.get_role_for_tenant(g.tenant_id):
+            return jsonify({"error": "Keine Berechtigung"}), 403
 
     data = request.get_json()
     if not data:
@@ -262,9 +301,19 @@ def update_user(user_id):
             return jsonify({"error": "E-Mail-Adresse bereits vergeben"}), 409
         user.email = email
     if "role" in data:
-        if g.current_user.role != "super_admin":
+        new_role = data["role"]
+        if g.current_user.role != "super_admin" and new_role == "super_admin":
             return jsonify({"error": "Keine Berechtigung"}), 403
-        user.role = data["role"]
+        if new_role == "super_admin":
+            user.role = "super_admin"
+        else:
+            # Update membership role for the current tenant
+            tenant_id = data.get("tenant_id") or g.tenant_id
+            membership = UserTenantMembership.query.filter_by(
+                user_id=user.id, tenant_id=tenant_id
+            ).first()
+            if membership:
+                membership.role = new_role
     if "is_active" in data:
         user.is_active = bool(data["is_active"])
 
@@ -287,9 +336,10 @@ def delete_user(user_id):
     if user.role == "super_admin":
         return jsonify({"error": "Super-Admin kann nicht gelöscht werden"}), 403
 
-    # tenant_admin can only delete own tenant's users
-    if g.current_user.role != "super_admin" and user.tenant_id != g.current_user.tenant_id:
-        return jsonify({"error": "Keine Berechtigung"}), 403
+    # tenant_admin can only delete users in their tenant
+    if g.current_user.role != "super_admin":
+        if not user.get_role_for_tenant(g.tenant_id):
+            return jsonify({"error": "Keine Berechtigung"}), 403
 
     db.session.delete(user)
     db.session.commit()
@@ -307,8 +357,9 @@ def reset_password(user_id):
     if not user:
         return jsonify({"error": "Benutzer nicht gefunden"}), 404
 
-    if g.current_user.role != "super_admin" and user.tenant_id != g.current_user.tenant_id:
-        return jsonify({"error": "Keine Berechtigung"}), 403
+    if g.current_user.role != "super_admin":
+        if not user.get_role_for_tenant(g.tenant_id):
+            return jsonify({"error": "Keine Berechtigung"}), 403
 
     data = request.get_json()
     if not data or "new_password" not in data:
@@ -321,3 +372,106 @@ def reset_password(user_id):
     db.session.commit()
     logger.info("Password reset for user: %s", user_id)
     return jsonify({"status": "ok"})
+
+
+# ─── Membership Management ───────────────────────────────────
+
+
+@admin_bp.route("/users/<user_id>/memberships", methods=["GET"])
+@login_required
+@role_required("tenant_admin")
+def list_user_memberships(user_id):
+    """List all tenant memberships for a user."""
+    from models import User
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({"error": "Benutzer nicht gefunden"}), 404
+
+    if g.current_user.role != "super_admin":
+        if not user.get_role_for_tenant(g.tenant_id):
+            return jsonify({"error": "Keine Berechtigung"}), 403
+
+    return jsonify([m.to_dict() for m in user.memberships])
+
+
+@admin_bp.route("/users/<user_id>/memberships", methods=["POST"])
+@login_required
+@role_required("super_admin")
+def add_user_membership(user_id):
+    """Add a tenant membership for a user. Body: { tenant_id, role }"""
+    from models import User, Tenant, UserTenantMembership
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({"error": "Benutzer nicht gefunden"}), 404
+
+    if user.role == "super_admin":
+        return jsonify({"error": "Super-Admin benötigt keine Mandanten-Zuordnung"}), 400
+
+    data = request.get_json()
+    if not data or "tenant_id" not in data:
+        return jsonify({"error": "tenant_id erforderlich"}), 400
+
+    tenant_id = data["tenant_id"]
+    role = data.get("role", "user")
+    if role not in ("tenant_admin", "user"):
+        return jsonify({"error": "Ungültige Rolle (tenant_admin oder user)"}), 400
+
+    tenant = db.session.get(Tenant, tenant_id)
+    if not tenant:
+        return jsonify({"error": "Mandant nicht gefunden"}), 404
+
+    existing = UserTenantMembership.query.filter_by(
+        user_id=user.id, tenant_id=tenant_id
+    ).first()
+    if existing:
+        return jsonify({"error": "Zuordnung existiert bereits"}), 409
+
+    membership = UserTenantMembership(
+        user_id=user.id, tenant_id=tenant_id, role=role
+    )
+    db.session.add(membership)
+    db.session.commit()
+
+    logger.info("Membership added: user=%s tenant=%s role=%s", user.username, tenant_id, role)
+    return jsonify(membership.to_dict()), 201
+
+
+@admin_bp.route("/memberships/<membership_id>", methods=["PUT"])
+@login_required
+@role_required("super_admin")
+def update_membership(membership_id):
+    """Update a membership's role."""
+    from models import UserTenantMembership
+    membership = db.session.get(UserTenantMembership, membership_id)
+    if not membership:
+        return jsonify({"error": "Zuordnung nicht gefunden"}), 404
+
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Request body required"}), 400
+
+    if "role" in data:
+        role = data["role"]
+        if role not in ("tenant_admin", "user"):
+            return jsonify({"error": "Ungültige Rolle"}), 400
+        membership.role = role
+
+    db.session.commit()
+    logger.info("Membership updated: %s (role=%s)", membership_id, membership.role)
+    return jsonify(membership.to_dict())
+
+
+@admin_bp.route("/memberships/<membership_id>", methods=["DELETE"])
+@login_required
+@role_required("super_admin")
+def delete_membership(membership_id):
+    """Remove a tenant membership."""
+    from models import UserTenantMembership
+    membership = db.session.get(UserTenantMembership, membership_id)
+    if not membership:
+        return jsonify({"error": "Zuordnung nicht gefunden"}), 404
+
+    db.session.delete(membership)
+    db.session.commit()
+    logger.info("Membership deleted: %s", membership_id)
+    return jsonify({"status": "deleted"})

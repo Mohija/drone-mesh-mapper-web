@@ -15,7 +15,7 @@ interface Props {
 }
 
 export default function ProtectedRoute({ children, requiredRole }: Props) {
-  const { isAuthenticated, isLoading, user } = useAuth();
+  const { isAuthenticated, isLoading, user, effectiveRole } = useAuth();
 
   if (isLoading) {
     return (
@@ -32,8 +32,8 @@ export default function ProtectedRoute({ children, requiredRole }: Props) {
     return <Navigate to="/login" replace />;
   }
 
-  if (requiredRole && user) {
-    const userLevel = ROLE_HIERARCHY[user.role] ?? 0;
+  if (requiredRole && effectiveRole) {
+    const userLevel = ROLE_HIERARCHY[effectiveRole] ?? 0;
     const requiredLevel = ROLE_HIERARCHY[requiredRole] ?? 0;
     if (userLevel < requiredLevel) {
       return <Navigate to="/" replace />;

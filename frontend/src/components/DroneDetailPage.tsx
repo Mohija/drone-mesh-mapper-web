@@ -400,7 +400,7 @@ export default function DroneDetailPage() {
           alignItems: 'center',
           gap: 8,
         }}>
-          <Spinner size={14} /> Flugverbotszonen werden gepr&uuml;ft...
+          <Spinner size={14} /> Flugverbotszonen werden geprüft...
         </div>
       ) : nfzZones.length > 0 ? (
         <div style={{
@@ -453,11 +453,11 @@ export default function DroneDetailPage() {
               color={drone.battery != null ? batteryColor(drone.battery) : undefined}
             />
             <StatItem
-              label="H&ouml;he MSL"
+              label="Höhe MSL"
               value={`${(drone.altitude_baro ?? drone.altitude).toFixed(1)} m`}
             />
             <StatItem
-              label="H&ouml;he AGL"
+              label="Höhe AGL"
               value={groundElevation != null
                 ? `${((drone.altitude_baro ?? drone.altitude) - groundElevation).toFixed(1)} m`
                 : undefined
@@ -470,7 +470,7 @@ export default function DroneDetailPage() {
               sub={`${(drone.speed * 3.6).toFixed(0)} km/h`}
             />
             <StatItem
-              label="Gel&auml;nde"
+              label="Gelände"
               value={groundElevation != null ? `${groundElevation.toFixed(0)} m` : undefined}
               loading={groundElevation == null}
             />
@@ -498,27 +498,27 @@ export default function DroneDetailPage() {
         {/* Position */}
         <Card title="Position">
           <DetailRow label="Breitengrad" value={drone.latitude.toFixed(6)} mono />
-          <DetailRow label="L&auml;ngengrad" value={drone.longitude.toFixed(6)} mono />
+          <DetailRow label="Längengrad" value={drone.longitude.toFixed(6)} mono />
           <DetailRow
-            label="H&ouml;he MSL"
+            label="Höhe MSL"
             value={`${(drone.altitude_baro ?? drone.altitude).toFixed(1)} m`}
             hint={drone.altitude_baro != null ? 'barometrisch' : undefined}
           />
           <DetailRow
-            label="H&ouml;he GPS"
+            label="Höhe GPS"
             value={drone.altitude_geom != null ? `${drone.altitude_geom.toFixed(1)} m` : 'N/A'}
             hint={drone.altitude_geom != null ? 'geometrisch' : undefined}
           />
           <DetailRow
-            label="H&ouml;he AGL"
+            label="Höhe AGL"
             value={groundElevation != null
               ? `${((drone.altitude_baro ?? drone.altitude) - groundElevation).toFixed(1)} m`
               : undefined}
             loading={groundElevation == null}
-            hint="&uuml;ber Grund"
+            hint="über Grund"
           />
           <DetailRow
-            label="Gel&auml;ndeh&ouml;he"
+            label="Geländehöhe"
             value={groundElevation != null ? `${groundElevation.toFixed(0)} m MSL` : undefined}
             loading={groundElevation == null}
           />

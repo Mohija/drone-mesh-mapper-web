@@ -2,10 +2,51 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-12 (Flugbericht-Verbesserungen + NFZ-Fix + Reverse Geocoding)
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-12 (v1.4.0 - Multi-Tenant-System + Mandanten-Isolation)
 - **Typ:** Projekt | **Status:** Development
 
 ## Änderungshistorie
+
+### 2026-03-12 - Mandanten-Isolation für Zones, Settings, Archives, Center
+**Änderungen:**
+- **Settings per Mandant:** `GET/POST /api/settings` verwendet jetzt `g.tenant_id` — jeder Mandant hat eigene Datenquellen-Konfiguration
+- **Drones per Mandant:** `GET /api/drones` liest `enabled_sources` aus den mandantenspezifischen Settings; Center-Koordinaten kommen aus TenantSettings statt globalem Fleet
+- **Kartenzentrum per Mandant:** `POST /api/fleet/center` aktualisiert `center_lat`/`center_lon` in TenantSettings statt globaler Simulator-Einstellung
+- **Trail-Archive per Mandant:** Alle Archive-Routes (`GET/POST/DELETE /api/trails/archives`) filtern jetzt nach `g.tenant_id`
+- **Settings-API erweitert:** `_read_from_db()` liefert jetzt auch `center_lat`, `center_lon`, `radius`; `_write_to_db()` unterstützt Updates dieser Felder
+- **Neue Mandanten:** `create_tenant()` setzt Default-Center (Bielefeld) und Radius bei TenantSettings
+- **Bereits isoliert (verifiziert):** Flight Zones, Violations, User/Tenant Management — waren schon korrekt per `g.tenant_id` gefiltert
+**Dateien:** `backend/app.py`, `backend/settings.py`, `backend/routes/admin_routes.py`
+
+### 2026-03-12 - Benutzer-Bearbeitung im Admin-Panel
+**Änderungen:**
+- **Inline-Bearbeitung:** Admins können Benutzer direkt in der Tabelle bearbeiten (Anzeigename, E-Mail, Rolle, Aktiv-Status)
+- **Rollenbasierte Einschränkungen:** Nur Super-Admins können die Rolle eines Benutzers ändern, Mandanten-Admins können ihre Benutzer bearbeiten
+- **Toggle-Switch:** Aktiv/Inaktiv-Status mit animiertem Toggle-Switch statt Dropdown
+**Dateien:** `frontend/src/components/admin/UserList.tsx`
+
+### 2026-03-12 - Rollenbasiertes Berechtigungssystem + Multi-Tenant-Login
+**Änderungen:**
+- **Multi-Tenant-Zuordnung:** Neues `UserTenantMembership`-Model — Benutzer können mehreren Mandanten zugeordnet sein mit individuellen Rollen pro Mandant
+- **Login mit Mandantenauswahl:** Dropdown mit Autocomplete-Suche im Login-Formular zur Mandantenauswahl; letzter Mandant wird in localStorage gespeichert
+- **Mandantenwechsel:** `POST /api/auth/switch-tenant` Endpoint + Mandantenwähler in der Admin-Sidebar
+- **Rollenbasierte Berechtigungen:**
+  - Benutzer (user): Kann alles sehen, aber keine Datenquellen, Flugzonen oder Verstöße ändern/löschen
+  - Mandanten-Admin (tenant_admin): Kann Benutzer, Datenquellen und Flugzonen für den eigenen Mandanten verwalten
+  - Super-Admin (super_admin): Voller Zugriff auf alle Mandanten
+- **Backend-Absicherung:** `@role_required("tenant_admin")` auf alle schreibenden Zone-Routen (POST/PUT/DELETE/assign/unassign), Settings POST und Violation DELETE Routen
+- **Frontend ReadOnly-Modus:** FlightZonesPanel, ViolationTable und SettingsPage zeigen Verwaltungsoptionen nur für Admins an
+- **JWT-Payload erweitert:** Enthält jetzt `tenant_id` des gewählten Mandanten und `effective_role` (per-Tenant-Rolle)
+- **Admin-Dashboard:** Mandanten-Übersicht für Super-Admins mit Benutzer-/Zonenanzahl pro Mandant
+- **Migration:** Bestehende Benutzer werden automatisch in die Membership-Tabelle überführt
+- **Öffentlicher Tenant-Endpoint:** `GET /api/auth/tenants` (ohne Auth) für Login-Dropdown
+**Dateien:** `backend/models.py`, `backend/auth.py`, `backend/app.py`, `backend/routes/auth_routes.py`, `backend/routes/admin_routes.py`, `frontend/src/types/auth.ts`, `frontend/src/api.ts`, `frontend/src/AuthContext.tsx`, `frontend/src/components/LoginPage.tsx`, `frontend/src/components/ProtectedRoute.tsx`, `frontend/src/components/SettingsPage.tsx`, `frontend/src/components/FlightZonesPanel.tsx`, `frontend/src/components/ViolationTable.tsx`, `frontend/src/components/MapPage.tsx`, `frontend/src/components/admin/AdminLayout.tsx`, `frontend/src/components/admin/AdminDashboard.tsx`
+
+### 2026-03-12 - Umlaute-Fix + Verstoß-Alarmton-Toggle
+**Änderungen:**
+- **Umlaute korrigiert:** Alle fehlerhaften Umlaute (sz→ß, ae→ä, oe→ö, ue→ü) und HTML-Entities (&ouml;→ö etc.) im gesamten Frontend durch korrekte UTF-8-Zeichen ersetzt
+- **Per-User Alarmton-Toggle:** Verstoß-Alarmton kann in den Einstellungen pro Benutzer aktiviert/deaktiviert werden (localStorage via userStorage.ts)
+**Dateien:** `frontend/src/components/SettingsPage.tsx`, `frontend/src/components/ViolationAlert.tsx`, `frontend/src/useViolationLog.ts`, `frontend/src/components/FlightReportView.tsx`, `frontend/src/components/StatusPanel.tsx`, `frontend/src/components/DroneDetailPage.tsx`, `frontend/src/components/ViolationTable.tsx`, `frontend/src/components/FlightZonesPanel.tsx`, `frontend/src/components/TrackingPanel.tsx`, `frontend/src/components/MapComponent.tsx`, `frontend/src/config/noFlyZones.ts`
 
 ### 2026-03-12 - Flugbericht-Verbesserungen + NFZ-Fix + Reverse Geocoding
 **Änderungen:**

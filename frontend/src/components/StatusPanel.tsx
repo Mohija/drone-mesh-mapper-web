@@ -384,23 +384,23 @@ export default function StatusPanel({ drone, onClose, enabledNoFlyLayers, tracki
         {/* Position */}
         <Section title="Position">
           <DataRow label="Breitengrad" value={drone.latitude.toFixed(6)} />
-          <DataRow label="L&auml;ngengrad" value={drone.longitude.toFixed(6)} />
+          <DataRow label="Längengrad" value={drone.longitude.toFixed(6)} />
           <DataRow
-            label="H&ouml;he MSL"
+            label="Höhe MSL"
             value={`${(drone.altitude_baro ?? drone.altitude).toFixed(1)} m`}
           />
           <DataRow
-            label="H&ouml;he AGL"
+            label="Höhe AGL"
             value={groundElevation != null
               ? `${((drone.altitude_baro ?? drone.altitude) - groundElevation).toFixed(1)} m`
               : undefined}
             loading={groundElevation == null}
           />
           {drone.altitude_geom != null && (
-            <DataRow label="H&ouml;he GPS" value={`${drone.altitude_geom.toFixed(1)} m`} />
+            <DataRow label="Höhe GPS" value={`${drone.altitude_geom.toFixed(1)} m`} />
           )}
           <DataRow
-            label="Gel&auml;nde"
+            label="Gelände"
             value={groundElevation != null ? `${groundElevation.toFixed(0)} m MSL` : undefined}
             loading={groundElevation == null}
           />
@@ -415,7 +415,7 @@ export default function StatusPanel({ drone, onClose, enabledNoFlyLayers, tracki
         {drone.pilot_latitude != null && drone.pilot_longitude != null && (
           <Section title="Pilot">
             <DataRow label="Breitengrad" value={drone.pilot_latitude.toFixed(6)} />
-            <DataRow label="L&auml;ngengrad" value={drone.pilot_longitude.toFixed(6)} />
+            <DataRow label="Längengrad" value={drone.pilot_longitude.toFixed(6)} />
             <DataRow
               label="Standort"
               value={pilotAddress || undefined}

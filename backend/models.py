@@ -55,12 +55,15 @@ class User(db.Model):
     display_name = db.Column(db.String(200), nullable=False)
     role = db.Column(db.String(20), nullable=False, default="user")  # super_admin, tenant_admin, user
     is_active = db.Column(db.Boolean, default=True, nullable=False)
-    tenant_id = db.Column(db.String(8), db.ForeignKey("tenants.id"), nullable=True)  # NULL for super_admin
+    tenant_id = db.Column(db.String(8), db.ForeignKey("tenants.id"), nullable=True)  # default tenant (NULL for super_admin)
     last_login = db.Column(db.Float, nullable=True)
     created_at = db.Column(db.Float, default=_now, nullable=False)
     updated_at = db.Column(db.Float, default=_now, onupdate=_now, nullable=False)
 
-    def to_dict(self, include_tenant=False):
+    # Relationships
+    memberships = db.relationship("UserTenantMembership", backref="user", cascade="all, delete-orphan", lazy=True)
+
+    def to_dict(self, include_tenant=False, tenant_id=None):
         result = {
             "id": self.id,
             "username": self.username,
@@ -68,16 +71,67 @@ class User(db.Model):
             "display_name": self.display_name,
             "role": self.role,
             "is_active": self.is_active,
-            "tenant_id": self.tenant_id,
+            "tenant_id": tenant_id or self.tenant_id,
             "last_login": self.last_login,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
-        if include_tenant and self.tenant:
-            result["tenant_name"] = self.tenant.display_name
-        elif include_tenant:
-            result["tenant_name"] = None
+        if include_tenant:
+            # If a specific tenant_id is given, look up its name
+            if tenant_id:
+                t = db.session.get(Tenant, tenant_id)
+                result["tenant_name"] = t.display_name if t else None
+            elif self.tenant:
+                result["tenant_name"] = self.tenant.display_name
+            else:
+                result["tenant_name"] = None
         return result
+
+    def get_tenants(self):
+        """Return list of tenants this user has access to (via memberships)."""
+        if self.role == "super_admin":
+            return [t.to_dict() for t in Tenant.query.filter_by(is_active=True).all()]
+        return [
+            {**m.tenant.to_dict(), "membership_role": m.role}
+            for m in self.memberships
+            if m.tenant and m.tenant.is_active
+        ]
+
+    def get_role_for_tenant(self, tenant_id: str) -> str | None:
+        """Get the user's effective role for a specific tenant."""
+        if self.role == "super_admin":
+            return "super_admin"
+        for m in self.memberships:
+            if m.tenant_id == tenant_id:
+                return m.role
+        return None
+
+
+class UserTenantMembership(db.Model):
+    """Many-to-many: a user can belong to multiple tenants with per-tenant roles."""
+    __tablename__ = "user_tenant_memberships"
+
+    id = db.Column(db.String(8), primary_key=True, default=_uuid8)
+    user_id = db.Column(db.String(8), db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    tenant_id = db.Column(db.String(8), db.ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    role = db.Column(db.String(20), nullable=False, default="user")  # tenant_admin, user
+    created_at = db.Column(db.Float, default=_now, nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "tenant_id", name="uq_user_tenant"),
+    )
+
+    tenant = db.relationship("Tenant")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "tenant_id": self.tenant_id,
+            "role": self.role,
+            "tenant_name": self.tenant.display_name if self.tenant else None,
+            "created_at": self.created_at,
+        }
 
 
 class TenantSettings(db.Model):

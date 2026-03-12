@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../AuthContext';
-import { fetchUsers, fetchTenants, createUser, deleteUser, resetUserPassword } from '../../api';
+import { fetchUsers, fetchTenants, createUser, deleteUser, resetUserPassword, updateUser } from '../../api';
 import type { UserAdmin, Tenant } from '../../api';
 
 const ROLE_LABELS: Record<string, string> = {
@@ -15,6 +15,9 @@ export default function UserList() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ display_name: '', email: '', role: '', is_active: true });
+  const [editError, setEditError] = useState<string | null>(null);
   const [form, setForm] = useState({
     username: '', email: '', password: '', display_name: '', role: 'user', tenant_id: '',
   });
@@ -67,10 +70,35 @@ export default function UserList() {
     } catch { /* silent */ }
   };
 
+  const startEdit = (u: UserAdmin) => {
+    setEditingId(u.id);
+    setEditForm({
+      display_name: u.display_name,
+      email: u.email,
+      role: u.role,
+      is_active: u.is_active,
+    });
+    setEditError(null);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingId) return;
+    setEditError(null);
+    try {
+      await updateUser(editingId, editForm);
+      setEditingId(null);
+      load();
+    } catch (err: unknown) {
+      setEditError(err instanceof Error ? err.message : 'Fehler beim Speichern');
+    }
+  };
+
   const inputStyle = {
     background: 'var(--bg-primary)', border: '1px solid var(--border)',
     borderRadius: 8, padding: '8px 12px', fontSize: 13, color: 'var(--text-primary)', outline: 'none',
   };
+
+  const isSuperAdmin = currentUser?.role === 'super_admin';
 
   return (
     <div>
@@ -100,10 +128,10 @@ export default function UserList() {
             <input placeholder="Passwort (min. 8 Zeichen)" type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} style={inputStyle} />
             <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} style={inputStyle}>
               <option value="user">Benutzer</option>
-              {currentUser?.role === 'super_admin' && <option value="tenant_admin">Mandanten-Admin</option>}
-              {currentUser?.role === 'super_admin' && <option value="super_admin">Super-Admin</option>}
+              {isSuperAdmin && <option value="tenant_admin">Mandanten-Admin</option>}
+              {isSuperAdmin && <option value="super_admin">Super-Admin</option>}
             </select>
-            {currentUser?.role === 'super_admin' && (
+            {isSuperAdmin && (
               <select value={form.tenant_id} onChange={e => setForm({ ...form, tenant_id: e.target.value })} style={inputStyle}>
                 {tenants.map(t => <option key={t.id} value={t.id}>{t.display_name}</option>)}
               </select>
@@ -137,52 +165,153 @@ export default function UserList() {
           </thead>
           <tbody>
             {users.map(u => (
-              <tr key={u.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                <td style={{ padding: '10px 16px' }}>
-                  <div>{u.display_name}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>@{u.username}</div>
-                </td>
-                <td style={{ padding: '10px 16px', color: 'var(--text-secondary)' }}>{u.email}</td>
-                <td style={{ padding: '10px 16px', textAlign: 'center' }}>
-                  <span style={{
-                    fontSize: 11, padding: '2px 8px', borderRadius: 4,
-                    background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
-                  }}>
-                    {ROLE_LABELS[u.role] ?? u.role}
-                  </span>
-                </td>
-                <td style={{ padding: '10px 16px', textAlign: 'center' }}>
-                  <span style={{
-                    fontSize: 11, padding: '2px 8px', borderRadius: 4,
-                    background: u.is_active ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
-                    color: u.is_active ? '#22c55e' : '#ef4444',
-                  }}>
-                    {u.is_active ? 'Aktiv' : 'Inaktiv'}
-                  </span>
-                </td>
-                <td style={{ padding: '10px 16px', textAlign: 'right', display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                  <button
-                    onClick={() => handleResetPassword(u.id)}
-                    style={{
-                      background: 'var(--bg-tertiary)', color: 'var(--text-secondary)', border: '1px solid var(--border)',
-                      borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer',
-                    }}
-                  >
-                    PW Reset
-                  </button>
-                  {u.role !== 'super_admin' && (
+              editingId === u.id ? (
+                <tr key={u.id} style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-tertiary)' }}>
+                  <td colSpan={5} style={{ padding: '16px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>
+                        Bearbeiten: @{u.username}
+                      </div>
+                      {editError && <div style={{ color: '#ef4444', fontSize: 13 }}>{editError}</div>}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <label style={{ fontSize: 11, color: 'var(--text-muted)' }}>Anzeigename</label>
+                          <input
+                            value={editForm.display_name}
+                            onChange={e => setEditForm({ ...editForm, display_name: e.target.value })}
+                            style={inputStyle}
+                          />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <label style={{ fontSize: 11, color: 'var(--text-muted)' }}>E-Mail</label>
+                          <input
+                            type="email"
+                            value={editForm.email}
+                            onChange={e => setEditForm({ ...editForm, email: e.target.value })}
+                            style={inputStyle}
+                          />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <label style={{ fontSize: 11, color: 'var(--text-muted)' }}>Rolle</label>
+                          <select
+                            value={editForm.role}
+                            onChange={e => setEditForm({ ...editForm, role: e.target.value })}
+                            style={inputStyle}
+                            disabled={!isSuperAdmin}
+                          >
+                            <option value="user">Benutzer</option>
+                            <option value="tenant_admin">Mandanten-Admin</option>
+                            {isSuperAdmin && <option value="super_admin">Super-Admin</option>}
+                          </select>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <label style={{ fontSize: 11, color: 'var(--text-muted)' }}>Status</label>
+                          <div
+                            onClick={() => setEditForm({ ...editForm, is_active: !editForm.is_active })}
+                            style={{
+                              ...inputStyle,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 8,
+                            }}
+                          >
+                            <div style={{
+                              width: 36, height: 20, borderRadius: 10,
+                              background: editForm.is_active ? '#22c55e' : 'var(--border)',
+                              position: 'relative', transition: 'background 0.2s',
+                            }}>
+                              <div style={{
+                                width: 16, height: 16, borderRadius: '50%', background: '#fff',
+                                position: 'absolute', top: 2,
+                                left: editForm.is_active ? 18 : 2,
+                                transition: 'left 0.2s',
+                              }} />
+                            </div>
+                            <span style={{ fontSize: 13 }}>{editForm.is_active ? 'Aktiv' : 'Inaktiv'}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          onClick={handleSaveEdit}
+                          style={{
+                            background: 'var(--accent)', color: '#fff', border: 'none',
+                            borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                          }}
+                        >
+                          Speichern
+                        </button>
+                        <button
+                          onClick={() => setEditingId(null)}
+                          style={{
+                            background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border)',
+                            borderRadius: 8, padding: '8px 16px', fontSize: 13, cursor: 'pointer',
+                          }}
+                        >
+                          Abbrechen
+                        </button>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                <tr key={u.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                  <td style={{ padding: '10px 16px' }}>
+                    <div>{u.display_name}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>@{u.username}</div>
+                  </td>
+                  <td style={{ padding: '10px 16px', color: 'var(--text-secondary)' }}>{u.email}</td>
+                  <td style={{ padding: '10px 16px', textAlign: 'center' }}>
+                    <span style={{
+                      fontSize: 11, padding: '2px 8px', borderRadius: 4,
+                      background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
+                    }}>
+                      {ROLE_LABELS[u.role] ?? u.role}
+                    </span>
+                  </td>
+                  <td style={{ padding: '10px 16px', textAlign: 'center' }}>
+                    <span style={{
+                      fontSize: 11, padding: '2px 8px', borderRadius: 4,
+                      background: u.is_active ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
+                      color: u.is_active ? '#22c55e' : '#ef4444',
+                    }}>
+                      {u.is_active ? 'Aktiv' : 'Inaktiv'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '10px 16px', textAlign: 'right', display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                     <button
-                      onClick={() => handleDelete(u.id, u.username)}
+                      onClick={() => startEdit(u)}
                       style={{
-                        background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)',
+                        background: 'rgba(59,130,246,0.1)', color: '#3b82f6', border: '1px solid rgba(59,130,246,0.3)',
                         borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer',
                       }}
                     >
-                      Löschen
+                      Bearbeiten
                     </button>
-                  )}
-                </td>
-              </tr>
+                    <button
+                      onClick={() => handleResetPassword(u.id)}
+                      style={{
+                        background: 'var(--bg-tertiary)', color: 'var(--text-secondary)', border: '1px solid var(--border)',
+                        borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer',
+                      }}
+                    >
+                      PW Reset
+                    </button>
+                    {u.role !== 'super_admin' && (
+                      <button
+                        onClick={() => handleDelete(u.id, u.username)}
+                        style={{
+                          background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)',
+                          borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer',
+                        }}
+                      >
+                        Löschen
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              )
             ))}
             {users.length === 0 && (
               <tr>

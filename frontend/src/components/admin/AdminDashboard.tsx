@@ -1,44 +1,45 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../AuthContext';
 import { fetchTenants, fetchUsers } from '../../api';
+import type { Tenant, UserAdmin } from '../../api';
 
-interface Stats {
-  tenants: number;
-  users: number;
-}
+const ROLE_LABELS: Record<string, string> = {
+  super_admin: 'Super-Admin',
+  tenant_admin: 'Mandanten-Admin',
+  user: 'Benutzer',
+};
 
 export default function AdminDashboard() {
-  const { user } = useAuth();
-  const [stats, setStats] = useState<Stats>({ tenants: 0, users: 0 });
+  const { user, effectiveRole } = useAuth();
+  const isSuperAdmin = user?.role === 'super_admin';
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [users, setUsers] = useState<UserAdmin[]>([]);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [tenants, users] = await Promise.all([
-          user?.role === 'super_admin' ? fetchTenants() : Promise.resolve([]),
+        const [t, u] = await Promise.all([
+          isSuperAdmin ? fetchTenants() : Promise.resolve([]),
           fetchUsers(),
         ]);
-        setStats({
-          tenants: tenants.length,
-          users: users.length,
-        });
-      } catch {
-        // Silent
-      }
+        setTenants(t);
+        setUsers(u);
+      } catch { /* silent */ }
     };
     load();
-  }, [user?.role]);
+  }, [isSuperAdmin]);
 
   const cards = [
-    ...(user?.role === 'super_admin' ? [{ label: 'Mandanten', value: stats.tenants }] : []),
-    { label: 'Benutzer', value: stats.users },
+    ...(isSuperAdmin ? [{ label: 'Mandanten', value: tenants.length }] : []),
+    { label: 'Benutzer', value: users.length },
+    { label: 'Deine Rolle', value: ROLE_LABELS[effectiveRole || 'user'] || effectiveRole || '' },
   ];
 
   return (
     <div>
       <h1 style={{ margin: '0 0 24px', fontSize: 22, fontWeight: 700 }}>Dashboard</h1>
 
-      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 32 }}>
         {cards.map(card => (
           <div key={card.label} style={{
             background: 'var(--bg-secondary)',
@@ -53,12 +54,63 @@ export default function AdminDashboard() {
             }}>
               {card.label}
             </div>
-            <div style={{ fontSize: 28, fontWeight: 700 }}>
+            <div style={{ fontSize: typeof card.value === 'number' ? 28 : 18, fontWeight: 700 }}>
               {card.value}
             </div>
           </div>
         ))}
       </div>
+
+      {/* Super Admin: overview of all tenants and their users */}
+      {isSuperAdmin && tenants.length > 0 && (
+        <>
+          <h2 style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 600 }}>
+            Mandanten-Übersicht
+          </h2>
+          <div style={{
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--border)',
+            borderRadius: 10,
+            overflow: 'hidden',
+          }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                  <th style={{ textAlign: 'left', padding: '10px 16px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)' }}>Mandant</th>
+                  <th style={{ textAlign: 'center', padding: '10px 16px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)' }}>Benutzer</th>
+                  <th style={{ textAlign: 'center', padding: '10px 16px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)' }}>Zonen</th>
+                  <th style={{ textAlign: 'center', padding: '10px 16px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)' }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tenants.map(t => (
+                  <tr key={t.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <td style={{ padding: '10px 16px' }}>
+                      <div style={{ fontWeight: 500 }}>{t.display_name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t.name}</div>
+                    </td>
+                    <td style={{ padding: '10px 16px', textAlign: 'center' }}>
+                      {t.user_count ?? 0}
+                    </td>
+                    <td style={{ padding: '10px 16px', textAlign: 'center' }}>
+                      {t.zone_count ?? 0}
+                    </td>
+                    <td style={{ padding: '10px 16px', textAlign: 'center' }}>
+                      <span style={{
+                        fontSize: 11, padding: '2px 8px', borderRadius: 4,
+                        background: t.is_active ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
+                        color: t.is_active ? '#22c55e' : '#ef4444',
+                      }}>
+                        {t.is_active ? 'Aktiv' : 'Inaktiv'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   );
 }

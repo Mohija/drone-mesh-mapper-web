@@ -71,12 +71,18 @@ class SettingsManager:
         """Read settings from DB and merge with defaults."""
         from models import TenantSettings
         ts = TenantSettings.query.filter_by(tenant_id=tenant_id).first()
-        if ts and ts.sources:
+        if ts:
             merged = _deep_copy(DEFAULT_SOURCES)
-            for src_id, src_cfg in ts.sources.items():
-                if src_id in merged:
-                    merged[src_id].update(src_cfg)
-            return {"sources": merged}
+            if ts.sources:
+                for src_id, src_cfg in ts.sources.items():
+                    if src_id in merged:
+                        merged[src_id].update(src_cfg)
+            return {
+                "sources": merged,
+                "center_lat": ts.center_lat,
+                "center_lon": ts.center_lon,
+                "radius": ts.radius,
+            }
         return {"sources": _deep_copy(DEFAULT_SOURCES)}
 
     def get_all(self, tenant_id=None) -> dict:
@@ -135,10 +141,16 @@ class SettingsManager:
         from database import db
         ts = TenantSettings.query.filter_by(tenant_id=tenant_id).first()
         if ts:
-            current = _deep_copy(ts.sources) if ts.sources else _deep_copy(DEFAULT_SOURCES)
             if "sources" in updates:
+                current = _deep_copy(ts.sources) if ts.sources else _deep_copy(DEFAULT_SOURCES)
                 for src_id, src_cfg in updates["sources"].items():
                     if src_id in current:
                         current[src_id].update(src_cfg)
-            ts.sources = current
+                ts.sources = current
+            if "center_lat" in updates:
+                ts.center_lat = updates["center_lat"]
+            if "center_lon" in updates:
+                ts.center_lon = updates["center_lon"]
+            if "radius" in updates:
+                ts.radius = updates["radius"]
             db.session.commit()

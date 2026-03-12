@@ -30,20 +30,31 @@ def check_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
 
 
-def generate_tokens(user) -> dict:
-    """Generate access and refresh tokens for a user."""
+def generate_tokens(user, tenant_id: str | None = None) -> dict:
+    """Generate access and refresh tokens for a user.
+    tenant_id: the tenant the user is logging into (from membership or selection).
+    """
+    effective_tenant = tenant_id or user.tenant_id
+    # Determine effective role for this tenant
+    effective_role = user.role
+    if user.role != "super_admin" and effective_tenant:
+        tenant_role = user.get_role_for_tenant(effective_tenant)
+        if tenant_role:
+            effective_role = tenant_role
+
     now = time.time()
     access_payload = {
         "user_id": user.id,
         "username": user.username,
-        "role": user.role,
-        "tenant_id": user.tenant_id,
+        "role": effective_role,
+        "tenant_id": effective_tenant,
         "type": "access",
         "iat": now,
         "exp": now + ACCESS_TOKEN_EXPIRY,
     }
     refresh_payload = {
         "user_id": user.id,
+        "tenant_id": effective_tenant,
         "type": "refresh",
         "iat": now,
         "exp": now + REFRESH_TOKEN_EXPIRY,
@@ -66,7 +77,7 @@ def decode_token(token: str) -> dict | None:
 
 
 def login_required(f):
-    """Decorator: requires valid access token. Sets g.current_user and g.tenant_id."""
+    """Decorator: requires valid access token. Sets g.current_user, g.tenant_id, g.effective_role."""
     @wraps(f)
     def decorated(*args, **kwargs):
         auth_header = request.headers.get("Authorization", "")
@@ -90,7 +101,10 @@ def login_required(f):
             return jsonify({"error": "Ungültiger Token"}), 401
 
         g.current_user = user
-        g.tenant_id = user.tenant_id
+        # Read tenant_id from JWT (selected at login), not from user model
+        g.tenant_id = payload.get("tenant_id") or user.tenant_id
+        # Effective role for this tenant context
+        g.effective_role = payload.get("role") or user.role
         return f(*args, **kwargs)
     return decorated
 
@@ -99,6 +113,7 @@ def role_required(*roles):
     """Decorator: requires user to have one of the specified roles.
     Must be used after @login_required.
     Supports role hierarchy: super_admin > tenant_admin > user.
+    Uses g.effective_role (from JWT) which reflects the per-tenant role.
     """
     ROLE_HIERARCHY = {"super_admin": 3, "tenant_admin": 2, "user": 1}
 
@@ -109,7 +124,9 @@ def role_required(*roles):
             if not user:
                 return jsonify({"error": "Authentifizierung erforderlich"}), 401
 
-            user_level = ROLE_HIERARCHY.get(user.role, 0)
+            # Use effective role (per-tenant) rather than global role
+            effective = getattr(g, "effective_role", user.role)
+            user_level = ROLE_HIERARCHY.get(effective, 0)
             required_level = min(ROLE_HIERARCHY.get(r, 99) for r in roles)
             if user_level < required_level:
                 return jsonify({"error": "Keine Berechtigung"}), 403

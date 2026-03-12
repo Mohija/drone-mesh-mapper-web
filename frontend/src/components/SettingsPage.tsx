@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import type { DataSourceSettings } from '../types/drone';
 import { fetchSettings, updateSettings } from '../api';
 import { useTheme } from '../ThemeContext';
+import { useAuth } from '../AuthContext';
+import { getUserItem, setUserItem } from '../userStorage';
 
 const SOURCE_COLORS: Record<string, string> = {
   simulator: '#3b82f6',
@@ -15,10 +17,12 @@ const SOURCE_COLORS: Record<string, string> = {
 export default function SettingsPage() {
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
+  const { canManage } = useAuth();
   const [settings, setSettings] = useState<DataSourceSettings | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [violationSound, setViolationSound] = useState(() => getUserItem('violation-sound') !== 'off');
 
   useEffect(() => {
     fetchSettings()
@@ -112,7 +116,7 @@ export default function SettingsPage() {
           lineHeight: 1.5,
         }}>
           Aktiviere oder deaktiviere Datenquellen. Externe Quellen liefern echte
-          ADS-B Flugdaten (Flugzeuge, UAVs, Gleiter) aus oeffentlichen Netzwerken.
+          ADS-B Flugdaten (Flugzeuge, UAVs, Gleiter) aus öffentlichen Netzwerken.
         </p>
 
         {error && (
@@ -196,6 +200,62 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {/* Violation sound toggle */}
+        <div style={{
+          background: 'var(--bg-secondary)',
+          border: '1px solid var(--border)',
+          borderRadius: 10,
+          padding: '14px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 14,
+          marginBottom: 24,
+        }}>
+          <div style={{
+            width: 10,
+            height: 10,
+            borderRadius: '50%',
+            background: violationSound ? '#ef4444' : 'var(--text-muted)',
+            boxShadow: violationSound ? '0 0 8px #ef4444' : 'none',
+            flexShrink: 0,
+          }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>Verstoß-Alarmton</div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+              {violationSound ? 'Ton wird bei Zonenverstößen abgespielt' : 'Alarmton deaktiviert'}
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              const next = !violationSound;
+              setViolationSound(next);
+              setUserItem('violation-sound', next ? 'on' : 'off');
+            }}
+            style={{
+              width: 44,
+              height: 24,
+              borderRadius: 12,
+              border: 'none',
+              background: violationSound ? '#ef4444' : 'var(--bg-tertiary)',
+              cursor: 'pointer',
+              position: 'relative',
+              transition: 'background 0.2s',
+              flexShrink: 0,
+            }}
+          >
+            <div style={{
+              width: 18,
+              height: 18,
+              borderRadius: '50%',
+              background: '#fff',
+              position: 'absolute',
+              top: 3,
+              left: violationSound ? 23 : 3,
+              transition: 'left 0.2s',
+            }} />
+          </button>
+        </div>
+
         {/* Source list */}
         <div style={{
           fontSize: 11,
@@ -243,16 +303,19 @@ export default function SettingsPage() {
               {/* Toggle */}
               <button
                 onClick={() => handleToggle(id)}
+                disabled={!canManage}
+                title={!canManage ? 'Nur Mandanten-Admins dürfen Datenquellen ändern' : undefined}
                 style={{
                   width: 44,
                   height: 24,
                   borderRadius: 12,
                   border: 'none',
                   background: cfg.enabled ? 'var(--accent)' : 'var(--bg-tertiary)',
-                  cursor: 'pointer',
+                  cursor: canManage ? 'pointer' : 'not-allowed',
                   position: 'relative',
                   transition: 'background 0.2s',
                   flexShrink: 0,
+                  opacity: canManage ? 1 : 0.6,
                 }}
               >
                 <div style={{
@@ -270,27 +333,39 @@ export default function SettingsPage() {
           ))}
         </div>
 
-        {/* Save button */}
-        <div style={{ marginTop: 24, display: 'flex', gap: 12 }}>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            style={{
-              padding: '10px 24px',
-              background: saved ? 'var(--status-active)' : 'var(--accent)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 8,
-              fontSize: 14,
-              fontWeight: 600,
-              cursor: saving ? 'not-allowed' : 'pointer',
-              opacity: saving ? 0.7 : 1,
-              transition: 'background 0.2s',
-            }}
-          >
-            {saving ? 'Speichern...' : saved ? 'Gespeichert!' : 'Speichern'}
-          </button>
-        </div>
+        {/* Save button (only for tenant_admin+) */}
+        {canManage && (
+          <div style={{ marginTop: 24, display: 'flex', gap: 12 }}>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              style={{
+                padding: '10px 24px',
+                background: saved ? 'var(--status-active)' : 'var(--accent)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 8,
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: saving ? 'not-allowed' : 'pointer',
+                opacity: saving ? 0.7 : 1,
+                transition: 'background 0.2s',
+              }}
+            >
+              {saving ? 'Speichern...' : saved ? 'Gespeichert!' : 'Speichern'}
+            </button>
+          </div>
+        )}
+        {!canManage && (
+          <div style={{
+            marginTop: 16,
+            fontSize: 12,
+            color: 'var(--text-muted)',
+            fontStyle: 'italic',
+          }}>
+            Datenquellen können nur von Mandanten-Admins geändert werden.
+          </div>
+        )}
       </div>
     </div>
   );

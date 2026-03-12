@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { ZoneViolation } from '../types/drone';
+import { getUserItem } from '../userStorage';
 
 interface Props {
   violations: ZoneViolation[];
@@ -10,23 +11,25 @@ interface Props {
 export default function ViolationAlert({ violations, onDismiss, onDismissAll }: Props) {
   const prevCountRef = useRef(0);
 
-  // Play alert sound when new violations appear
+  // Play alert sound when new violations appear (respects user setting)
   useEffect(() => {
     if (violations.length > prevCountRef.current && violations.length > 0) {
-      try {
-        const ctx = new AudioContext();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.frequency.value = 880;
-        osc.type = 'square';
-        gain.gain.value = 0.1;
-        osc.start();
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
-        osc.stop(ctx.currentTime + 0.3);
-      } catch {
-        // Audio not available — ignore
+      if (getUserItem('violation-sound') !== 'off') {
+        try {
+          const ctx = new AudioContext();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.frequency.value = 880;
+          osc.type = 'square';
+          gain.gain.value = 0.1;
+          osc.start();
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+          osc.stop(ctx.currentTime + 0.3);
+        } catch {
+          // Audio not available — ignore
+        }
       }
     }
     prevCountRef.current = violations.length;
