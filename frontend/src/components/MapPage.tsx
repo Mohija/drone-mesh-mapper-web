@@ -26,6 +26,16 @@ import {
 const DEFAULT_RADIUS = 50000; // 50km
 const DEFAULT_CENTER = { lat: 52.0302, lon: 8.5325 }; // Bielefeld
 
+// Refresh rate options (ms). Backend providers cache 10-15s, simulator updates 2s.
+// Polling faster than cache TTL returns cached data but keeps UI responsive.
+const REFRESH_RATES = [
+  { value: 1000,  label: '1s',  description: 'Sehr schnell (Simulator)' },
+  { value: 2000,  label: '2s',  description: 'Standard' },
+  { value: 5000,  label: '5s',  description: 'Moderat' },
+  { value: 10000, label: '10s', description: 'Sparsam (API-Cache)' },
+  { value: 30000, label: '30s', description: 'Langsam' },
+] as const;
+
 // Altitude zones based on EU/German drone regulations (EASA 2019/947, LuftVO §21h)
 const ALTITUDE_ZONES = [
   { id: 'all', label: 'Alle Höhen', min: 0, max: Infinity, color: 'var(--text-secondary)', description: 'Kein Höhenfilter' },
@@ -50,6 +60,11 @@ export default function MapPage() {
   const [nfzRadiusEnabled, setNfzRadiusEnabled] = useState(false);
   const [nfzRadius, setNfzRadius] = useState(50000); // 50km default
   const [altitudeZone, setAltitudeZone] = useState('all');
+  const [refreshRate, setRefreshRate] = useState(() => {
+    const stored = localStorage.getItem('refresh-rate');
+    const parsed = stored ? Number(stored) : 2000;
+    return REFRESH_RATES.some(r => r.value === parsed) ? parsed : 2000;
+  });
   const [trackingPanelOpen, setTrackingPanelOpen] = useState(false);
   const [zonesPanelOpen, setZonesPanelOpen] = useState(false);
   const [assignZoneId, setAssignZoneId] = useState<string | null>(null);
@@ -124,15 +139,20 @@ export default function MapPage() {
     buildGrid(lat, lon, r);
   }, [userLocation, radiusEnabled, radius]);
 
-  // Polling interval - slower when many drones to reduce render load
+  // Persist refresh rate
+  useEffect(() => {
+    localStorage.setItem('refresh-rate', String(refreshRate));
+  }, [refreshRate]);
+
+  // Polling interval - enforce minimum 5s when >100 drones to reduce render load
+  const effectiveInterval = droneCount > 100 ? Math.max(refreshRate, 5000) : refreshRate;
   useEffect(() => {
     loadDrones();
-    const interval = droneCount > 100 ? 5000 : 2000;
-    intervalRef.current = setInterval(loadDrones, interval);
+    intervalRef.current = setInterval(loadDrones, effectiveInterval);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [loadDrones, droneCount > 100]);
+  }, [loadDrones, effectiveInterval]);
 
   const handleLocationFound = useCallback(async (loc: UserLocation) => {
     setUserLocation(loc);
@@ -293,6 +313,42 @@ export default function MapPage() {
           }}>
             {altitudeZone !== 'all' ? `${filteredDrones.length}/` : ''}{droneCount} Drohne{droneCount !== 1 ? 'n' : ''}
           </span>
+        </div>
+
+        {/* Refresh rate control */}
+        <div style={{
+          background: 'var(--bg-secondary)',
+          border: '1px solid var(--border)',
+          borderRadius: 8,
+          padding: '6px 12px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          whiteSpace: 'nowrap',
+        }}>
+          <span style={{ fontSize: 13 }}>&#8635;</span>
+          <select
+            value={refreshRate}
+            onChange={(e) => setRefreshRate(Number(e.target.value))}
+            title={`Aktualisierungsrate${droneCount > 100 && refreshRate < 5000 ? ' (min. 5s bei >100 Drohnen)' : ''}`}
+            data-testid="refresh-rate-select"
+            style={{
+              background: 'var(--bg-tertiary)',
+              border: '1px solid var(--border)',
+              borderRadius: 4,
+              padding: '2px 4px',
+              color: 'var(--text-primary)',
+              fontSize: 12,
+              cursor: 'pointer',
+            }}
+          >
+            {REFRESH_RATES.map(r => (
+              <option key={r.value} value={r.value}>{r.label}</option>
+            ))}
+          </select>
+          {droneCount > 100 && refreshRate < 5000 && (
+            <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>min 5s</span>
+          )}
         </div>
 
         {/* Radius control */}

@@ -664,6 +664,20 @@
 - `frontend/src/components/MapPage.tsx` - selectedViolationRecordId State, Trail-Filterung nach Selektion, Record-Cleanup useEffect
 - `frontend/dist/` - Rebuild
 
+### 2026-03-12 - Konfigurierbare Aktualisierungsrate
+**Änderungen:**
+- **Refresh-Rate Dropdown in der Top-Bar:** Benutzer kann Polling-Intervall anpassen
+  - 5 Stufen: 1s (Simulator), 2s (Standard), 5s (Moderat), 10s (API-Cache), 30s (Langsam)
+  - Einstellung wird in localStorage gespeichert (persistent)
+- **Performance-Guard:** Bei >100 Drohnen wird automatisch mindestens 5s erzwungen
+  - Hinweis "min 5s" erscheint wenn User schnellere Rate gewaehlt hat
+- **API-Rate konform:** Backend-Provider cachen 10-15s unabhaengig vom Frontend-Polling
+  - Schnelleres Polling liefert gecachte Daten, belastet externe APIs nicht zusaetzlich
+
+**Dateien:**
+- `frontend/src/components/MapPage.tsx` - REFRESH_RATES Config, refreshRate State, effectiveInterval, Dropdown-UI
+- `frontend/dist/` - Rebuild
+
 ## Offene Aufgaben
 - [ ] WebSocket-Integration für echte Push-Updates statt Polling
 - [ ] ESP 8266 MicroPython-Anpassung
