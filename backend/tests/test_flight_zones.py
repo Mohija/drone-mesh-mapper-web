@@ -349,12 +349,12 @@ class TestZoneAPI:
         res = client.get("/api/zones/violations", headers=auth_headers)
         assert res.status_code == 200
         data = res.get_json()
-        assert "violations" in data
+        assert "records" in data
         assert "count" in data
-        assert isinstance(data["violations"], list)
-        assert data["count"] == len(data["violations"])
+        assert isinstance(data["records"], list)
+        assert data["count"] == len(data["records"])
         # Each violation has required fields
-        for v in data["violations"]:
+        for v in data["records"]:
             assert "droneId" in v
             assert "droneName" in v
             assert "zoneId" in v

@@ -2,10 +2,27 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-12 (Zone Violations Fix + Multi-Tenant Sync)
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-12 (Flugbericht-Feature + Trail-Fixes + Demo-Drohnen-Muster)
 - **Typ:** Projekt | **Status:** Development
 
 ## Änderungshistorie
+
+### 2026-03-12 - Flugbericht-Feature + Trail-Fixes + Demo-Drohnen-Muster
+**Änderungen:**
+- **Flugbericht (FlightReportView):** Neues Feature — jeder Alarm-Eintrag hat einen "Bericht"-Button der eine vollständige Flugbericht-Ansicht öffnet:
+  - Leaflet-Karte mit Zonen-Polygon und Drohnen-Trail (animiert)
+  - Timeline mit Play/Pause, Geschwindigkeitsregler (0.5x–10x), Range-Slider
+  - Rechte Seite: Aktuelle Messpunkt-Details + scrollbare Messpunkt-Tabelle (synced mit Timeline)
+  - Kommentar-Feld mit Backend-Persistierung
+  - "Bericht erstellen"-Button generiert professionellen HTML-Flugbericht zum Drucken/PDF
+  - Stats-Overlay (Höhenbereich, Geschwindigkeit, Punkte, Dauer)
+- **Backend Trail-Daten:** `update_violations()` sammelt jetzt bei jeder Prüfung Position-Snapshots (lat, lon, alt, speed, battery, signal, heading, ts) in `trail_data` JSON-Spalte. Neue Endpoints: `GET /api/violations/<id>` (mit Trail), `PUT /api/violations/<id>/comments`
+- **DB-Migration:** Neue Spalten `trail_data`, `comments`, `zone_polygon` auf `violation_records`
+- **Trail-Fix (3 Ursachen):** (1) `visibleTrails` Fallback wenn selektierte Violation-Drohne keinen Trail hat, (2) `vl.sync()` wird jetzt awaited + zweiter `updatePositions()`-Call nach Auto-Tracking, (3) `trackDrone()` erzeugt 2 initiale Trail-Punkte statt 1
+- **ViolationTable-Fix:** `e.stopPropagation()` auf Trail-Toggle und Delete-Buttons, damit Row-Selection nicht gleichzeitig feuert
+- **Demo-Drohnen:** Jede Drohne hat ein eigenes festes Flugmuster (linear, circular, waypoint, figure_eight, search_pattern) statt zufälliger Muster. 3 neue Patterns: figure_eight (Lemniskate), spiral, random_walk
+- **Test-Fix:** `test_violations_endpoint` auf neuen `records`-Key angepasst (280/280 Tests bestanden)
+**Dateien:** `frontend/src/components/FlightReportView.tsx` (NEU), `frontend/src/components/MapPage.tsx`, `frontend/src/components/ViolationTable.tsx`, `frontend/src/useTracking.ts`, `frontend/src/api.ts`, `frontend/src/App.tsx`, `backend/flight_zones.py`, `backend/app.py`, `backend/models.py`, `backend/drone_simulator.py`, `backend/tests/test_flight_zones.py`
 
 ### 2026-03-12 - Fix: Zone Violations nur für erste Zone + Multi-Tenant Sync
 **Änderungen:**

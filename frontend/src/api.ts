@@ -381,8 +381,26 @@ export interface ServerViolationRecord {
   zoneId: string;
   zoneName: string;
   zoneColor: string;
+  zonePolygon: [number, number][] | null;
   startTime: number;
   endTime: number | null;
+  trailPointCount: number;
+  comments: string | null;
+}
+
+export interface ViolationTrailPoint {
+  lat: number;
+  lon: number;
+  alt: number;
+  speed: number;
+  battery: number | null;
+  signal: number | null;
+  heading: number | null;
+  ts: number;
+}
+
+export interface ViolationDetail extends ServerViolationRecord {
+  trailData: ViolationTrailPoint[];
 }
 
 export async function fetchViolations(): Promise<{ records: ServerViolationRecord[]; count: number }> {
@@ -401,6 +419,21 @@ export async function deleteViolationRecord(recordId: string): Promise<void> {
 export async function clearViolationRecords(): Promise<void> {
   const res = await authFetch(`${API_BASE}/violations`, {
     method: 'DELETE',
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+}
+
+export async function fetchViolationDetail(recordId: string): Promise<ViolationDetail> {
+  const res = await authFetch(`${API_BASE}/violations/${encodeURIComponent(recordId)}`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function updateViolationComments(recordId: string, comments: string): Promise<void> {
+  const res = await authFetch(`${API_BASE}/violations/${encodeURIComponent(recordId)}/comments`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ comments }),
   });
   if (!res.ok) throw new Error(`API error: ${res.status}`);
 }

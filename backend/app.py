@@ -651,6 +651,27 @@ def list_violations():
     return jsonify({"records": records, "count": len(records)})
 
 
+@app.route("/api/violations/<record_id>", methods=["GET"])
+@login_required
+def get_violation_detail(record_id: str):
+    """Get a single violation record with full trail data."""
+    record = zones.get_violation(record_id, tenant_id=g.tenant_id)
+    if not record:
+        return jsonify({"error": "Record not found"}), 404
+    return jsonify(record)
+
+
+@app.route("/api/violations/<record_id>/comments", methods=["PUT"])
+@login_required
+def update_violation_comments(record_id: str):
+    """Update comments on a violation record."""
+    data = request.get_json()
+    comments = data.get("comments", "")
+    if zones.update_violation_comments(record_id, comments, tenant_id=g.tenant_id):
+        return jsonify({"status": "updated"})
+    return jsonify({"error": "Record not found"}), 404
+
+
 @app.route("/api/violations/<record_id>", methods=["DELETE"])
 @login_required
 def delete_violation(record_id: str):

@@ -10,6 +10,7 @@ interface Props {
   onToggleTracking: (recordId: string) => void;
   onClearAll: () => void;
   onSelectRecord: (recordId: string) => void;
+  onOpenReport: (recordId: string) => void;
   onHeightChange?: (height: number) => void;
 }
 
@@ -51,6 +52,7 @@ export default function ViolationTable({
   onToggleTracking,
   onClearAll,
   onSelectRecord,
+  onOpenReport,
   onHeightChange,
 }: Props) {
   // Force re-render every second for live duration updates
@@ -172,6 +174,7 @@ export default function ViolationTable({
                 <th style={thStyle}>Beginn</th>
                 <th style={thStyle}>Dauer</th>
                 <th style={{ ...thStyle, textAlign: 'center' }}>Trail</th>
+                <th style={{ ...thStyle, textAlign: 'center' }}>Bericht</th>
                 <th style={{ ...thStyle, textAlign: 'center' }}></th>
               </tr>
             </thead>
@@ -236,7 +239,7 @@ export default function ViolationTable({
                     </td>
                     <td style={{ ...tdStyle, textAlign: 'center' }}>
                       <button
-                        onClick={() => onToggleTracking(record.id)}
+                        onClick={(e) => { e.stopPropagation(); onToggleTracking(record.id); }}
                         data-testid={`toggle-trail-${record.id}`}
                         title={record.trackingVisible ? 'Trail ausblenden' : 'Trail anzeigen'}
                         style={{
@@ -254,7 +257,24 @@ export default function ViolationTable({
                     </td>
                     <td style={{ ...tdStyle, textAlign: 'center' }}>
                       <button
-                        onClick={() => onDeleteRecord(record.id)}
+                        onClick={(e) => { e.stopPropagation(); onOpenReport(record.id); }}
+                        title="Flugbericht anzeigen"
+                        style={{
+                          background: 'none',
+                          border: '1px solid var(--border)',
+                          color: 'var(--text-secondary)',
+                          fontSize: 10,
+                          cursor: 'pointer',
+                          padding: '2px 6px',
+                          borderRadius: 3,
+                        }}
+                      >
+                        &#128196;
+                      </button>
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: 'center' }}>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onDeleteRecord(record.id); }}
                         data-testid={`delete-violation-${record.id}`}
                         title="Verstosz loeschen"
                         style={{

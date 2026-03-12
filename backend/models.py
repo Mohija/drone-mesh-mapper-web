@@ -145,20 +145,30 @@ class ViolationRecord(db.Model):
     zone_id = db.Column(db.String(8), nullable=False)  # no FK — zone may be deleted
     zone_name = db.Column(db.String(200), nullable=False)
     zone_color = db.Column(db.String(20), default="#ef4444", nullable=False)
+    zone_polygon = db.Column(JSON, nullable=True)  # snapshot of zone polygon at violation time
     start_time = db.Column(db.Float, nullable=False, default=_now)
     end_time = db.Column(db.Float, nullable=True)  # NULL = still active
+    # Trail data: list of {lat, lon, alt, speed, battery, signal, heading, timestamp}
+    trail_data = db.Column(JSON, nullable=False, default=list)
+    comments = db.Column(db.Text, nullable=True)
 
-    def to_dict(self):
-        return {
+    def to_dict(self, include_trail=False):
+        result = {
             "id": self.id,
             "droneId": self.drone_id,
             "droneName": self.drone_name,
             "zoneId": self.zone_id,
             "zoneName": self.zone_name,
             "zoneColor": self.zone_color,
+            "zonePolygon": self.zone_polygon,
             "startTime": self.start_time,
             "endTime": self.end_time,
+            "trailPointCount": len(self.trail_data or []),
+            "comments": self.comments,
         }
+        if include_trail:
+            result["trailData"] = self.trail_data or []
+        return result
 
 
 class TrailArchive(db.Model):

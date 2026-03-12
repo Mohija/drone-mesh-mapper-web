@@ -285,6 +285,8 @@ class FlightZoneManager:
                     "drone_name": drone.get("name", drone_id),
                     "zone_name": zone["name"],
                     "zone_color": zone.get("color", "#ef4444"),
+                    "zone_polygon": polygon,
+                    "drone": drone,  # full drone dict for trail snapshot
                 }
 
         # 2. Update DB records atomically
@@ -299,8 +301,20 @@ class FlightZoneManager:
                 if key not in active_pairs:
                     record.end_time = now
 
-            # Create new violations
+            # Create new violations or append trail snapshots
             for key, details in active_pairs.items():
+                drone = details["drone"]
+                snapshot = {
+                    "lat": round(drone.get("latitude", 0), 6),
+                    "lon": round(drone.get("longitude", 0), 6),
+                    "alt": round(drone.get("altitude", 0) or 0, 1),
+                    "speed": round(drone.get("speed", 0) or 0, 1),
+                    "battery": drone.get("battery"),
+                    "signal": drone.get("signal_strength"),
+                    "heading": round(drone.get("bearing", 0) or 0, 1) if drone.get("bearing") else None,
+                    "ts": round(now, 2),
+                }
+
                 if key not in existing_keys:
                     drone_id, zone_id = key
                     db.session.add(VR(
@@ -310,8 +324,16 @@ class FlightZoneManager:
                         zone_id=zone_id,
                         zone_name=details["zone_name"],
                         zone_color=details["zone_color"],
+                        zone_polygon=details["zone_polygon"],
                         start_time=now,
+                        trail_data=[snapshot],
                     ))
+                else:
+                    # Append trail snapshot to existing active violation
+                    record = existing_keys[key]
+                    trail = list(record.trail_data or [])
+                    trail.append(snapshot)
+                    record.trail_data = trail
 
             db.session.commit()
 
@@ -325,7 +347,33 @@ class FlightZoneManager:
         tid = tenant_id or self._default_tenant_id
         with self._ctx():
             records = VR.query.filter_by(tenant_id=tid).order_by(VR.start_time.desc()).all()
-            return [r.to_dict() for r in records]
+            return [r.to_dict(include_trail=False) for r in records]
+
+    def get_violation(self, record_id: str, tenant_id=None) -> dict | None:
+        """Get a single violation record with full trail data."""
+        from models import ViolationRecord as VR
+        from database import db
+
+        tid = tenant_id or self._default_tenant_id
+        with self._ctx():
+            record = db.session.get(VR, record_id)
+            if not record or (tid and record.tenant_id != tid):
+                return None
+            return record.to_dict(include_trail=True)
+
+    def update_violation_comments(self, record_id: str, comments: str, tenant_id=None) -> bool:
+        """Update comments on a violation record."""
+        from models import ViolationRecord as VR
+        from database import db
+
+        tid = tenant_id or self._default_tenant_id
+        with self._ctx():
+            record = db.session.get(VR, record_id)
+            if not record or (tid and record.tenant_id != tid):
+                return False
+            record.comments = comments
+            db.session.commit()
+        return True
 
     def delete_violation(self, record_id: str, tenant_id=None) -> bool:
         """Delete a single violation record."""

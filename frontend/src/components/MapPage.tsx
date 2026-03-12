@@ -931,6 +931,7 @@ export default function MapPage() {
             }
           }
         }}
+        onOpenReport={(recordId) => navigate(`/report/${recordId}`)}
       />
     </div>
   );
