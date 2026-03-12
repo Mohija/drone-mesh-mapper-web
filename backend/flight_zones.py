@@ -312,6 +312,8 @@ class FlightZoneManager:
                     "battery": drone.get("battery"),
                     "signal": drone.get("signal_strength"),
                     "heading": round(drone.get("bearing", 0) or 0, 1) if drone.get("bearing") else None,
+                    "pilot_lat": round(drone["pilot_latitude"], 6) if drone.get("pilot_latitude") is not None else None,
+                    "pilot_lon": round(drone["pilot_longitude"], 6) if drone.get("pilot_longitude") is not None else None,
                     "ts": round(now, 2),
                 }
 

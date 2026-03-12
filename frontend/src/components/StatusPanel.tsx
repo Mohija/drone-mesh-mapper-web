@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Drone, AircraftLookup } from '../types/drone';
 import { useNavigate } from 'react-router-dom';
-import { lookupAircraft } from '../api';
+import { lookupAircraft, reverseGeocode } from '../api';
 import { getElevation, onGridReady, isGridReady } from '../elevationGrid';
 import { DIPUL_WMS_URL, getWmsLayerString, NFZ_LAYERS } from '../config/noFlyZones';
 import { getCachedLookup, setCachedLookup, getCachedNfz, setCachedNfz } from '../lookupCache';
@@ -84,6 +84,31 @@ export default function StatusPanel({ drone, onClose, enabledNoFlyLayers, tracki
   // NFZ zone check
   const [nfzZones, setNfzZones] = useState<NfzFeature[]>([]);
   const [nfzLoading, setNfzLoading] = useState(false);
+  const prevNfzPosRef = useRef<string>('');
+
+  // Pilot address (reverse geocoded)
+  const [pilotAddress, setPilotAddress] = useState<string | null>(null);
+  const prevPilotPosRef = useRef<string>('');
+
+  useEffect(() => {
+    if (drone.pilot_latitude == null || drone.pilot_longitude == null) {
+      setPilotAddress(null);
+      return;
+    }
+    const key = `${drone.pilot_latitude.toFixed(4)}_${drone.pilot_longitude.toFixed(4)}`;
+    if (key === prevPilotPosRef.current) return;
+    prevPilotPosRef.current = key;
+    setPilotAddress(null);
+    reverseGeocode(drone.pilot_latitude, drone.pilot_longitude).then(addr => {
+      if (addr) setPilotAddress(addr);
+    });
+  }, [drone.pilot_latitude, drone.pilot_longitude]);
+
+  // Manual NFZ re-check
+  const triggerNfzCheck = useCallback(() => {
+    prevNfzPosRef.current = ''; // reset to force re-check
+    setNfzLoading(true);
+  }, []);
 
   // Ground elevation from pre-computed grid (synchronous, O(1) bilinear interpolation)
   const [groundElevation, setGroundElevation] = useState<number | null>(
@@ -145,7 +170,6 @@ export default function StatusPanel({ drone, onClose, enabledNoFlyLayers, tracki
   }, [drone.basic_id, drone.id, drone.source, drone.name, drone.icao_hex]);
 
   // Check if drone is in any NFZ (via DIPUL WMS GetFeatureInfo) — with shared cache
-  const prevNfzPosRef = useRef<string>('');
   useEffect(() => {
     const posKey = `${drone.latitude.toFixed(4)}_${drone.longitude.toFixed(4)}`;
     if (posKey === prevNfzPosRef.current) return;
@@ -279,45 +303,6 @@ export default function StatusPanel({ drone, onClose, enabledNoFlyLayers, tracki
 
       {/* Content */}
       <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
-        {/* NFZ Warning */}
-        {nfzLoading ? (
-          <div style={{
-            padding: '8px 12px',
-            marginBottom: 16,
-            background: 'var(--bg-tertiary)',
-            borderRadius: 8,
-            fontSize: 12,
-            color: 'var(--text-muted)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-          }}>
-            <Spinner size={14} /> NFZ-Pr&uuml;fung...
-          </div>
-        ) : nfzZones.length > 0 ? (
-          <div style={{
-            padding: '10px 12px',
-            marginBottom: 16,
-            background: 'rgba(239, 68, 68, 0.1)',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
-            borderRadius: 8,
-          }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--status-error)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 14 }}>&#9888;</span>
-              In Flugverbotszone ({nfzZones.length})
-            </div>
-            {nfzZones.slice(0, 4).map((z, i) => (
-              <div key={i} style={{ fontSize: 11, color: 'var(--text-secondary)', padding: '1px 0' }}>
-                {z.name}
-                {z.type_code && <span style={{ color: 'var(--text-muted)', marginLeft: 4 }}>({z.type_code.replace(/_/g, ' ')})</span>}
-              </div>
-            ))}
-            {nfzZones.length > 4 && (
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>+{nfzZones.length - 4} weitere</div>
-            )}
-          </div>
-        ) : null}
-
         {/* Status */}
         <div style={{
           display: 'flex',
@@ -431,6 +416,11 @@ export default function StatusPanel({ drone, onClose, enabledNoFlyLayers, tracki
           <Section title="Pilot">
             <DataRow label="Breitengrad" value={drone.pilot_latitude.toFixed(6)} />
             <DataRow label="L&auml;ngengrad" value={drone.pilot_longitude.toFixed(6)} />
+            <DataRow
+              label="Standort"
+              value={pilotAddress || undefined}
+              loading={!pilotAddress}
+            />
           </Section>
         )}
 
@@ -527,6 +517,55 @@ export default function StatusPanel({ drone, onClose, enabledNoFlyLayers, tracki
             )}
           </>
         )}
+
+        {/* NFZ Check — at bottom with refresh button */}
+        <div style={{
+          marginTop: 8,
+          padding: '10px 12px',
+          background: nfzZones.length > 0 ? 'rgba(239, 68, 68, 0.1)' : 'var(--bg-tertiary)',
+          border: nfzZones.length > 0 ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid var(--border)',
+          borderRadius: 8,
+        }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            marginBottom: nfzZones.length > 0 ? 6 : 0,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+              {nfzZones.length > 0 ? (
+                <span style={{ fontWeight: 700, color: 'var(--status-error)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 14 }}>&#9888;</span>
+                  In Flugverbotszone ({nfzZones.length})
+                </span>
+              ) : (
+                <span style={{ color: 'var(--text-muted)' }}>
+                  {nfzLoading ? 'NFZ wird gepr\u00fcft...' : 'Keine Flugverbotszonen'}
+                </span>
+              )}
+            </div>
+            <button
+              onClick={triggerNfzCheck}
+              title="NFZ erneut pr\u00fcfen"
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'var(--text-muted)', fontSize: 16, padding: '2px 4px',
+                display: 'flex', alignItems: 'center',
+                animation: nfzLoading ? 'spin 1s linear infinite' : 'none',
+                opacity: nfzLoading ? 0.5 : 1,
+              }}
+            >
+              &#8635;
+            </button>
+          </div>
+          {nfzZones.length > 0 && nfzZones.slice(0, 4).map((z, i) => (
+            <div key={i} style={{ fontSize: 11, color: 'var(--text-secondary)', padding: '1px 0' }}>
+              {z.name}
+              {z.type_code && <span style={{ color: 'var(--text-muted)', marginLeft: 4 }}>({z.type_code.replace(/_/g, ' ')})</span>}
+            </div>
+          ))}
+          {nfzZones.length > 4 && (
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>+{nfzZones.length - 4} weitere</div>
+          )}
+        </div>
       </div>
 
       {/* Footer */}

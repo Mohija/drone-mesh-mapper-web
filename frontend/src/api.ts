@@ -396,6 +396,8 @@ export interface ViolationTrailPoint {
   battery: number | null;
   signal: number | null;
   heading: number | null;
+  pilot_lat: number | null;
+  pilot_lon: number | null;
   ts: number;
 }
 
@@ -436,6 +438,57 @@ export async function updateViolationComments(recordId: string, comments: string
     body: JSON.stringify({ comments }),
   });
   if (!res.ok) throw new Error(`API error: ${res.status}`);
+}
+
+// ─── Reverse Geocoding (Nominatim) ────────────────────────
+
+const _geocodeCache = new Map<string, string>();
+let _lastGeocodeTime = 0;
+
+function _geocodeKey(lat: number, lon: number): string {
+  return `${lat.toFixed(5)}_${lon.toFixed(5)}`;
+}
+
+export function getCachedAddress(lat: number, lon: number): string | null {
+  return _geocodeCache.get(_geocodeKey(lat, lon)) ?? null;
+}
+
+export async function reverseGeocode(lat: number, lon: number): Promise<string | null> {
+  const key = _geocodeKey(lat, lon);
+  const cached = _geocodeCache.get(key);
+  if (cached !== undefined) return cached;
+
+  // Nominatim rate limit: max 1 request per second
+  const now = Date.now();
+  const wait = Math.max(0, 1100 - (now - _lastGeocodeTime));
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  _lastGeocodeTime = Date.now();
+
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat.toFixed(6)}&lon=${lon.toFixed(6)}&format=json&addressdetails=1&zoom=18`,
+      { headers: { 'User-Agent': 'FlightArc/1.3 (drone monitoring)' } },
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const addr = data.address;
+    if (!addr) { _geocodeCache.set(key, ''); return null; }
+
+    // Build concise address: street + number, city
+    const parts: string[] = [];
+    const street = addr.road || addr.pedestrian || addr.footway || addr.path || '';
+    if (street) {
+      parts.push(addr.house_number ? `${street} ${addr.house_number}` : street);
+    }
+    const city = addr.city || addr.town || addr.village || addr.municipality || '';
+    if (city) parts.push(city);
+    if (!parts.length && addr.suburb) parts.push(addr.suburb);
+    const result = parts.join(', ') || data.display_name?.split(',').slice(0, 3).join(',') || '';
+    _geocodeCache.set(key, result);
+    return result || null;
+  } catch {
+    return null;
+  }
 }
 
 // ─── Admin API ────────────────────────────────────────────

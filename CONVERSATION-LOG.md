@@ -2,10 +2,25 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-12 (Flugbericht-Feature + Trail-Fixes + Demo-Drohnen-Muster)
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-12 (Flugbericht-Verbesserungen + NFZ-Fix + Reverse Geocoding)
 - **Typ:** Projekt | **Status:** Development
 
 ## Änderungshistorie
+
+### 2026-03-12 - Flugbericht-Verbesserungen + NFZ-Fix + Reverse Geocoding
+**Änderungen:**
+- **FlightReportView komplett überarbeitet:**
+  - Fix: Leere Karte behoben — Map-Container wird immer gerendert (kein early-return vor dem div), Loading-Overlay statt conditional rendering
+  - Layer-Toggle-Checkboxen (oben rechts): Zone, Trail, Drohne, Pilot, DIPUL NFZ, Statistiken ein/ausblendbar
+  - Drohnen- und Pilotenposition auf Karte mit Markern
+  - Reverse Geocoding (Nominatim) für Drohnen- und Pilotenstandort → Straßenadresse
+  - Pilot-Sektion im HTML-Bericht (Koordinaten + Adresse)
+  - Stats-Overlay repositioniert (`left: 60`) damit Zoom-Controls nicht verdeckt werden
+- **StatusPanel NFZ-Prüfung:** Von oben nach unten verschoben, blinkender Spinner durch Refresh-Circle-Button (&#8635;) ersetzt der bei Prüfung rotiert
+- **StatusPanel Pilot-Adresse:** Reverse Geocoding zeigt Straßenadresse des Piloten an
+- **Backend Trail-Daten erweitert:** `pilot_lat` und `pilot_lon` werden jetzt in Trail-Snapshots gespeichert
+- **API:** `reverseGeocode()` Funktion mit Nominatim, 1 req/s Rate-Limiting und In-Memory-Cache; `ViolationTrailPoint` Interface um `pilot_lat`/`pilot_lon` erweitert
+**Dateien:** `frontend/src/components/FlightReportView.tsx`, `frontend/src/components/StatusPanel.tsx`, `frontend/src/api.ts`, `backend/flight_zones.py`
 
 ### 2026-03-12 - Flugbericht-Feature + Trail-Fixes + Demo-Drohnen-Muster
 **Änderungen:**
