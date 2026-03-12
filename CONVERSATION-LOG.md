@@ -2,7 +2,7 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-11
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-12
 - **Typ:** Projekt | **Status:** Development
 
 ## Änderungshistorie
@@ -497,6 +497,173 @@
 - `CONVERSATION-LOG.md` - Titel
 - `frontend/dist/` - Rebuild
 
+### 2026-03-12 - Custom Flight Zones (v1.3.0)
+**Aenderungen:**
+- **Custom Flight Zones:** Benutzer koennen eigene Flugzonen per Mausklick auf der Karte definieren
+  - Polygon-Zeichenmodus: Punkte per Klick setzen, Vorschau als gestrichelte Linie, Undo/Abbrechen
+  - Zonenname und Farbe waehlbar, 8 vordefinierte Farben
+  - Zonen werden als farbige halbtransparente Polygone auf der Karte dargestellt
+  - Tooltip mit Zonenname bei Hover
+- **Drohnen-Zuweisung (n:m):** Mehrere Drohnen koennen mehreren Zonen zugewiesen werden
+  - Zuweisungs-Panel mit Drohnen-Liste, Checkbox-Selektion und Suchfilter
+  - Drohnen werden ueber ihre Kennung (basic_id) zugewiesen
+- **Zonenverletzungs-Alarm:** Warnung wenn nicht-zugewiesene Drohne eine Zone betritt
+  - Echtzeit-Pruefung bei jedem Poll-Zyklus (Client-seitige Point-in-Polygon Berechnung)
+  - Rotes Alert-Banner am unteren Bildschirmrand mit Pulse-Animation
+  - Web Audio API Warnton bei neuen Verletzungen
+  - Einzeln oder alle Verletzungen ausblendbar, auto-clear bei Verlassen der Zone
+- **Backend:**
+  - `flight_zones.py`: FlightZoneManager mit CRUD, Assign/Unassign, Violation Detection
+  - JSON-Persistenz in `backend/data/zones/`, Thread-safe mit threading.Lock()
+  - Point-in-Polygon Ray-Casting Algorithmus (Python + TypeScript)
+  - 8 neue API-Endpoints: GET/POST `/api/zones`, GET/PUT/DELETE `/api/zones/<id>`, POST assign/unassign, GET violations
+  - Strukturiertes Logging (`zone_logger`)
+- **Frontend:**
+  - `useFlightZones.ts`: Custom Hook fuer Zonen-State, Zeichenmodus, Violation Detection
+  - `FlightZonesPanel.tsx`: Zonen-Verwaltung mit Zeichenmodus-UI
+  - `ZoneAssignPanel.tsx`: Drohnen-Zuweisungs-Modal
+  - `ViolationAlert.tsx`: Verletzungs-Alert mit Audio
+  - MapComponent: Polygon-Rendering, Drawing-Mode mit Crosshair-Cursor
+  - MapPage: Zonen-Button mit Badge-Count und "ZEICHNEN"-Indikator
+- **Tests:**
+  - Backend: 48 neue Tests (Point-in-Polygon, CRUD, Assign, Violations, Persistence, API)
+  - Frontend Unit: 6 neue Tests (pointInPolygon), 10 API-Tests
+  - E2E: 22 neue Tests (11 API + 11 UI: Panel, Drawing, Create, Delete, Assign, Badge)
+- **Test-Ergebnisse:** 180 Backend, 73 Frontend Unit, 22 Flight Zones E2E — alle bestanden
+
+**Dateien:**
+- `backend/flight_zones.py` - NEU: FlightZoneManager mit CRUD + Violations
+- `backend/app.py` - 8 neue Zone-API-Endpoints, zone_logger
+- `backend/tests/test_flight_zones.py` - NEU: 48 Backend-Tests
+- `frontend/src/types/drone.ts` - FlightZone, ZoneViolation Interfaces
+- `frontend/src/api.ts` - 7 neue Zone-API-Funktionen
+- `frontend/src/useFlightZones.ts` - NEU: Flight Zones Hook
+- `frontend/src/useFlightZones.test.ts` - NEU: pointInPolygon Tests
+- `frontend/src/components/FlightZonesPanel.tsx` - NEU: Zonen-Panel
+- `frontend/src/components/ZoneAssignPanel.tsx` - NEU: Zuweisungs-Modal
+- `frontend/src/components/ViolationAlert.tsx` - NEU: Verletzungs-Alert
+- `frontend/src/components/MapComponent.tsx` - Polygon + Drawing Mode Rendering
+- `frontend/src/components/MapPage.tsx` - Flight Zones Integration
+- `frontend/src/index.css` - violationPulse Animation
+- `frontend/src/api.test.ts` - 10 neue Zone-API-Tests
+- `frontend/src/test/mocks.ts` - createMockFlightZone, createMockZoneViolation
+- `frontend/src/components/StatusPanel.test.tsx` - Test-Fix (Speed Regex)
+- `frontend/src/components/DroneDetailPage.test.tsx` - Test-Fix (Timer Advancement)
+- `frontend/e2e/flight-zones.spec.ts` - NEU: 22 E2E-Tests
+- `manifest.json` - Version 1.2.0 → 1.3.0
+- `frontend/package.json` - Version 1.2.0 → 1.3.0
+- `frontend/dist/` - Rebuild
+
+### 2026-03-12 - Hoehenbereiche AGL, Snap-to-Close Zeichnen, Zonennamen auf Karte
+**Aenderungen:**
+- **Hoehenbereiche (AGL):** Flugzonen koennen jetzt Min/Max-Hoehe ueber Grund (AGL) zugewiesen werden
+  - Neue Felder `minAltitudeAGL` / `maxAltitudeAGL` auf FlightZone (nullable)
+  - Violation Check beruecksichtigt AGL: Drohnenhoehe - Gelaendehoehe aus Elevation Grid
+  - Backend nutzt `_get_cached_elevation()` fuer serverseitige AGL-Pruefung
+  - Frontend nutzt `getElevation()` aus dem vorberechneten Elevation Grid
+  - Panel zeigt AGL-Eingabefelder bei Zonenerstellung und AGL-Range in der Zonenliste
+- **Snap-to-Close Zeichenmodus:** Polygon-Kette schliessen durch Klick auf ersten Punkt
+  - `SNAP_THRESHOLD` (~15m): Wenn Klick nahe dem ersten Punkt, wird Polygon automatisch geschlossen
+  - Erster Punkt pulsiert gruen und vergroessert sich wenn Snapping moeglich (>=3 Punkte)
+  - `addPoint()` gibt `true` zurueck bei Snap, Panel zeigt "Klicke auf den gruenen Punkt zum Schliessen"
+- **Zonennamen auf der Karte:** Permanente Labels am Polygon-Centroid
+  - Leaflet `L.tooltip` mit `permanent: true` und `direction: 'center'`
+  - CSS-Klasse `zone-label` mit halbtransparentem Hintergrund (dark/light theme)
+  - Zeigt Zonenname + AGL-Bereich (wenn definiert)
+- **Abwaertskompatibilitaet:** Bestehende Zonen ohne AGL-Felder erhalten `null`-Defaults beim Laden
+
+**Dateien:**
+- `frontend/src/types/drone.ts` - minAltitudeAGL, maxAltitudeAGL auf FlightZone
+- `frontend/src/useFlightZones.ts` - SNAP_THRESHOLD, snappable, AGL in finishDrawing + checkViolations
+- `frontend/src/components/FlightZonesPanel.tsx` - AGL-Inputs, Snap-Hinweis, AGL in Zonenliste
+- `frontend/src/components/MapComponent.tsx` - Snap-Indikator, permanente Zone-Labels, snappable prop
+- `frontend/src/components/MapPage.tsx` - snappable prop durchreichen
+- `frontend/src/api.ts` - AGL-Felder in create/update
+- `frontend/src/index.css` - zone-label CSS (dark/light)
+- `frontend/src/test/mocks.ts` - AGL-Felder in Mock
+- `backend/flight_zones.py` - AGL-Felder in create/update/load, AGL-Check in check_violations
+- `backend/app.py` - _get_cached_elevation an check_violations uebergeben
+- `frontend/e2e/flight-zones.spec.ts` - Selektoren angepasst fuer permanente Labels
+- `frontend/dist/` - Rebuild
+
+### 2026-03-12 - Zone nach Erstellung bearbeiten (ZoneAssignPanel)
+**Änderungen:**
+- **Zone bearbeiten:** ZoneAssignPanel erweitert um editierbare Zonen-Eigenschaften
+  - Name, Farbe, Min/Max AGL direkt im gleichen Modal wie Drohnen-Zuweisung bearbeiten
+  - Header geaendert von "Drohnen zuweisen" zu "Zone bearbeiten" mit separater "Drohnen zuweisen" Sektion
+  - Neue `onUpdateZone` Prop fuer API-Aufrufe (PUT /api/zones/:id)
+  - Speichern-Button sendet sowohl Zonen-Updates als auch Drohnen-Aenderungen
+  - Disabled/Loading State waehrend Speichern
+- **E2E Tests (+2):** 23 Flight Zone Tests gesamt
+  - "assign drones panel opens with edit fields": Prueft ob Editfelder mit Zonendaten vorbefuellt sind
+  - "edit zone name via assign panel": Aendert Zonennamen, verifiziert per API und Panel
+
+**Dateien:**
+- `frontend/src/components/ZoneAssignPanel.tsx` - Editierbare Name/Farbe/AGL-Felder, onUpdateZone Prop
+- `frontend/src/components/MapPage.tsx` - onUpdateZone={flightZones.updateZone} durchgereicht
+- `frontend/e2e/flight-zones.spec.ts` - 2 neue E2E-Tests fuer Zone-Bearbeitung
+- `frontend/dist/` - Rebuild
+
+### 2026-03-12 - Violations-Tabelle mit Auto-Tracking
+**Änderungen:**
+- **Violations-Tabelle am unteren Rand:** Ersetzt die alte ViolationAlert-Popup-Anzeige
+  - Fixierte Leiste am unteren Bildschirmrand mit collapsible Tabelle
+  - Header-Leiste zeigt Anzahl und aktive Verstoesze, klickbar zum Auf-/Zuklappen
+  - Tabelle: Status (aktiv/beendet), Drohne, Zone, Beginn (Uhrzeit), Dauer (live-aktualisiert), Trail-Toggle, Loeschen
+  - Sortiert nach Startzeitpunkt (neueste zuerst)
+  - "Alle loeschen" Button im Header
+  - Klick auf Drohnenname oeffnet StatusPanel
+- **Violation Records mit Start/End-Zeit:** Neue `ViolationRecord` Datenstruktur
+  - Persistente Aufzeichnung mit Startzeit, Endzeit (null = aktiv), Zonenfarbe
+  - Erkennt automatisch wann Verstoesze beginnen und enden
+  - Gleiche Drohne kann mehrere Verstoesze verursachen (separate Eintraege)
+  - Loeschen eines Verstoszes entfernt auch Tracking-Daten (Untrack wenn letzter Verstosz)
+- **Auto-Tracking bei Verstosz:** Wenn Drohne in eine Flight Zone eindringt, wird automatisch Tracking gestartet
+  - Tracking bleibt aktiv bis manuell deaktiviert oder Drohne verschwindet
+  - Trail-Sichtbarkeit per Toggle in der Tabelle steuerbar
+  - Filled Circle = Trail sichtbar, Empty Circle = Trail ausgeblendet
+- **Neuer Hook `useViolationLog`:** Verwaltet Violation Records
+  - Vergleicht aktuelle Verstoesze mit bestehenden Records
+  - Erkennt neue Verstoesze und loest Auto-Track + Alarm-Sound aus
+  - Erkennt beendete Verstoesze (Drohne verlaesst Zone oder verschwindet)
+  - Trail-Visibility pro Record, aggregiert auf Drohnen-Ebene
+- **Vereinfachtes useFlightZones:** Dismiss-Logik entfernt (durch Tabelle ersetzt)
+- **ViolationAlert entfernt:** Durch ViolationTable ersetzt (Alarm-Sound beibehalten)
+- **E2E Tests (+8):** 31 Flight Zone Tests gesamt
+  - Violation Table: erscheint bei Verstoesze, collapsible, zeigt Drohne/Zone info
+  - Aktive Verstoesze: live Badge, Trail-Toggle, Loeschen, Alle loeschen
+  - Klick auf Drohnenname oeffnet StatusPanel
+
+**Dateien:**
+- `frontend/src/types/drone.ts` - ViolationRecord Interface
+- `frontend/src/useViolationLog.ts` - **NEU** Violation Log Hook mit Auto-Tracking
+- `frontend/src/components/ViolationTable.tsx` - **NEU** Collapsible Violations-Tabelle
+- `frontend/src/useFlightZones.ts` - Dismiss-Logik entfernt, vereinfacht
+- `frontend/src/components/MapPage.tsx` - ViolationTable statt ViolationAlert, Auto-Track Integration, Trail-Filter
+- `frontend/src/test/mocks.ts` - createMockViolationRecord hinzugefuegt
+- `frontend/e2e/flight-zones.spec.ts` - 8 neue E2E-Tests fuer Violation Table
+- `frontend/dist/` - Rebuild
+
+### 2026-03-12 - Violation-Tabelle: Zeilen-Selektion + Trail-Filterung
+**Änderungen:**
+- **Zeilen-Selektion in Violation-Tabelle:** Klick auf eine Tabellenzeile selektiert den Verstosz visuell
+  - Selektierte Zeile wird blau hervorgehoben (outline + background)
+  - Wechsel zwischen verschiedenen Verstoessen per Klick moeglich
+  - Karte fliegt zur Position der selektierten Drohne (focusPosition)
+  - StatusPanel oeffnet sich fuer die selektierte Drohne
+- **Trail-Filterung nach Selektion:** Nur der Trail der selektierten Drohne wird auf der Karte angezeigt
+  - Wenn ein Verstosz selektiert ist: nur Trail dieser Drohne sichtbar
+  - Wenn kein Verstosz selektiert: alle Trails sichtbar (bisheriges Verhalten)
+  - Selektion wird automatisch zurueckgesetzt wenn der Record geloescht/gecleart wird
+- **ViolationTable Props geaendert:** `onSelectDrone(droneId)` → `onSelectRecord(recordId)` + `selectedRecordId`
+  - Klick-Handler auf gesamte Tabellenzeile (nicht nur Drohnenname)
+  - Separate `cursor: pointer` auf der ganzen Zeile
+
+**Dateien:**
+- `frontend/src/components/ViolationTable.tsx` - selectedRecordId Prop, Zeilen-Highlight, onSelectRecord
+- `frontend/src/components/MapPage.tsx` - selectedViolationRecordId State, Trail-Filterung nach Selektion, Record-Cleanup useEffect
+- `frontend/dist/` - Rebuild
+
 ## Offene Aufgaben
 - [ ] WebSocket-Integration für echte Push-Updates statt Polling
 - [ ] ESP 8266 MicroPython-Anpassung
@@ -513,7 +680,7 @@
 - DIPUL WMS rendert in dunklen Farben → CSS `filter: invert(1) hue-rotate(180deg) brightness(1.3)` nur im Dark Theme, Light Theme zeigt Originalfarben
 - Hover-Tooltip: Zeigt Zonenname, Typ, Hoehengrenzen, Rechtsgrundlage. Klick-Popup: Vollstaendige Details inkl. Referenz
 - FFH-Gebiete: WMS-Layer heisst `dipul:ffh-gebiete` (Bindestrich!), nicht `dipul:ffh_gebiete`
-- Test-Abdeckung: 132 Backend-Tests, 57 Frontend Unit-Tests, 69 E2E-Tests (30 davon NFZ-spezifisch)
+- Test-Abdeckung: 180 Backend-Tests, 73 Frontend Unit-Tests, 100 E2E-Tests (30 NFZ, 31 Flight Zones)
 - Aircraft Lookup Quellen (7): adsbdb.com, OpenSky Network, hexdb.io, OGN DDB, adsbdb Callsign, planespotters.net, airport-data.com
 - OGN Aircraft Type Codes: 0=Unknown, 1=Segelflugzeug, 3=Helikopter, 8=Motorflugzeug, 9=Jet, 13=UAV/Drohne, etc.
 - OGN Feld 12 = ICAO Hex (Mode-S), Feld 10 = Aircraft Type Code, Feld 13 = OGN/FLARM Device ID

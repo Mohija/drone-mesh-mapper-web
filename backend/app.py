@@ -17,6 +17,7 @@ from drone_simulator import DroneFleet
 from settings import SettingsManager
 from providers import ProviderRegistry
 from trail_archive import TrailArchive
+from flight_zones import FlightZoneManager
 
 # Logging setup
 logging.basicConfig(
@@ -57,6 +58,7 @@ fleet.start(interval=2.0)
 settings = SettingsManager()
 registry = ProviderRegistry(fleet)
 archive = TrailArchive(os.path.join(BASE_DIR, "data", "archives"))
+zones = FlightZoneManager(os.path.join(BASE_DIR, "data", "zones"))
 
 
 # ─── API Routes ────────────────────────────────────────────
@@ -519,6 +521,115 @@ def delete_trail_archive(archive_id: str):
     if archive.delete_archive(archive_id):
         return jsonify({"status": "deleted"})
     return jsonify({"error": "Archive not found"}), 404
+
+
+# ─── Flight Zones Routes ──────────────────────────────────
+
+zone_logger = logging.getLogger("zones")
+
+
+@app.route("/api/zones", methods=["GET"])
+def list_zones():
+    """List all flight zones."""
+    zone_list = zones.list_zones()
+    zone_logger.debug("GET /api/zones - %d zones", len(zone_list))
+    return jsonify(zone_list)
+
+
+@app.route("/api/zones", methods=["POST"])
+def create_zone():
+    """Create a new flight zone."""
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Request body required"}), 400
+    try:
+        zone = zones.create_zone(data)
+        zone_logger.info("POST /api/zones - created %s: %s", zone["id"], zone["name"])
+        return jsonify(zone), 201
+    except ValueError as e:
+        zone_logger.warning("Zone creation rejected: %s", e)
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/zones/violations", methods=["GET"])
+def check_zone_violations():
+    """Check all zones for unauthorized drones (not assigned but inside zone)."""
+    lat = request.args.get("lat", type=float, default=DEFAULT_LAT)
+    lon = request.args.get("lon", type=float, default=DEFAULT_LON)
+    radius = request.args.get("radius", type=float, default=DEFAULT_RADIUS)
+
+    enabled = settings.get_enabled_sources()
+    drones_list = registry.get_all_drones(lat, lon, radius, enabled)
+    violations = zones.check_violations(drones_list, get_elevation=_get_cached_elevation)
+    zone_logger.debug("GET /api/zones/violations - %d violations from %d drones", len(violations), len(drones_list))
+    return jsonify({"violations": violations, "count": len(violations)})
+
+
+@app.route("/api/zones/<zone_id>", methods=["GET"])
+def get_zone(zone_id: str):
+    """Get a single flight zone."""
+    zone = zones.get_zone(zone_id)
+    if not zone:
+        return jsonify({"error": "Zone not found"}), 404
+    return jsonify(zone)
+
+
+@app.route("/api/zones/<zone_id>", methods=["PUT"])
+def update_zone(zone_id: str):
+    """Update a flight zone (name, color, polygon)."""
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Request body required"}), 400
+    try:
+        zone = zones.update_zone(zone_id, data)
+        if not zone:
+            return jsonify({"error": "Zone not found"}), 404
+        zone_logger.info("PUT /api/zones/%s - updated", zone_id)
+        return jsonify(zone)
+    except ValueError as e:
+        zone_logger.warning("Zone update rejected: %s", e)
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/zones/<zone_id>", methods=["DELETE"])
+def delete_zone(zone_id: str):
+    """Delete a flight zone."""
+    if zones.delete_zone(zone_id):
+        zone_logger.info("DELETE /api/zones/%s - deleted", zone_id)
+        return jsonify({"status": "deleted"})
+    return jsonify({"error": "Zone not found"}), 404
+
+
+@app.route("/api/zones/<zone_id>/assign", methods=["POST"])
+def assign_drones_to_zone(zone_id: str):
+    """Assign drone(s) to a zone. Body: { "droneIds": ["..."] }"""
+    data = request.get_json()
+    if not data or "droneIds" not in data:
+        return jsonify({"error": "droneIds required"}), 400
+    drone_ids = data["droneIds"]
+    if not isinstance(drone_ids, list):
+        return jsonify({"error": "droneIds must be an array"}), 400
+    zone = zones.assign_drones(zone_id, drone_ids)
+    if not zone:
+        return jsonify({"error": "Zone not found"}), 404
+    zone_logger.info("POST /api/zones/%s/assign - %d drone(s)", zone_id, len(drone_ids))
+    return jsonify(zone)
+
+
+@app.route("/api/zones/<zone_id>/unassign", methods=["POST"])
+def unassign_drones_from_zone(zone_id: str):
+    """Unassign drone(s) from a zone. Body: { "droneIds": ["..."] }"""
+    data = request.get_json()
+    if not data or "droneIds" not in data:
+        return jsonify({"error": "droneIds required"}), 400
+    drone_ids = data["droneIds"]
+    if not isinstance(drone_ids, list):
+        return jsonify({"error": "droneIds must be an array"}), 400
+    zone = zones.unassign_drones(zone_id, drone_ids)
+    if not zone:
+        return jsonify({"error": "Zone not found"}), 404
+    zone_logger.info("POST /api/zones/%s/unassign - %d drone(s)", zone_id, len(drone_ids))
+    return jsonify(zone)
 
 
 # ─── Terrain Elevation API ─────────────────────────────────

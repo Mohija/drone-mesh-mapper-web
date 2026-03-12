@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { DIPUL_WMS_URL, getWmsLayerString, NFZ_LAYERS } from '../config/noFlyZones';
 import { useTheme } from '../ThemeContext';
 import type { TrailData } from '../useTracking';
+import type { FlightZone } from '../types/drone';
 
 // Persist map view across remounts (route navigation)
 let savedCenter: [number, number] = [52.0302, 8.5325]; // Bielefeld
@@ -276,19 +277,28 @@ interface Props {
   droneRadiusCenter: { lat: number; lon: number } | null;
   droneRadiusMeters: number | null;
   trails?: TrailData[];
+  flightZones?: FlightZone[];
+  drawingMode?: boolean;
+  pendingPoints?: [number, number][];
+  snappable?: boolean;
+  onMapClickForZone?: (lat: number, lon: number) => boolean | void;
+  focusPosition?: { lat: number; lon: number } | null;
 }
 
 // Store drone data for map event handlers (avoids stale closures)
 let droneDataMap: Map<string, Drone> = new Map();
 // Store active WMS layer string for event handlers
 let currentWmsLayers = '';
+// Store drawing mode state for click handler
+let isDrawingMode = false;
+let drawingClickHandler: ((lat: number, lon: number) => boolean | void) | null = null;
 
 const TILE_URLS = {
   dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
   light: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
 };
 
-export default function MapComponent({ drones, selectedDrone, userLocation, onDroneClick, activeNoFlyLayers, nfzBounds, nfzRadiusCenter, nfzRadiusMeters, droneRadiusCenter, droneRadiusMeters, trails = [] }: Props) {
+export default function MapComponent({ drones, selectedDrone, userLocation, onDroneClick, activeNoFlyLayers, nfzBounds, nfzRadiusCenter, nfzRadiusMeters, droneRadiusCenter, droneRadiusMeters, trails = [], flightZones = [], drawingMode = false, pendingPoints = [], snappable = false, onMapClickForZone, focusPosition }: Props) {
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
@@ -304,6 +314,10 @@ export default function MapComponent({ drones, selectedDrone, userLocation, onDr
   const nfzFetchControllerRef = useRef<AbortController | null>(null);
   const nfzDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const trailPolylinesRef = useRef<Map<string, L.Polyline>>(new Map());
+  const zonePolygonsRef = useRef<Map<string, L.Polygon>>(new Map());
+  const zoneLabelsRef = useRef<Map<string, L.Tooltip>>(new Map());
+  const drawingPolylineRef = useRef<L.Polyline | null>(null);
+  const drawingMarkersRef = useRef<L.CircleMarker[]>([]);
   const navigate = useNavigate();
   const { theme } = useTheme();
 
@@ -401,6 +415,11 @@ export default function MapComponent({ drones, selectedDrone, userLocation, onDr
 
     // NFZ click handler - GetFeatureInfo on click for detailed popup
     function handleMapClick(e: L.LeafletMouseEvent) {
+      // Drawing mode intercepts clicks
+      if (isDrawingMode && drawingClickHandler) {
+        drawingClickHandler(e.latlng.lat, e.latlng.lng);
+        return;
+      }
       if (!currentWmsLayers) return;
 
       const url = buildFeatureInfoUrl(map, e.containerPoint, currentWmsLayers);
@@ -479,6 +498,16 @@ export default function MapComponent({ drones, selectedDrone, userLocation, onDr
       map.setView([userLocation.latitude, userLocation.longitude], 14);
     }
   }, [userLocation]);
+
+  // Fly to focus position (e.g. when selecting drone from violation table)
+  const prevFocusRef = useRef<{ lat: number; lon: number } | null>(null);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !focusPosition) return;
+    if (prevFocusRef.current === focusPosition) return;
+    prevFocusRef.current = focusPosition;
+    map.flyTo([focusPosition.lat, focusPosition.lon], Math.max(map.getZoom(), 14), { duration: 0.8 });
+  }, [focusPosition]);
 
   // Update DIPUL WMS no-fly zone overlay
   useEffect(() => {
@@ -775,6 +804,162 @@ export default function MapComponent({ drones, selectedDrone, userLocation, onDr
       }
     }
   }, [trails]);
+
+  // Sync drawing mode state to module-level variable for click handler
+  useEffect(() => {
+    isDrawingMode = drawingMode;
+    drawingClickHandler = onMapClickForZone || null;
+
+    // Change cursor for drawing mode
+    const container = mapContainerRef.current;
+    if (container) {
+      container.style.cursor = drawingMode ? 'crosshair' : '';
+    }
+
+    return () => {
+      isDrawingMode = false;
+      drawingClickHandler = null;
+      if (container) container.style.cursor = '';
+    };
+  }, [drawingMode, onMapClickForZone]);
+
+  // Render drawing mode polyline + point markers
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    // Clear previous drawing visuals
+    if (drawingPolylineRef.current) {
+      drawingPolylineRef.current.remove();
+      drawingPolylineRef.current = null;
+    }
+    drawingMarkersRef.current.forEach(m => m.remove());
+    drawingMarkersRef.current = [];
+
+    if (!drawingMode || pendingPoints.length === 0) return;
+
+    // Draw polyline connecting pending points (close it if 3+ points)
+    const latlngs = pendingPoints.map(p => L.latLng(p[0], p[1]));
+    if (pendingPoints.length >= 3) {
+      // Close the polygon preview
+      latlngs.push(latlngs[0]);
+    }
+    drawingPolylineRef.current = L.polyline(latlngs, {
+      color: '#3b82f6',
+      weight: 2,
+      dashArray: '6, 4',
+      opacity: 0.8,
+      interactive: false,
+    }).addTo(map);
+
+    // Draw point markers
+    pendingPoints.forEach((p, i) => {
+      const isFirst = i === 0;
+      const showSnap = isFirst && snappable;
+      const marker = L.circleMarker([p[0], p[1]], {
+        radius: showSnap ? 9 : 5,
+        fillColor: isFirst ? '#22c55e' : '#3b82f6',
+        color: showSnap ? '#22c55e' : '#fff',
+        weight: showSnap ? 3 : 2,
+        fillOpacity: showSnap ? 0.5 : 1,
+        interactive: false,
+        className: showSnap ? 'drone-marker-pulse' : undefined,
+      }).addTo(map);
+      drawingMarkersRef.current.push(marker);
+    });
+
+    return () => {
+      if (drawingPolylineRef.current) {
+        drawingPolylineRef.current.remove();
+        drawingPolylineRef.current = null;
+      }
+      drawingMarkersRef.current.forEach(m => m.remove());
+      drawingMarkersRef.current = [];
+    };
+  }, [drawingMode, pendingPoints, snappable]);
+
+  // Render flight zone polygons with permanent name labels
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const currentIds = new Set(flightZones.map(z => z.id));
+
+    // Remove polygons and labels no longer in zones
+    zonePolygonsRef.current.forEach((polygon, id) => {
+      if (!currentIds.has(id)) {
+        polygon.remove();
+        zonePolygonsRef.current.delete(id);
+      }
+    });
+    zoneLabelsRef.current.forEach((label, id) => {
+      if (!currentIds.has(id)) {
+        map.removeLayer(label as unknown as L.Layer);
+        zoneLabelsRef.current.delete(id);
+      }
+    });
+
+    // Helper: compute polygon centroid for label placement
+    function centroid(polygon: [number, number][]): [number, number] {
+      let latSum = 0, lonSum = 0;
+      for (const [lat, lon] of polygon) {
+        latSum += lat;
+        lonSum += lon;
+      }
+      return [latSum / polygon.length, lonSum / polygon.length];
+    }
+
+    // Build altitude label suffix
+    function altLabel(zone: FlightZone): string {
+      const min = zone.minAltitudeAGL;
+      const max = zone.maxAltitudeAGL;
+      if (min === null && max === null) return '';
+      return `\n${min ?? 0}–${max ?? '∞'} m AGL`;
+    }
+
+    // Update or create polygons
+    for (const zone of flightZones) {
+      if (zone.polygon.length < 3) continue;
+      const latlngs: L.LatLngExpression[] = zone.polygon.map(p => [p[0], p[1]]);
+      const labelText = zone.name + altLabel(zone);
+      const center = centroid(zone.polygon);
+      const existing = zonePolygonsRef.current.get(zone.id);
+
+      if (existing) {
+        existing.setLatLngs(latlngs);
+        existing.setStyle({ color: zone.color, fillColor: zone.color });
+      } else {
+        const polygon = L.polygon(latlngs, {
+          color: zone.color,
+          fillColor: zone.color,
+          fillOpacity: 0.15,
+          weight: 2,
+          opacity: 0.7,
+          interactive: true,
+        }).addTo(map);
+        polygon.bringToBack();
+        zonePolygonsRef.current.set(zone.id, polygon);
+      }
+
+      // Permanent label at centroid
+      const existingLabel = zoneLabelsRef.current.get(zone.id);
+      if (existingLabel) {
+        existingLabel.setLatLng(L.latLng(center[0], center[1]));
+        existingLabel.setContent(`<div style="text-align:center;white-space:pre">${labelText}</div>`);
+      } else {
+        const tooltip = L.tooltip({
+          permanent: true,
+          direction: 'center',
+          className: 'zone-label',
+          interactive: false,
+        })
+          .setLatLng(L.latLng(center[0], center[1]))
+          .setContent(`<div style="text-align:center;white-space:pre">${labelText}</div>`)
+          .addTo(map);
+        zoneLabelsRef.current.set(zone.id, tooltip);
+      }
+    }
+  }, [flightZones]);
 
   return (
     <div

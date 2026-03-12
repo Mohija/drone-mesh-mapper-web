@@ -138,3 +138,37 @@ export interface ArchivedTrailSummary {
 export interface ArchivedTrail extends ArchivedTrailSummary {
   trail: TrailPoint[];
 }
+
+// ─── Flight Zones ─────────────────────────────────────────
+
+export interface FlightZone {
+  id: string;
+  name: string;
+  color: string;
+  polygon: [number, number][]; // [lat, lon][]
+  minAltitudeAGL: number | null; // meters above ground level
+  maxAltitudeAGL: number | null; // meters above ground level
+  assignedDrones: string[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ZoneViolation {
+  droneId: string;
+  droneName: string;
+  zoneId: string;
+  zoneName: string;
+  timestamp: number;
+}
+
+export interface ViolationRecord {
+  id: string;
+  droneId: string;
+  droneName: string;
+  zoneId: string;
+  zoneName: string;
+  zoneColor: string;
+  startTime: number;       // epoch seconds
+  endTime: number | null;  // null = still active
+  trackingVisible: boolean;
+}

@@ -9,8 +9,13 @@ import StatusPanel from './StatusPanel';
 import GeolocationButton from './GeolocationButton';
 import { pruneCache } from '../lookupCache';
 import { useTracking } from '../useTracking';
+import { useFlightZones } from '../useFlightZones';
+import { useViolationLog } from '../useViolationLog';
 import NoFlyZonesPanel from './NoFlyZonesPanel';
 import TrackingPanel from './TrackingPanel';
+import FlightZonesPanel from './FlightZonesPanel';
+import ZoneAssignPanel from './ZoneAssignPanel';
+import ViolationTable from './ViolationTable';
 import {
   DEFAULT_ENABLED_LAYERS,
   NFZ_LAYERS,
@@ -46,7 +51,13 @@ export default function MapPage() {
   const [nfzRadius, setNfzRadius] = useState(50000); // 50km default
   const [altitudeZone, setAltitudeZone] = useState('all');
   const [trackingPanelOpen, setTrackingPanelOpen] = useState(false);
+  const [zonesPanelOpen, setZonesPanelOpen] = useState(false);
+  const [assignZoneId, setAssignZoneId] = useState<string | null>(null);
+  const [focusPosition, setFocusPosition] = useState<{ lat: number; lon: number } | null>(null);
+  const [selectedViolationRecordId, setSelectedViolationRecordId] = useState<string | null>(null);
   const tracking = useTracking();
+  const flightZones = useFlightZones();
+  const violationLog = useViolationLog();
   const [enabledNoFlyLayers, setEnabledNoFlyLayers] = useState<string[]>(() => {
     try {
       const stored = localStorage.getItem('nofly-layers');
@@ -85,10 +96,25 @@ export default function MapPage() {
 
       // Feed new positions to tracked flights
       tracking.updatePositions(data.drones);
+
+      // Check flight zone violations and feed to violation log
+      const currentViolations = flightZones.checkViolations(data.drones);
+
+      // Update violation log with auto-tracking
+      violationLog.update(
+        currentViolations,
+        data.drones,
+        flightZones.zones,
+        (drone) => {
+          if (!tracking.isTracked(drone.id)) {
+            tracking.trackDrone(drone);
+          }
+        },
+      );
     } catch (err) {
       setError('Verbindung zum Server fehlgeschlagen');
     }
-  }, [userLocation, radiusEnabled, radius, tracking.updatePositions]);
+  }, [userLocation, radiusEnabled, radius, tracking.updatePositions, tracking.isTracked, tracking.trackDrone, flightZones.checkViolations, flightZones.zones, violationLog.update]);
 
   // Build elevation grid for the search area (pre-computes terrain for AGL)
   useEffect(() => {
@@ -171,6 +197,37 @@ export default function MapPage() {
     ? drones
     : drones.filter(d => d.altitude >= activeZone.min && d.altitude < activeZone.max);
 
+  // Derive selected violation record (null if deleted/cleared)
+  const selectedViolationRecord = useMemo(() =>
+    selectedViolationRecordId ? violationLog.records.find(r => r.id === selectedViolationRecordId) ?? null : null,
+    [selectedViolationRecordId, violationLog.records],
+  );
+
+  // Clear selection when record no longer exists
+  useEffect(() => {
+    if (selectedViolationRecordId && !selectedViolationRecord) {
+      setSelectedViolationRecordId(null);
+    }
+  }, [selectedViolationRecordId, selectedViolationRecord]);
+
+  // Show only the selected drone's trail when a violation row is selected
+  const visibleTrails = useMemo(() => {
+    if (selectedViolationRecord) {
+      const selectedDroneId = selectedViolationRecord.droneId;
+      return tracking.allTrails.filter(t => {
+        const droneId = t.id.startsWith('track-') ? t.id.slice(6) : null;
+        return droneId === selectedDroneId;
+      });
+    }
+    // No violation selected: show all trails except hidden ones
+    if (violationLog.hiddenTrailDroneIds.size === 0) return tracking.allTrails;
+    return tracking.allTrails.filter(t => {
+      const droneId = t.id.startsWith('track-') ? t.id.slice(6) : null;
+      if (droneId && violationLog.hiddenTrailDroneIds.has(droneId)) return false;
+      return true;
+    });
+  }, [tracking.allTrails, violationLog.hiddenTrailDroneIds, selectedViolationRecord]);
+
   // Shared center for radii (GPS position or Bielefeld default)
   const currentCenter = userLocation
     ? { lat: userLocation.latitude, lon: userLocation.longitude }
@@ -189,7 +246,13 @@ export default function MapPage() {
         nfzRadiusMeters={nfzRadiusEnabled && noFlyEnabled ? nfzRadius : null}
         droneRadiusCenter={radiusEnabled ? currentCenter : null}
         droneRadiusMeters={radiusEnabled ? radius : null}
-        trails={tracking.allTrails}
+        trails={visibleTrails}
+        flightZones={flightZones.zones}
+        drawingMode={flightZones.drawingMode}
+        pendingPoints={flightZones.pendingPoints}
+        snappable={flightZones.snappable}
+        onMapClickForZone={flightZones.addPoint}
+        focusPosition={focusPosition}
       />
 
       {/* Top bar */}
@@ -555,6 +618,78 @@ export default function MapPage() {
           )}
         </div>
 
+        {/* Flight Zones button */}
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => setZonesPanelOpen(prev => !prev)}
+            title="Flugzonen"
+            data-testid="zones-toggle"
+            style={{
+              background: flightZones.zones.length > 0 || flightZones.drawingMode
+                ? 'rgba(59, 130, 246, 0.15)'
+                : 'var(--bg-secondary)',
+              border: `1px solid ${flightZones.zones.length > 0 || flightZones.drawingMode ? 'var(--accent)' : 'var(--border)'}`,
+              borderRadius: 8,
+              padding: '8px 12px',
+              cursor: 'pointer',
+              color: flightZones.zones.length > 0 || flightZones.drawingMode
+                ? 'var(--accent)'
+                : 'var(--text-secondary)',
+              fontSize: 14,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <span style={{ fontSize: 14 }}>&#9634;</span>
+            <span>Zonen</span>
+            {flightZones.zones.length > 0 && (
+              <span style={{
+                background: 'var(--accent)',
+                color: '#fff',
+                borderRadius: 8,
+                padding: '0 5px',
+                fontSize: 10,
+                fontWeight: 700,
+                minWidth: 16,
+                textAlign: 'center',
+              }}>
+                {flightZones.zones.length}
+              </span>
+            )}
+            {flightZones.drawingMode && (
+              <span style={{
+                background: '#22c55e',
+                color: '#fff',
+                borderRadius: 4,
+                padding: '0 5px',
+                fontSize: 9,
+                fontWeight: 700,
+              }}>
+                ZEICHNEN
+              </span>
+            )}
+          </button>
+
+          {zonesPanelOpen && (
+            <FlightZonesPanel
+              zones={flightZones.zones}
+              drawingMode={flightZones.drawingMode}
+              pendingPoints={flightZones.pendingPoints}
+              snappable={flightZones.snappable}
+              onStartDrawing={flightZones.startDrawing}
+              onCancelDrawing={flightZones.cancelDrawing}
+              onUndoPoint={flightZones.undoLastPoint}
+              onFinishDrawing={flightZones.finishDrawing}
+              onDeleteZone={flightZones.deleteZone}
+              onSelectZone={() => {}}
+              onAssignZone={(zoneId) => setAssignZoneId(zoneId)}
+              onClose={() => setZonesPanelOpen(false)}
+            />
+          )}
+        </div>
+
         {/* Settings button */}
         <button
           onClick={() => navigate('/settings')}
@@ -603,6 +738,60 @@ export default function MapPage() {
           onArchive={tracking.archiveFlight}
         />
       )}
+
+      {/* Zone assign modal */}
+      {assignZoneId && (() => {
+        const zone = flightZones.zones.find(z => z.id === assignZoneId);
+        if (!zone) return null;
+        return (
+          <ZoneAssignPanel
+            zone={zone}
+            drones={drones}
+            onSave={async (zoneId, toAssign, toUnassign) => {
+              if (toAssign.length > 0) await flightZones.assignDrones(zoneId, toAssign);
+              if (toUnassign.length > 0) await flightZones.unassignDrones(zoneId, toUnassign);
+              setAssignZoneId(null);
+            }}
+            onUpdateZone={flightZones.updateZone}
+            onClose={() => setAssignZoneId(null)}
+          />
+        );
+      })()}
+
+      {/* Violation table */}
+      <ViolationTable
+        records={violationLog.records}
+        collapsed={violationLog.collapsed}
+        selectedRecordId={selectedViolationRecordId}
+        onToggleCollapsed={() => violationLog.setCollapsed(!violationLog.collapsed)}
+        onDeleteRecord={(recordId) => {
+          const droneId = violationLog.getDroneIdForRecord(recordId);
+          if (droneId && !violationLog.hasOtherRecords(droneId, recordId)) {
+            tracking.untrackDrone(droneId);
+          }
+          violationLog.deleteRecord(recordId);
+        }}
+        onToggleTracking={(recordId) => violationLog.toggleTrackingVisible(recordId)}
+        onClearAll={() => {
+          const droneIds = new Set(violationLog.records.map(r => r.droneId));
+          for (const droneId of droneIds) {
+            tracking.untrackDrone(droneId);
+          }
+          violationLog.clearAll();
+          setSelectedViolationRecordId(null);
+        }}
+        onSelectRecord={(recordId) => {
+          setSelectedViolationRecordId(recordId);
+          const record = violationLog.records.find(r => r.id === recordId);
+          if (record) {
+            const drone = drones.find(d => d.id === record.droneId);
+            if (drone) {
+              setSelectedDrone(drone);
+              setFocusPosition({ lat: drone.latitude, lon: drone.longitude });
+            }
+          }
+        }}
+      />
     </div>
   );
 }

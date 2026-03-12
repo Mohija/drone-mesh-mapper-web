@@ -1,4 +1,4 @@
-import type { Drone, DronesResponse, DroneHistoryEntry } from '../types/drone';
+import type { Drone, DronesResponse, DroneHistoryEntry, FlightZone, ZoneViolation, ViolationRecord } from '../types/drone';
 
 export function createMockDrone(overrides: Partial<Drone> = {}): Drone {
   return {
@@ -57,4 +57,46 @@ export function createMockHistory(count = 5): DroneHistoryEntry[] {
     status: 'active' as const,
     battery: 90 - i * 2,
   }));
+}
+
+export function createMockFlightZone(overrides: Partial<FlightZone> = {}): FlightZone {
+  return {
+    id: 'zone001',
+    name: 'Test Zone',
+    color: '#3b82f6',
+    polygon: [[52.025, 8.525], [52.025, 8.545], [52.035, 8.545], [52.035, 8.525]],
+    minAltitudeAGL: null,
+    maxAltitudeAGL: null,
+    assignedDrones: [],
+    createdAt: Date.now() / 1000,
+    updatedAt: Date.now() / 1000,
+    ...overrides,
+  };
+}
+
+export function createMockZoneViolation(overrides: Partial<ZoneViolation> = {}): ZoneViolation {
+  return {
+    droneId: 'TEST001',
+    droneName: 'Test Drone',
+    zoneId: 'zone001',
+    zoneName: 'Test Zone',
+    timestamp: Date.now() / 1000,
+    ...overrides,
+  };
+}
+
+export function createMockViolationRecord(overrides: Partial<ViolationRecord> = {}): ViolationRecord {
+  const now = Date.now() / 1000;
+  return {
+    id: `TEST001_zone001_${Math.round(now * 1000)}`,
+    droneId: 'TEST001',
+    droneName: 'Test Drone',
+    zoneId: 'zone001',
+    zoneName: 'Test Zone',
+    zoneColor: '#ef4444',
+    startTime: now,
+    endTime: null,
+    trackingVisible: true,
+    ...overrides,
+  };
 }

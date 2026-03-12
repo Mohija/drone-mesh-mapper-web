@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fetchDrones, fetchDrone, fetchDroneHistory, setFleetCenter, checkNoFlyWms, fetchNoFlyInfo } from './api';
-import { createMockDrone, createMockDronesResponse, createMockHistory } from './test/mocks';
+import { fetchDrones, fetchDrone, fetchDroneHistory, setFleetCenter, checkNoFlyWms, fetchNoFlyInfo, fetchFlightZones, createFlightZone, updateFlightZone, deleteFlightZone, assignDronesToZone, unassignDronesFromZone, checkZoneViolations } from './api';
+import { createMockDrone, createMockDronesResponse, createMockHistory, createMockFlightZone, createMockZoneViolation } from './test/mocks';
 
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
@@ -137,5 +137,95 @@ describe('fetchNoFlyInfo', () => {
   it('throws on error', async () => {
     mockFetch.mockResolvedValueOnce({ ok: false, status: 502 });
     await expect(fetchNoFlyInfo(52.0, 8.0, 'dipul:flughaefen')).rejects.toThrow('API error: 502');
+  });
+});
+
+// ─── Flight Zones API Tests ──────────────────────────────
+
+describe('fetchFlightZones', () => {
+  it('fetches zones list', async () => {
+    const zones = [createMockFlightZone()];
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(zones) });
+    const result = await fetchFlightZones();
+    expect(mockFetch).toHaveBeenCalledWith('/api/zones');
+    expect(result).toEqual(zones);
+  });
+
+  it('throws on error', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
+    await expect(fetchFlightZones()).rejects.toThrow('API error: 500');
+  });
+});
+
+describe('createFlightZone', () => {
+  it('posts zone data', async () => {
+    const zone = createMockFlightZone();
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(zone) });
+    const result = await createFlightZone({ name: 'Test', color: '#ff0000', polygon: [[0, 0], [0, 1], [1, 1]] });
+    expect(mockFetch).toHaveBeenCalledWith('/api/zones', expect.objectContaining({ method: 'POST' }));
+    expect(result.id).toBe('zone001');
+  });
+
+  it('throws on validation error', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 400 });
+    await expect(createFlightZone({ name: '', color: '#ff0000', polygon: [] })).rejects.toThrow('API error: 400');
+  });
+});
+
+describe('updateFlightZone', () => {
+  it('sends PUT with updates', async () => {
+    const zone = createMockFlightZone({ name: 'Updated' });
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(zone) });
+    const result = await updateFlightZone('zone001', { name: 'Updated' });
+    const url = mockFetch.mock.calls[0][0] as string;
+    expect(url).toBe('/api/zones/zone001');
+    expect(mockFetch.mock.calls[0][1]).toMatchObject({ method: 'PUT' });
+    expect(result.name).toBe('Updated');
+  });
+});
+
+describe('deleteFlightZone', () => {
+  it('sends DELETE', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) });
+    await deleteFlightZone('zone001');
+    expect(mockFetch).toHaveBeenCalledWith('/api/zones/zone001', expect.objectContaining({ method: 'DELETE' }));
+  });
+
+  it('throws on 404', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 404 });
+    await expect(deleteFlightZone('nonexistent')).rejects.toThrow('API error: 404');
+  });
+});
+
+describe('assignDronesToZone', () => {
+  it('posts drone IDs', async () => {
+    const zone = createMockFlightZone({ assignedDrones: ['D1', 'D2'] });
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(zone) });
+    const result = await assignDronesToZone('zone001', ['D1', 'D2']);
+    const url = mockFetch.mock.calls[0][0] as string;
+    expect(url).toBe('/api/zones/zone001/assign');
+    expect(result.assignedDrones).toEqual(['D1', 'D2']);
+  });
+});
+
+describe('unassignDronesFromZone', () => {
+  it('posts drone IDs to unassign', async () => {
+    const zone = createMockFlightZone({ assignedDrones: ['D2'] });
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(zone) });
+    const result = await unassignDronesFromZone('zone001', ['D1']);
+    const url = mockFetch.mock.calls[0][0] as string;
+    expect(url).toBe('/api/zones/zone001/unassign');
+    expect(result.assignedDrones).toEqual(['D2']);
+  });
+});
+
+describe('checkZoneViolations', () => {
+  it('fetches violations', async () => {
+    const data = { violations: [createMockZoneViolation()], count: 1 };
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(data) });
+    const result = await checkZoneViolations();
+    expect(mockFetch).toHaveBeenCalledWith('/api/zones/violations');
+    expect(result.count).toBe(1);
+    expect(result.violations[0].droneId).toBe('TEST001');
   });
 });

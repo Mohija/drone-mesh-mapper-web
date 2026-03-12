@@ -11,6 +11,25 @@ const mockFetchDroneHistory = vi.fn();
 vi.mock('../api', () => ({
   fetchDrone: (...args: unknown[]) => mockFetchDrone(...args),
   fetchDroneHistory: (...args: unknown[]) => mockFetchDroneHistory(...args),
+  lookupAircraft: vi.fn().mockResolvedValue({ identifier: 'TEST', found: false }),
+}));
+
+vi.mock('../elevationGrid', () => ({
+  getElevation: vi.fn().mockReturnValue(null),
+  onGridReady: vi.fn().mockReturnValue(() => {}),
+}));
+
+vi.mock('../lookupCache', () => ({
+  getCachedLookup: vi.fn().mockReturnValue(null),
+  setCachedLookup: vi.fn(),
+  getCachedNfz: vi.fn().mockReturnValue(null),
+  setCachedNfz: vi.fn(),
+}));
+
+vi.mock('../config/noFlyZones', () => ({
+  DIPUL_WMS_URL: 'https://test.wms/wms',
+  getWmsLayerString: vi.fn().mockReturnValue(''),
+  NFZ_LAYERS: [],
 }));
 
 function renderDetailPage(droneId = 'TEST001') {
@@ -104,6 +123,9 @@ describe('DroneDetailPage', () => {
 
     renderDetailPage('NONEXISTENT');
 
+    // First load() call fires immediately — need second failure (failCount >= 2)
+    await vi.advanceTimersByTimeAsync(2500);
+
     await waitFor(() => {
       expect(screen.getByText('Drohne nicht gefunden')).toBeInTheDocument();
     });
@@ -114,6 +136,8 @@ describe('DroneDetailPage', () => {
     mockFetchDroneHistory.mockRejectedValue(new Error('Not found'));
 
     renderDetailPage('NONEXISTENT');
+
+    await vi.advanceTimersByTimeAsync(2500);
 
     await waitFor(() => {
       expect(screen.getByText('Zur Karte')).toBeInTheDocument();

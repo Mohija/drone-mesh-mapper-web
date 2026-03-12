@@ -1,4 +1,4 @@
-import type { DronesResponse, Drone, DroneHistoryEntry, DataSourceSettings, AircraftLookup, ArchivedTrailSummary, ArchivedTrail, TrailPoint } from './types/drone';
+import type { DronesResponse, Drone, DroneHistoryEntry, DataSourceSettings, AircraftLookup, ArchivedTrailSummary, ArchivedTrail, TrailPoint, FlightZone, ZoneViolation } from './types/drone';
 
 function getApiBase(): string {
   const path = window.location.pathname;
@@ -223,4 +223,74 @@ export async function deleteArchivedTrail(id: string): Promise<void> {
     method: 'DELETE',
   });
   if (!res.ok) throw new Error(`API error: ${res.status}`);
+}
+
+// ─── Flight Zones API ────────────────────────────────────────
+
+export async function fetchFlightZones(): Promise<FlightZone[]> {
+  const res = await fetch(`${API_BASE}/zones`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function createFlightZone(data: {
+  name: string;
+  color: string;
+  polygon: [number, number][];
+  minAltitudeAGL?: number | null;
+  maxAltitudeAGL?: number | null;
+}): Promise<FlightZone> {
+  const res = await fetch(`${API_BASE}/zones`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function updateFlightZone(
+  id: string,
+  data: Partial<Pick<FlightZone, 'name' | 'color' | 'polygon' | 'minAltitudeAGL' | 'maxAltitudeAGL'>>,
+): Promise<FlightZone> {
+  const res = await fetch(`${API_BASE}/zones/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function deleteFlightZone(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/zones/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+}
+
+export async function assignDronesToZone(zoneId: string, droneIds: string[]): Promise<FlightZone> {
+  const res = await fetch(`${API_BASE}/zones/${encodeURIComponent(zoneId)}/assign`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ droneIds }),
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function unassignDronesFromZone(zoneId: string, droneIds: string[]): Promise<FlightZone> {
+  const res = await fetch(`${API_BASE}/zones/${encodeURIComponent(zoneId)}/unassign`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ droneIds }),
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function checkZoneViolations(): Promise<{ violations: ZoneViolation[]; count: number }> {
+  const res = await fetch(`${API_BASE}/zones/violations`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
 }

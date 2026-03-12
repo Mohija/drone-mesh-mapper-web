@@ -5,6 +5,29 @@ import { MemoryRouter } from 'react-router-dom';
 import StatusPanel from './StatusPanel';
 import { createMockDrone } from '../test/mocks';
 
+vi.mock('../elevationGrid', () => ({
+  getElevation: vi.fn().mockReturnValue(null),
+  onGridReady: vi.fn().mockReturnValue(() => {}),
+  isGridReady: vi.fn().mockReturnValue(false),
+}));
+
+vi.mock('../lookupCache', () => ({
+  getCachedLookup: vi.fn().mockReturnValue(null),
+  setCachedLookup: vi.fn(),
+  getCachedNfz: vi.fn().mockReturnValue(null),
+  setCachedNfz: vi.fn(),
+}));
+
+vi.mock('../config/noFlyZones', () => ({
+  DIPUL_WMS_URL: 'https://test.wms/wms',
+  getWmsLayerString: vi.fn().mockReturnValue(''),
+  NFZ_LAYERS: [],
+}));
+
+vi.mock('../api', () => ({
+  lookupAircraft: vi.fn().mockResolvedValue({ identifier: 'TEST', found: false }),
+}));
+
 function renderPanel(droneOverrides = {}, onClose = vi.fn()) {
   const drone = createMockDrone(droneOverrides);
   return {
@@ -44,7 +67,7 @@ describe('StatusPanel', () => {
   it('shows altitude and speed', () => {
     renderPanel({ altitude: 150.3, speed: 18.7 });
     expect(screen.getByText('150.3 m')).toBeInTheDocument();
-    expect(screen.getByText('18.7 m/s')).toBeInTheDocument();
+    expect(screen.getByText(/18\.7 m\/s/)).toBeInTheDocument();
   });
 
   it('shows flight pattern', () => {
