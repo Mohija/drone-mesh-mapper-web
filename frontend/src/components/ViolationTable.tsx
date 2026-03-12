@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { ViolationRecord } from '../types/drone';
 
 interface Props {
@@ -10,6 +10,7 @@ interface Props {
   onToggleTracking: (recordId: string) => void;
   onClearAll: () => void;
   onSelectRecord: (recordId: string) => void;
+  onHeightChange?: (height: number) => void;
 }
 
 function formatTime(epoch: number): string {
@@ -50,6 +51,7 @@ export default function ViolationTable({
   onToggleTracking,
   onClearAll,
   onSelectRecord,
+  onHeightChange,
 }: Props) {
   // Force re-render every second for live duration updates
   const [, setTick] = useState(0);
@@ -60,6 +62,24 @@ export default function ViolationTable({
     }
   }, [records.some(r => r.endTime === null)]);
 
+  // Measure height via callback ref — fires when element mounts/unmounts
+  const roRef = useRef<ResizeObserver | null>(null);
+  const measuredRef = useCallback((node: HTMLDivElement | null) => {
+    if (roRef.current) {
+      roRef.current.disconnect();
+      roRef.current = null;
+    }
+    if (!onHeightChange) return;
+    if (!node) {
+      onHeightChange(0);
+      return;
+    }
+    const ro = new ResizeObserver(() => onHeightChange(node.offsetHeight));
+    ro.observe(node);
+    roRef.current = ro;
+    onHeightChange(node.offsetHeight);
+  }, [onHeightChange]);
+
   if (records.length === 0) return null;
 
   const now = Date.now() / 1000;
@@ -68,6 +88,7 @@ export default function ViolationTable({
 
   return (
     <div
+      ref={measuredRef}
       data-testid="violation-table"
       style={{
         position: 'fixed',

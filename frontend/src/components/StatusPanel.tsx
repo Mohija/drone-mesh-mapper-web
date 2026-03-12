@@ -59,6 +59,7 @@ interface Props {
   onTrack?: (drone: Drone) => void;
   onUntrack?: (droneId: string) => void;
   onArchive?: (droneId: string) => Promise<void>;
+  bottomOffset?: number;
 }
 
 const SOURCE_COLORS: Record<string, string> = {
@@ -69,7 +70,7 @@ const SOURCE_COLORS: Record<string, string> = {
   ogn: '#10b981',
 };
 
-export default function StatusPanel({ drone, onClose, enabledNoFlyLayers, trackingState, onTrack, onUntrack, onArchive }: Props) {
+export default function StatusPanel({ drone, onClose, enabledNoFlyLayers, trackingState, onTrack, onUntrack, onArchive, bottomOffset = 0 }: Props) {
   const navigate = useNavigate();
   const statusInfo = STATUS_LABELS[drone.status] || STATUS_LABELS.lost;
   const signal = drone.signal_strength != null ? signalBar(drone.signal_strength) : null;
@@ -219,14 +220,14 @@ export default function StatusPanel({ drone, onClose, enabledNoFlyLayers, tracki
     <div
       data-testid="status-panel"
       style={{
-        position: 'absolute',
+        position: 'fixed',
         top: 0,
         right: 0,
-        bottom: 0,
+        bottom: bottomOffset,
         width: 350,
         background: 'var(--bg-secondary)',
         borderLeft: '1px solid var(--border)',
-        zIndex: 1001,
+        zIndex: 2400,
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',

@@ -70,7 +70,10 @@ export default function MapPage() {
   const [assignZoneId, setAssignZoneId] = useState<string | null>(null);
   const [focusPosition, setFocusPosition] = useState<{ lat: number; lon: number } | null>(null);
   const [selectedViolationRecordId, setSelectedViolationRecordId] = useState<string | null>(null);
+  const [violationTableHeight, setViolationTableHeight] = useState(0);
+  const handleViolationHeightChange = useCallback((h: number) => setViolationTableHeight(h), []);
   const tracking = useTracking();
+  const hasActiveTracking = [...tracking.trackedFlights.values()].some(f => f.state === 'tracking');
   const flightZones = useFlightZones();
   const violationLog = useViolationLog();
   const [enabledNoFlyLayers, setEnabledNoFlyLayers] = useState<string[]>(() => {
@@ -634,12 +637,12 @@ export default function MapPage() {
             onClick={() => setTrackingPanelOpen(prev => !prev)}
             title="Tracking"
             style={{
-              background: tracking.trackedFlights.size > 0 ? 'rgba(249, 115, 22, 0.15)' : 'var(--bg-secondary)',
-              border: `1px solid ${tracking.trackedFlights.size > 0 ? '#f97316' : 'var(--border)'}`,
+              background: hasActiveTracking ? 'rgba(249, 115, 22, 0.15)' : 'var(--bg-secondary)',
+              border: `1px solid ${hasActiveTracking ? '#f97316' : 'var(--border)'}`,
               borderRadius: 8,
               padding: '8px 12px',
               cursor: 'pointer',
-              color: tracking.trackedFlights.size > 0 ? '#f97316' : 'var(--text-secondary)',
+              color: hasActiveTracking ? '#f97316' : 'var(--text-secondary)',
               fontSize: 14,
               display: 'flex',
               alignItems: 'center',
@@ -799,6 +802,7 @@ export default function MapPage() {
           onTrack={tracking.trackDrone}
           onUntrack={tracking.untrackDrone}
           onArchive={tracking.archiveFlight}
+          bottomOffset={violationTableHeight}
         />
       )}
 
@@ -827,6 +831,7 @@ export default function MapPage() {
         collapsed={violationLog.collapsed}
         selectedRecordId={selectedViolationRecordId}
         onToggleCollapsed={() => violationLog.setCollapsed(!violationLog.collapsed)}
+        onHeightChange={handleViolationHeightChange}
         onDeleteRecord={(recordId) => {
           pollSeqRef.current++;
           const droneId = violationLog.getDroneIdForRecord(recordId);

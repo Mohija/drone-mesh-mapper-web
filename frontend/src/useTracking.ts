@@ -258,7 +258,8 @@ export function useTracking(): UseTrackingReturn {
   }, [trackedFlights, archiveTrails]);
 
   const isTracked = useCallback((droneId: string) => {
-    return trackedFlights.get(droneId);
+    const flight = trackedFlights.get(droneId);
+    return flight?.state === 'tracking' ? flight : undefined;
   }, [trackedFlights]);
 
   return {
