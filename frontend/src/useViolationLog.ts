@@ -52,6 +52,9 @@ export function useViolationLog(): UseViolationLogReturn {
     const activeKeys = new Set(activeViolations.map(v => `${v.droneId}::${v.zoneId}`));
     const activeDroneIds = new Set(drones.map(d => d.id));
 
+    // Collect new violation keys for post-update side effects
+    const newAutoTrackDroneIds: string[] = [];
+
     setRecords(prev => {
       const next = prev.map(r => ({ ...r }));
       let hasNew = false;
@@ -78,10 +81,9 @@ export function useViolationLog(): UseViolationLogReturn {
           });
           hasNew = true;
 
-          // Auto-track the drone
+          // Mark for auto-tracking (side effect happens AFTER setRecords)
           if (!alertedRef.current.has(key)) {
-            const drone = drones.find(d => d.id === v.droneId);
-            if (drone && onAutoTrack) onAutoTrack(drone);
+            newAutoTrackDroneIds.push(v.droneId);
             alertedRef.current.add(key);
           }
         }
@@ -99,13 +101,18 @@ export function useViolationLog(): UseViolationLogReturn {
         }
       }
 
-      if (hasNew) {
-        playAlertSound();
-      }
-
       if (!hasNew && !hasEnded) return prev;
       return next;
     });
+
+    // Side effects OUTSIDE the state updater — safe from React re-runs
+    if (newAutoTrackDroneIds.length > 0) {
+      playAlertSound();
+      for (const droneId of newAutoTrackDroneIds) {
+        const drone = drones.find(d => d.id === droneId);
+        if (drone && onAutoTrack) onAutoTrack(drone);
+      }
+    }
   }, []);
 
   const deleteRecord = useCallback((recordId: string) => {

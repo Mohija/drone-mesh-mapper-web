@@ -82,6 +82,8 @@ export default function MapPage() {
     }
   });
   const intervalRef = useRef<ReturnType<typeof setInterval>>();
+  // Sequence counter: incremented on clearAll to discard stale in-flight polls
+  const pollSeqRef = useRef(0);
 
   // Persist no-fly layer selection
   useEffect(() => {
@@ -89,6 +91,7 @@ export default function MapPage() {
   }, [enabledNoFlyLayers]);
 
   const loadDrones = useCallback(async () => {
+    const seq = pollSeqRef.current;
     try {
       // Always send center + radius. Use GPS position if available, otherwise default (Bielefeld)
       const lat = userLocation ? userLocation.latitude : DEFAULT_CENTER.lat;
@@ -96,6 +99,10 @@ export default function MapPage() {
       const r = radiusEnabled ? radius : 0;
 
       const data = await fetchDrones(lat, lon, r);
+
+      // Discard result if a clearAll happened while we were fetching
+      if (pollSeqRef.current !== seq) return;
+
       setDrones(data.drones);
       setDroneCount(data.count);
       setError(null);
@@ -821,6 +828,7 @@ export default function MapPage() {
         selectedRecordId={selectedViolationRecordId}
         onToggleCollapsed={() => violationLog.setCollapsed(!violationLog.collapsed)}
         onDeleteRecord={(recordId) => {
+          pollSeqRef.current++;
           const droneId = violationLog.getDroneIdForRecord(recordId);
           if (droneId && !violationLog.hasOtherRecords(droneId, recordId)) {
             tracking.untrackDrone(droneId);
@@ -829,6 +837,8 @@ export default function MapPage() {
         }}
         onToggleTracking={(recordId) => violationLog.toggleTrackingVisible(recordId)}
         onClearAll={() => {
+          // Invalidate any in-flight poll so stale results don't overwrite fresh state
+          pollSeqRef.current++;
           const droneIds = new Set(violationLog.records.map(r => r.droneId));
           for (const droneId of droneIds) {
             tracking.untrackDrone(droneId);
