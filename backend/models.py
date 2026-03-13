@@ -2,6 +2,7 @@
 SQLAlchemy models for FlightArc multi-tenant system.
 """
 
+import secrets
 import time
 import uuid
 
@@ -33,6 +34,7 @@ class Tenant(db.Model):
     flight_zones = db.relationship("FlightZone", backref="tenant", cascade="all, delete-orphan", lazy=True)
     trail_archives = db.relationship("TrailArchive", backref="tenant", cascade="all, delete-orphan", lazy=True)
     violation_records = db.relationship("ViolationRecord", backref="tenant", cascade="all, delete-orphan", lazy=True)
+    receiver_nodes = db.relationship("ReceiverNode", backref="tenant", cascade="all, delete-orphan", lazy=True)
 
     def to_dict(self):
         return {
@@ -254,4 +256,81 @@ class TrailArchive(db.Model):
         }
         if include_trail:
             result["trail"] = self.trail or []
+        return result
+
+
+class ReceiverNode(db.Model):
+    """Hardware receiver node (ESP32-S3, ESP32-C3, ESP8266) for Open Drone ID detection."""
+    __tablename__ = "receiver_nodes"
+
+    HARDWARE_TYPES = ("esp32-s3", "esp32-c3", "esp8266")
+    # Status thresholds (seconds since last heartbeat)
+    ONLINE_THRESHOLD = 90
+    STALE_THRESHOLD = 300
+
+    id = db.Column(db.String(8), primary_key=True, default=_uuid8)
+    tenant_id = db.Column(db.String(8), db.ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    name = db.Column(db.String(200), nullable=False)
+    hardware_type = db.Column(db.String(20), nullable=False)  # esp32-s3, esp32-c3, esp8266
+    api_key = db.Column(db.String(64), unique=True, nullable=False, default=lambda: secrets.token_hex(32))
+    firmware_version = db.Column(db.String(20), nullable=True)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+
+    # Location (updated via heartbeat or captive portal GPS)
+    last_latitude = db.Column(db.Float, nullable=True)
+    last_longitude = db.Column(db.Float, nullable=True)
+    last_location_accuracy = db.Column(db.Float, nullable=True)
+
+    # Health / status
+    last_heartbeat = db.Column(db.Float, nullable=True)  # epoch timestamp
+    last_ip = db.Column(db.String(45), nullable=True)
+    wifi_ssid = db.Column(db.String(64), nullable=True)
+    wifi_rssi = db.Column(db.Integer, nullable=True)
+    free_heap = db.Column(db.Integer, nullable=True)
+    uptime_seconds = db.Column(db.Integer, nullable=True)
+
+    # Detection counters
+    total_detections = db.Column(db.Integer, default=0, nullable=False)
+    detections_since_boot = db.Column(db.Integer, default=0, nullable=False)
+
+    created_at = db.Column(db.Float, default=_now, nullable=False)
+    updated_at = db.Column(db.Float, default=_now, onupdate=_now, nullable=False)
+
+    @property
+    def status(self) -> str:
+        """Compute online status from last_heartbeat."""
+        if not self.last_heartbeat:
+            return "offline"
+        age = time.time() - self.last_heartbeat
+        if age < self.ONLINE_THRESHOLD:
+            return "online"
+        if age < self.STALE_THRESHOLD:
+            return "stale"
+        return "offline"
+
+    def to_dict(self, include_key=False):
+        result = {
+            "id": self.id,
+            "tenantId": self.tenant_id,
+            "name": self.name,
+            "hardwareType": self.hardware_type,
+            "firmwareVersion": self.firmware_version,
+            "isActive": self.is_active,
+            "lastLatitude": self.last_latitude,
+            "lastLongitude": self.last_longitude,
+            "lastLocationAccuracy": self.last_location_accuracy,
+            "lastHeartbeat": self.last_heartbeat,
+            "lastIp": self.last_ip,
+            "wifiSsid": self.wifi_ssid,
+            "wifiRssi": self.wifi_rssi,
+            "freeHeap": self.free_heap,
+            "uptimeSeconds": self.uptime_seconds,
+            "totalDetections": self.total_detections,
+            "detectionsSinceBoot": self.detections_since_boot,
+            "status": self.status,
+            "createdAt": self.created_at,
+            "updatedAt": self.updated_at,
+        }
+        if include_key:
+            result["apiKey"] = self.api_key
         return result

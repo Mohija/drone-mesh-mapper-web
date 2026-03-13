@@ -2,10 +2,365 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-13 (Adress-Geocoding für Einsatz-Zonen)
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-13 (E2E-Tests erweitert, data-testid Attribute)
 - **Typ:** Projekt | **Status:** Development
 
+## Offene Aufgaben
+- [x] ESP Hardware-Empfänger Phase 1: Backend-Grundlagen
+- [x] ESP Hardware-Empfänger Phase 5.1: Farben für Empfänger-Drohnen
+- [x] ESP Hardware-Empfänger Phase 2: Frontend Admin-UI
+- [x] ESP Hardware-Empfänger Phase 3: ESP Firmware
+- [x] ESP Hardware-Empfänger Phase 5: Map-Integration
+- [x] ESP Hardware-Empfänger Phase 4: Flash-Wizard
+- [x] ESP Hardware-Empfänger Phase 6: Tests
+- [x] Umfassende E2E-Tests für Receiver-System (60 Tests, alle bestanden)
+
 ## Änderungshistorie
+
+### 2026-03-13 - ESP Hardware-Empfänger: Vollständige Implementierung (Phase 1-6)
+
+**Phase 1 — Backend-Grundlagen:**
+- ReceiverNode DB-Model mit 20 Feldern (hardware_type, api_key, Standort, Health-Daten, Detection-Counter)
+- `@node_auth_required` Decorator für ESP-Authentifizierung via X-Node-Key Header
+- ReceiverProvider: In-Memory-Store mit Thread-Safe Deduplizierung (stärkstes RSSI), 30s Staleness
+- ProviderRegistry erweitert: tenant_id Parameter, receiver_provider Property
+- receiver_routes Blueprint: Admin-CRUD (7 Endpoints) + Node-Ingest/Heartbeat (2 Endpoints) + Firmware-Build
+- "receiver" als neue Datenquelle in DEFAULT_SOURCES
+- receiver_version im /api/drones Response (Version-Counter-Pattern)
+
+**Phase 5.1 — Farben:**
+- SOURCE_COLORS um `receiver: '#14b8a6'` (Teal) in MapComponent, StatusPanel, SettingsPage, DroneDetailPage
+
+**Phase 2 — Frontend Admin-UI:**
+- ReceiverNode TypeScript-Interface + 7 API-Funktionen (fetchReceivers, createReceiver, updateReceiver, deleteReceiver, regenerateReceiverKey, fetchReceiverStats, buildFirmware)
+- ReceiverList.tsx: Tabelle mit Status-Dots, ESP8266-Light-Badge, Erstellen-Dialog, API-Key-Anzeige (einmal), Detail-Expand, Auto-Refresh 30s
+- AdminLayout.tsx: Nav-Eintrag "Empfänger"
+- AdminDashboard.tsx: Empfänger Online/Gesamt Karte
+- App.tsx: Route `/admin/receivers`
+
+**Phase 3 — ESP Firmware:**
+- platformio.ini: 3 Environments (esp32-s3, esp32-c3, esp8266)
+- config.h: Build-Flags, Runtime-Konstanten
+- wifi_manager: AP+STA Dual-Mode, NVS-Persistence, Auto-Reconnect, WiFi-Scan
+- odid_scanner: Promiscuous Mode + BLE NimBLE, ODID Beacon/NAN/BLE Parsing, Ring-Buffer
+- http_client: POST Ingest (2s) + Heartbeat (30s), TLS (ESP32), Retry-Logic
+- web_server: Captive Portal (WiFi-Config, GPS via Browser Geolocation, Status)
+- led_status: 5 LED-Muster (Boot/WiFi/Online/Detection/Error)
+- main.cpp: Boot-Sequenz + Main Loop
+
+**Phase 4 — Flash-Wizard:**
+- ReceiverFlashWizard.tsx: 5-Schritte-Wizard (Intro → Config → Build → Download → Done)
+- Backend-Endpoint POST /api/receivers/firmware/build: On-Demand PlatformIO-Kompilierung
+- Firmware-Download als .bin, manuelle esptool-Anleitung als Fallback
+
+**Phase 5 — Map/Settings-Integration:**
+- receiver_count + receiver_nodes Felder in Drone-Interface
+- StatusPanel zeigt Empfänger-Anzahl bei Receiver-Drohnen
+- Receiver-Drohnen erscheinen automatisch auf Karte (via /api/drones, Teal-Farbe)
+
+**Phase 6 — E2E-Tests (60 Tests, alle bestanden):**
+- receivers.spec.ts komplett neu geschrieben mit umfassender Abdeckung
+- **Receiver API CRUD (17 Tests):** List, Create (3 HW-Typen), Validierung (invalid HW, leerer Name, Whitespace), Get Single, Get 404, Update Name, Update Reject Empty, Deactivate, Reactivate, Regenerate Key, Delete, Delete 404
+- **Receiver Stats API (2 Tests):** Alle Stat-Felder vorhanden, total inkrementiert nach Create
+- **Node Authentication (10 Tests):** Heartbeat ohne/falscher/gültiger Key, Heartbeat persistiert Felder (firmware_version, wifi_ssid, wifi_rssi, free_heap, uptime, location, status=online), Ingest ohne Key 401, Ingest speichert + Counter, Ingest leere Detections 400, Ingest aktualisiert Location, Deaktivierter Receiver → 403
+- **Receiver Version Counter (2 Tests):** /api/drones enthält receiver_version, Version inkrementiert nach Ingest
+- **API Auth Requirements (4 Tests):** GET/POST/stats ohne Token → 401, Invalid Token → 401
+- **Firmware Build API (4 Tests):** Erfordert node_id, Erfordert backend_url, Non-existent Node → 404, PlatformIO-Fehlerbehandlung
+- **Receiver Admin UI (14 Tests):** Sidebar-Navigation, Seitentitel, Stats-Bar (5 Karten), Create-Form Toggle, Create via UI + API-Key-Banner, Dismiss Key-Banner, Tabelle zeigt Receiver, ESP8266-Warning, Row Expand/Collapse, Detail-Inhalt (ID, Firmware, WiFi, Heap), Online-Status nach Heartbeat, Deaktivieren (Akt./Deakt.), Löschen entfernt aus Tabelle, Key-Regeneration zeigt neuen Key
+- **Flash Wizard UI (4 Tests):** Modal öffnet mit Receiver-Name, Intro-Step mit Hardware-Typ, Navigation Intro→Config mit Feldern, Close-Button schließt Modal
+- **Admin Dashboard (1 Test):** "Empfänger Online" Karte sichtbar
+- **Settings Page (2 Tests):** Receiver-Quelle "Empfänger" sichtbar, Beschreibung "Hardware-Empfänger" sichtbar
+
+**Dateien (Backend):**
+- `backend/models.py` — ReceiverNode Model + Tenant-Relationship
+- `backend/auth.py` — node_auth_required Decorator
+- `backend/providers/receiver_provider.py` — NEU
+- `backend/providers/__init__.py` — ProviderRegistry Integration
+- `backend/routes/receiver_routes.py` — NEU: CRUD + Node + Firmware Build
+- `backend/routes/__init__.py` — Blueprint Registration
+- `backend/settings.py` — receiver in DEFAULT_SOURCES
+- `backend/app.py` — tenant_id, receiver_version, Registry in app.config
+
+**Dateien (Frontend):**
+- `frontend/src/api.ts` — ReceiverNode Interface + 7 API-Funktionen
+- `frontend/src/types/drone.ts` — receiver_version, receiver_count, receiver_nodes
+- `frontend/src/App.tsx` — Route /admin/receivers
+- `frontend/src/components/admin/ReceiverList.tsx` — NEU
+- `frontend/src/components/admin/ReceiverFlashWizard.tsx` — NEU
+- `frontend/src/components/admin/AdminLayout.tsx` — Nav-Eintrag
+- `frontend/src/components/admin/AdminDashboard.tsx` — Stats-Karte
+- `frontend/src/components/MapComponent.tsx` — receiver Farbe
+- `frontend/src/components/SettingsPage.tsx` — receiver Farbe
+- `frontend/src/components/StatusPanel.tsx` — receiver Farbe + count
+- `frontend/src/components/DroneDetailPage.tsx` — receiver Farbe
+- `frontend/e2e/receivers.spec.ts` — NEU: 60 E2E-Tests (API + UI + Wizard + Dashboard + Settings)
+
+**Dateien (Firmware):**
+- `firmware/platformio.ini` — NEU
+- `firmware/src/main.cpp` — NEU
+- `firmware/src/config.h` — NEU
+- `firmware/src/wifi_manager.h/.cpp` — NEU
+- `firmware/src/odid_scanner.h/.cpp` — NEU
+- `firmware/src/http_client.h/.cpp` — NEU
+- `firmware/src/web_server.h/.cpp` — NEU
+- `firmware/src/led_status.h/.cpp` — NEU
+
+### 2026-03-13 - E2E-Tests erweitert: data-testid Attribute + 60 umfassende Tests
+
+**Änderungen:**
+- `data-testid` Attribute zu ReceiverList.tsx hinzugefügt (receiver-list, receiver-create-btn, receiver-create-form, receiver-name-input, receiver-type-select, receiver-submit-btn, esp8266-warning, api-key-banner, api-key-value, api-key-copy, api-key-dismiss, receiver-stats, stat-total/online/stale/offline/detections, receiver-empty, receiver-table, receiver-row-{id}, receiver-status-{id}, receiver-status-label-{id}, receiver-toggle-{id}, receiver-delete-{id}, receiver-detail-{id}, receiver-detail-grid-{id}, receiver-flash-{id}, receiver-regen-key-{id})
+- `data-testid` Attribute zu ReceiverFlashWizard.tsx hinzugefügt (flash-wizard-overlay, flash-wizard, flash-wizard-title, flash-wizard-close, flash-wizard-step-label, flash-step-intro, flash-wizard-next, flash-step-config, flash-backend-url, flash-wifi-ssid, flash-wifi-pass)
+- receivers.spec.ts komplett neu geschrieben: 60 Tests in 10 describe-Blöcken (vorher 15 Tests)
+- Alle 60 Tests bestanden in 22.2 Sekunden
+- Backend-Neustart war nötig (Server lief mit alter Version ohne Receiver-Routes)
+
+**Dateien:**
+- `frontend/src/components/admin/ReceiverList.tsx` — data-testid Attribute
+- `frontend/src/components/admin/ReceiverFlashWizard.tsx` — data-testid Attribute
+- `frontend/e2e/receivers.spec.ts` — 60 E2E-Tests (komplett neu)
+- `manifest.json` — lastModified aktualisiert
+
+### 2026-03-13 - ESP Hardware-Empfänger: Vollständiger Implementierungsplan
+**Status: Phase 1 umgesetzt, Phasen 2-6 offen**
+**Referenz:** github.com/colonelpanichacks/drone-mesh-mapper (Original-Hardware-Projekt)
+
+#### Ziel
+ESP32-S3, ESP32-C3 und ESP8266 Controller als Hardware-Empfänger für Open Drone ID (ODID) in FlightArc integrieren. Controller erkennen Drohnen via WiFi-Sniffing, senden Daten per HTTP/HTTPS ans Backend, erscheinen als neue Datenquelle "Empfänger" neben Simulator/OpenSky/etc.
+
+#### Entscheidungen (mit User abgestimmt)
+1. **Hardware:** ESP32-S3 (BLE+WiFi), ESP32-C3 (BLE+WiFi), ESP8266 "Light" (nur WiFi-Beacon, kein BLE, kein TLS)
+2. **Kommunikation:** HTTP (lokal) + HTTPS (Internet), Fokus auf Internet-Betrieb
+3. **AP-Verhalten:** Hotspot immer aktiv (AP+STA Dual-Mode). Offline-Status bei Stromausfall. Auto-Reconnect
+4. **Key-Übertragung:** Automatisch beim Flashen via Serial (in Firmware eingebrannt via Build-Flags)
+5. **Firmware-Build:** On-Demand auf Server via PlatformIO CLI (muss installiert werden)
+6. **Deduplizierung:** Standard: stärkstes RSSI. Optional: Triangulation bei ≥3 Empfängern
+7. **Mobilität:** Controller sind mobil. Standort via Handy-GPS über Captive Portal Browser-Geolocation
+8. **ESP8266-Einschränkungen:** Kein BLE-ODID, kein HTTPS (80KB RAM), nur Beacon-Frame-ODID — muss im UI sichtbar sein
+
+#### Phase 1: Backend-Grundlagen
+
+**1.1 Neues DB-Model `ReceiverNode`** (`backend/models.py`)
+```python
+class ReceiverNode(db.Model):
+    __tablename__ = "receiver_nodes"
+    id = db.Column(db.String(8), primary_key=True, default=_uuid8)
+    tenant_id = db.Column(db.String(8), db.ForeignKey("tenants.id", ondelete="CASCADE"))
+    name = db.Column(db.String(200), nullable=False)
+    hardware_type = db.Column(db.String(20), nullable=False)  # "esp32-s3"|"esp32-c3"|"esp8266"
+    api_key = db.Column(db.String(64), unique=True, nullable=False)  # secrets.token_hex(32)
+    firmware_version = db.Column(db.String(20), nullable=True)
+    is_active = db.Column(db.Boolean, default=True)
+    last_latitude/last_longitude/last_location_accuracy = db.Column(db.Float, nullable=True)
+    last_heartbeat = db.Column(db.Float, nullable=True)  # epoch
+    last_ip = db.Column(db.String(45), nullable=True)
+    wifi_ssid = db.Column(db.String(64), nullable=True)
+    wifi_rssi = db.Column(db.Integer, nullable=True)
+    free_heap = db.Column(db.Integer, nullable=True)
+    uptime_seconds = db.Column(db.Integer, nullable=True)
+    total_detections = db.Column(db.Integer, default=0)
+    detections_since_boot = db.Column(db.Integer, default=0)
+    created_at/updated_at = db.Column(db.Float)
+```
+Status berechnet aus `last_heartbeat`: online (<90s), stale (90-300s), offline (>300s)
+
+**1.2 `@node_auth_required` Decorator** (`backend/auth.py`)
+- Prüft `X-Node-Key` Header gegen `api_key` in DB
+- Setzt `g.receiver_node` und `g.tenant_id`
+- Prüft `is_active` und Tenant-Status
+
+**1.3 ReceiverProvider** (`backend/providers/receiver_provider.py`)
+- In-Memory-Store: `_store[tenant_id][basic_id] = {detections: {node_id: data}, merged: drone_dict}`
+- `ingest(tenant_id, node_id, node_lat, node_lon, detections)` → speichert/merged
+- `fetch_drones(tenant_id)` → gibt nicht-stale Drohnen zurück (>30s = stale)
+- Deduplizierung: stärkstes RSSI pro basic_id über alle Empfänger
+- Thread-safe via `threading.Lock`
+- Normalisiert auf Standard-Drohnen-Format (gleich wie andere Provider)
+
+**1.4 ProviderRegistry-Integration** (`backend/providers/__init__.py`)
+- `_receiver_provider = ReceiverProvider()` im `__init__`
+- `get_all_drones()` bekommt neuen Parameter `tenant_id`
+- Wenn "receiver" in `enabled_sources`: `fetch_drones(tenant_id)` + Compound-ID `receiver_{basic_id}`
+
+**1.5 API-Endpoints** (`backend/routes/receiver_routes.py`, Prefix `/api/receivers`)
+
+Admin-CRUD (JWT, tenant_admin+):
+| Methode | Pfad | Beschreibung |
+|---------|------|-------------|
+| GET | `/api/receivers` | Liste aller Empfänger des Mandanten |
+| POST | `/api/receivers` | Empfänger erstellen (name, hardware_type) → api_key generiert |
+| GET | `/api/receivers/:id` | Einzelner Empfänger |
+| PUT | `/api/receivers/:id` | Name/Status ändern |
+| DELETE | `/api/receivers/:id` | Empfänger löschen |
+| POST | `/api/receivers/:id/regenerate-key` | Neuen API-Key generieren |
+| GET | `/api/receivers/stats` | Aggregierte Statistiken |
+
+Node-Endpoints (X-Node-Key Header):
+| Methode | Pfad | Body | Beschreibung |
+|---------|------|------|-------------|
+| POST | `/api/receivers/ingest` | `{node_lat, node_lon, detections: [{basic_id, lat, lon, alt, rssi, ...}]}` | Erkennungen senden |
+| POST | `/api/receivers/heartbeat` | `{firmware_version, wifi_ssid, wifi_rssi, free_heap, uptime_seconds}` | Status-Update |
+| POST | `/api/receivers/firmware/build` | `{hardware_type, backend_url, api_key, wifi_ssid?, wifi_password?}` | On-Demand Firmware-Build (super_admin) |
+
+**1.6 Neue Datenquelle** (`backend/settings.py`)
+```python
+"receiver": {"enabled": False, "label": "Empfänger", "description": "Hardware-Empfänger (ESP32/ESP8266) für Open Drone ID"}
+```
+
+**1.7 receiver_version** im `/api/drones`-Response (Version-Counter-Pattern)
+
+**1.8 PlatformIO installieren** (`backend/scripts/install-platformio.sh`)
+```bash
+pip3 install --user platformio
+~/.local/bin/pio platform install espressif32 espressif8266
+```
+
+#### Phase 2: Frontend Admin-UI
+
+**2.1 TypeScript-Interface** (`frontend/src/api.ts`)
+```typescript
+interface ReceiverNode {
+  id, tenantId, name, hardwareType, apiKey, firmwareVersion, isActive,
+  lastLatitude, lastLongitude, lastLocationAccuracy, lastHeartbeat, lastIp,
+  wifiSsid, wifiRssi, freeHeap, uptimeSeconds, totalDetections,
+  detectionsSinceBoot, status: 'online'|'stale'|'offline', createdAt, updatedAt
+}
+```
+
+**2.2 API-Funktionen:** fetchReceivers, createReceiver, updateReceiver, deleteReceiver, regenerateReceiverKey, fetchReceiverStats, buildFirmware
+
+**2.3 ReceiverList.tsx** (`frontend/src/components/admin/ReceiverList.tsx`)
+- Tabelle: Status-Dot, Name, Typ (ESP8266 mit gelber "Eingeschränkt"-Badge), Letzter Kontakt, Standort, Erkennungen, Firmware, Aktionen
+- Erstellen-Dialog: Name + Hardware-Typ-Auswahl (S3/C3/ESP8266 mit Einschränkungshinweis)
+- API-Key-Anzeige (einmal, mit Copy-Button)
+- Auto-Refresh alle 30s
+- Flash-Button öffnet Wizard
+
+**2.4 ReceiverFlashWizard.tsx** (Phase 2: Placeholder, Phase 4: volle Implementierung)
+
+**2.5 AdminLayout.tsx** → neuer Nav-Eintrag "Empfänger"
+**2.6 AdminDashboard.tsx** → Empfänger-Karten (Online/Gesamt)
+**2.7 App.tsx** → Route `/admin/receivers`
+
+#### Phase 3: ESP32/ESP8266 Firmware
+
+**3.1 PlatformIO-Projekt** (`firmware/`)
+```
+firmware/
+  platformio.ini        # 3 Environments: esp32-s3, esp32-c3, esp8266
+  src/
+    main.cpp            # Boot-Sequenz, Loop mit Ingest/Heartbeat-Timer
+    config.h            # Build-Flags (Backend-URL, API-Key, WiFi-Credentials)
+    wifi_manager.h/.cpp # AP+STA Dual-Mode, NVS-Persistence, Auto-Reconnect
+    web_server.h/.cpp   # Captive Portal (WiFi-Config, GPS via Browser, Status)
+    odid_scanner.h/.cpp # Promiscuous Mode, ODID Beacon+NAN+BLE Parsing
+    http_client.h/.cpp  # POST Ingest+Heartbeat, TLS (ESP32), Retry-Logic
+    led_status.h/.cpp   # LED-Muster für Status-Anzeige
+  data/
+    index.html          # Captive Portal Webseite
+```
+
+**3.2 platformio.ini Environments:**
+- `esp32-s3`: espressif32, BLE via NimBLE, TLS, AP+STA
+- `esp32-c3`: espressif32, BLE via NimBLE, TLS, AP+STA
+- `esp8266`: espressif8266, kein BLE, kein TLS, nur Beacon-Frames
+
+**3.3 WiFi Manager:**
+- AP immer aktiv: SSID `FlightArc-{node_id_kurz}` (offen)
+- STA verbindet zum konfigurierten WLAN
+- Credentials in NVS (non-volatile storage)
+- Auto-Reconnect bei Verbindungsverlust (alle 10s)
+- WiFi-Scan alle 60s für Captive Portal
+
+**3.4 Captive Portal** (ESPAsyncWebServer auf Port 80):
+- `GET /` → Status + Config-Seite
+- `GET /scan` → JSON: sichtbare WLANs
+- `POST /connect` → WiFi-Credentials speichern + verbinden
+- `POST /location` → GPS vom Handy speichern (Browser Geolocation API)
+- `GET /status` → JSON: Verbindungsstatus, Backend-Erreichbarkeit, Erkennungen
+- Captive Portal Detection (Android/Apple/Windows URLs)
+
+**3.5 ODID Scanner:**
+- WiFi Promiscuous Mode: Beacon-Frames (OUI 0xFA0BBC) + NAN Action Frames (ESP32)
+- BLE: NimBLE Scan für ODID Service UUID 0xFFFA (ESP32 nur)
+- ESP8266: Nur Beacon-Frames (kein NAN, kein BLE)
+- Ring-Buffer: max 50 Erkennungen bis nächster Ingest
+
+**3.6 HTTP Client:**
+- POST `/api/receivers/ingest` alle 2s mit gepufferten Erkennungen
+- POST `/api/receivers/heartbeat` alle 30s
+- Header: `X-Node-Key: {api_key}`
+- TLS auf ESP32 (WiFiClientSecure mit CA-Bundle)
+- HTTP-only auf ESP8266
+- Retry: 3x mit exponential backoff (1s/2s/4s)
+
+**3.7 LED-Status:**
+| Zustand | Muster |
+|---------|--------|
+| Boot / kein WiFi | Schnelles Blinken (100ms) |
+| WiFi OK, kein Backend | Langsames Blinken (500ms) |
+| Online (Heartbeat OK) | Dauerhaft an |
+| Erkennung empfangen | Kurzer Flash (50ms aus) |
+| Fehler | Doppelblink alle 2s |
+
+**3.8 main.cpp Boot-Sequenz:**
+```
+setup(): LED → WiFiManager.begin() → WebServer.begin() → Scanner.begin() → HTTPClient.begin()
+loop(): WiFiManager.loop() → Scanner.loop() → LED-Update → Ingest (2s) → Heartbeat (30s)
+```
+
+#### Phase 4: Web-Flash-Wizard
+
+**4.1 Dependency:** `esptool-js: ^0.4.3` (npm)
+
+**4.2 ReceiverFlashWizard.tsx** — 7-Schritte-Wizard:
+1. **Intro:** Hardware-Typ, Voraussetzungen, ESP8266-Warnung falls zutreffend
+2. **Serial:** `navigator.serial.requestPort()` (nur Chrome/Edge)
+3. **WiFi:** Optional SSID+Password + Backend-URL konfigurieren
+4. **Build:** `POST /api/receivers/firmware/build` → Firmware on-demand kompilieren (30-60s)
+5. **Flash:** esptool-js `ESPLoader.writeFlash()` mit Fortschrittsbalken
+6. **Verify:** Warte auf ersten Heartbeat (poll alle 2s, Timeout 60s)
+7. **Done:** Erfolgs-Meldung, Status-Anzeige
+
+**Non-Chrome Fallback:** Firmware-Download als .bin + manuelle esptool.py-Anleitung
+
+**4.3 Backend Build-Endpoint:** PlatformIO CLI mit `-D` Build-Flags für Backend-URL, API-Key, WiFi-Credentials. Binary als Download zurück.
+
+#### Phase 5: Karten- & Settings-Integration
+
+**5.1 SOURCE_COLORS:** `receiver: '#14b8a6'` (Teal) in MapComponent, StatusPanel, SettingsPage, DroneDetailPage
+
+**5.2 Empfänger-Marker auf Karte:** Eigene Marker für Empfänger-Standorte (Teal Antenne-Icon), Status-abhängige Farbe (grün/gelb/grau)
+
+**5.3 Settings-Erweiterung:** Wenn "Empfänger" aktiv → Status-Widget: "X von Y online, Z Erkennungen/min"
+
+**5.4 ESP8266-Hinweise:** Gelbe Badge "Eingeschränkt" in ReceiverList, Flash-Wizard, Settings-Hinweis
+
+**5.5 Drohnen-Detail:** `receiver_count` Feld → "(3 Empfänger)" wenn mehrere Nodes dieselbe Drohne sehen
+
+**5.6 Empfänger-Standorte:** MapPage fetcht ReceiverNodes wenn Source aktiv, zeigt als separate Marker-Layer
+
+#### Phase 6: Tests
+
+**Backend Unit-Tests** (`backend/tests/test_receivers.py`):
+- TestReceiverCRUD: list, create, create_invalid, get, get_notfound, update, deactivate, delete, regenerate_key, stats
+- TestNodeAuth: ohne Key (401), falscher Key (401), gültiger Key (200), inaktiver Node (401)
+- TestIngest: single, multiple, stats_update
+- TestReceiverProvider: in_drone_list, receiver_version
+
+**E2E-Tests** (`frontend/e2e/receivers.spec.ts`):
+- Admin-Seite erreichbar, Empfänger erstellen, Erstellen-Button, Ingest-Endpoint, Stats, Auth-Rejection, Version-Counter, Dashboard-Karten
+
+#### Implementierungsreihenfolge
+```
+Phase 1 (Backend) → Phase 5.1 (Colors) → Phase 2 (Admin-UI) → Phase 3 (Firmware) → Phase 5 (Map) → Phase 4 (Flash-Wizard) → Phase 6 (Tests)
+```
+Phase 2 und Phase 3 können parallel laufen. Phase 4 braucht Phase 2 + 3. Tests laufen begleitend.
+
+#### Voraussetzungen
+- PlatformIO CLI auf Server installieren: `pip3 install platformio`
+- ESP32/ESP8266 Plattform-Support: `pio platform install espressif32 espressif8266`
+- npm: `esptool-js@^0.4.3` für Flash-Wizard
+- Web Serial API nur in Chrome/Edge (Fallback für andere Browser)
 
 ### 2026-03-13 - Adress-Geocoding für Einsatz-Zonen
 **Änderungen:**

@@ -27,6 +27,8 @@ export interface Drone {
   icao_hex?: string;
   ogn_aircraft_type?: number;
   ogn_aircraft_type_label?: string;
+  receiver_count?: number;
+  receiver_nodes?: string[];
 }
 
 export interface FAAData {
@@ -65,6 +67,7 @@ export interface DronesResponse {
   zone_version?: number;
   violation_version?: number;
   settings_version?: number;
+  receiver_version?: number;
 }
 
 export interface AircraftLookup {

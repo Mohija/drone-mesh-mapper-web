@@ -118,6 +118,7 @@ settings = SettingsManager()
 settings.bind(DEFAULT_TENANT_ID, app)
 
 registry = ProviderRegistry(fleet)
+app.config["_registry"] = registry
 
 archive = TrailArchiveManager(app=app, tenant_id=DEFAULT_TENANT_ID)
 archive.bind(app, DEFAULT_TENANT_ID)
@@ -140,7 +141,7 @@ def _maybe_check_violations(tenant_id: str, enabled_sources: list[str]):
             return
         _violation_check_times[tenant_id] = now
     # Get ALL drones (radius=0) for violation checking
-    all_drones = registry.get_all_drones(DEFAULT_LAT, DEFAULT_LON, 0, enabled_sources)
+    all_drones = registry.get_all_drones(DEFAULT_LAT, DEFAULT_LON, 0, enabled_sources, tenant_id=tenant_id)
     zones.update_violations(all_drones, get_elevation=_get_cached_elevation, tenant_id=tenant_id)
 
 
@@ -163,7 +164,7 @@ def get_drones():
     enabled = settings.get_enabled_sources(tenant_id=tid)
     logger.debug("GET /api/drones tenant=%s lat=%.4f lon=%.4f radius=%.0f sources=%s", tid, lat, lon, radius, enabled)
 
-    drones = registry.get_all_drones(lat, lon, radius, enabled)
+    drones = registry.get_all_drones(lat, lon, radius, enabled, tenant_id=tid)
 
     # Side-effect: update shared violation records (throttled per tenant)
     _maybe_check_violations(tid, enabled)
@@ -179,6 +180,7 @@ def get_drones():
         "zone_version": zones.get_zone_version(tenant_id=tid),
         "violation_version": zones.get_violation_version(tenant_id=tid),
         "settings_version": settings.get_version(tenant_id=tid),
+        "receiver_version": registry.receiver_provider.get_version(tid),
     })
 
 
@@ -186,7 +188,8 @@ def get_drones():
 @login_required
 def get_drone(drone_id: str):
     """Get single drone details (supports compound IDs)."""
-    drone = registry.get_drone(drone_id)
+    tid = g.tenant_id or DEFAULT_TENANT_ID
+    drone = registry.get_drone(drone_id, tenant_id=tid)
     if not drone:
         logger.warning("GET /api/drones/%s - drone not found", drone_id)
         return jsonify({"error": "Drone not found"}), 404

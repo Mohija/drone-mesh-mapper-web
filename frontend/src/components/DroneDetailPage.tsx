@@ -20,6 +20,7 @@ const SOURCE_COLORS: Record<string, string> = {
   adsbfi: '#8b5cf6',
   adsblol: '#ec4899',
   ogn: '#10b981',
+  receiver: '#14b8a6',
 };
 
 // ICAO aircraft class codes

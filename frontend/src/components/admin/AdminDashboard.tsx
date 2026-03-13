@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../AuthContext';
-import { fetchTenants, fetchUsers } from '../../api';
-import type { Tenant, UserAdmin } from '../../api';
+import { fetchTenants, fetchUsers, fetchReceiverStats } from '../../api';
+import type { Tenant, UserAdmin, ReceiverStats } from '../../api';
 
 const ROLE_LABELS: Record<string, string> = {
   super_admin: 'Super-Admin',
@@ -14,25 +14,31 @@ export default function AdminDashboard() {
   const isSuperAdmin = user?.role === 'super_admin';
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [users, setUsers] = useState<UserAdmin[]>([]);
+  const [receiverStats, setReceiverStats] = useState<ReceiverStats | null>(null);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [t, u] = await Promise.all([
+        const [t, u, rs] = await Promise.all([
           isSuperAdmin ? fetchTenants() : Promise.resolve([]),
           fetchUsers(),
+          fetchReceiverStats().catch(() => null),
         ]);
         setTenants(t);
         setUsers(u);
+        setReceiverStats(rs);
       } catch { /* silent */ }
     };
     load();
   }, [isSuperAdmin]);
 
-  const cards = [
+  const cards: Array<{ label: string; value: string | number; color?: string }> = [
     ...(isSuperAdmin ? [{ label: 'Mandanten', value: tenants.length }] : []),
     { label: 'Benutzer', value: users.length },
     { label: 'Deine Rolle', value: ROLE_LABELS[effectiveRole || 'user'] || effectiveRole || '' },
+    ...(receiverStats ? [
+      { label: 'Empfänger Online', value: `${receiverStats.online}/${receiverStats.total}`, color: receiverStats.online > 0 ? '#14b8a6' : undefined },
+    ] : []),
   ];
 
   return (

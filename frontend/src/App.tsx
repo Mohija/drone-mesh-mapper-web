@@ -9,6 +9,7 @@ import AdminLayout from './components/admin/AdminLayout';
 import AdminDashboard from './components/admin/AdminDashboard';
 import TenantList from './components/admin/TenantList';
 import UserList from './components/admin/UserList';
+import ReceiverList from './components/admin/ReceiverList';
 
 export default function App() {
   return (
@@ -22,6 +23,7 @@ export default function App() {
         <Route index element={<AdminDashboard />} />
         <Route path="tenants" element={<TenantList />} />
         <Route path="users" element={<UserList />} />
+        <Route path="receivers" element={<ReceiverList />} />
       </Route>
     </Routes>
   );

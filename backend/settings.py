@@ -37,6 +37,11 @@ DEFAULT_SOURCES = {
         "label": "Open Glider Network",
         "description": "Gleiter und Kleinfluggeraete (experimental)",
     },
+    "receiver": {
+        "enabled": False,
+        "label": "Empfänger",
+        "description": "Hardware-Empfänger (ESP32/ESP8266) für Open Drone ID",
+    },
 }
 
 

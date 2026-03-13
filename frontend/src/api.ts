@@ -666,3 +666,106 @@ export async function resetUserPassword(id: string, newPassword: string): Promis
   });
   if (!res.ok) throw new Error(`API error: ${res.status}`);
 }
+
+// ─── Receiver API ─────────────────────────────────────────
+
+export interface ReceiverNode {
+  id: string;
+  tenantId: string;
+  name: string;
+  hardwareType: 'esp32-s3' | 'esp32-c3' | 'esp8266';
+  apiKey?: string;
+  firmwareVersion: string | null;
+  isActive: boolean;
+  lastLatitude: number | null;
+  lastLongitude: number | null;
+  lastLocationAccuracy: number | null;
+  lastHeartbeat: number | null;
+  lastIp: string | null;
+  wifiSsid: string | null;
+  wifiRssi: number | null;
+  freeHeap: number | null;
+  uptimeSeconds: number | null;
+  totalDetections: number;
+  detectionsSinceBoot: number;
+  status: 'online' | 'stale' | 'offline';
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ReceiverStats {
+  total: number;
+  online: number;
+  stale: number;
+  offline: number;
+  totalDetections: number;
+}
+
+export async function fetchReceivers(): Promise<ReceiverNode[]> {
+  const res = await authFetch(`${API_BASE}/receivers`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function createReceiver(data: { name: string; hardware_type: string }): Promise<ReceiverNode> {
+  const res = await authFetch(`${API_BASE}/receivers`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Fehler' }));
+    throw new Error(err.error || `API error: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function updateReceiver(id: string, data: { name?: string; is_active?: boolean }): Promise<ReceiverNode> {
+  const res = await authFetch(`${API_BASE}/receivers/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function deleteReceiver(id: string): Promise<void> {
+  const res = await authFetch(`${API_BASE}/receivers/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+}
+
+export async function regenerateReceiverKey(id: string): Promise<ReceiverNode> {
+  const res = await authFetch(`${API_BASE}/receivers/${encodeURIComponent(id)}/regenerate-key`, {
+    method: 'POST',
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchReceiverStats(): Promise<ReceiverStats> {
+  const res = await authFetch(`${API_BASE}/receivers/stats`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function buildFirmware(data: {
+  node_id: string;
+  hardware_type?: string;
+  backend_url: string;
+  wifi_ssid?: string;
+  wifi_password?: string;
+}): Promise<Blob> {
+  const res = await authFetch(`${API_BASE}/receivers/firmware/build`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Build fehlgeschlagen' }));
+    throw new Error(err.error || `API error: ${res.status}`);
+  }
+  return res.blob();
+}

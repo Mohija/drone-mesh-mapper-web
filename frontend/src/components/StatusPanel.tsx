@@ -68,6 +68,7 @@ const SOURCE_COLORS: Record<string, string> = {
   adsbfi: '#8b5cf6',
   adsblol: '#ec4899',
   ogn: '#10b981',
+  receiver: '#14b8a6',
 };
 
 export default function StatusPanel({ drone, onClose, enabledNoFlyLayers, trackingState, onTrack, onUntrack, onArchive, bottomOffset = 0 }: Props) {
@@ -277,6 +278,7 @@ export default function StatusPanel({ drone, onClose, enabledNoFlyLayers, tracki
                 fontWeight: 600,
               }}>
                 {drone.source_label}
+                {drone.receiver_count && drone.receiver_count > 1 && ` (${drone.receiver_count} Empfänger)`}
               </span>
             )}
           </div>

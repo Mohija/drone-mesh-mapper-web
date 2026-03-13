@@ -136,6 +136,31 @@ def role_required(*roles):
     return decorator
 
 
+def node_auth_required(f):
+    """Decorator: requires valid X-Node-Key header. Sets g.receiver_node, g.tenant_id."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        api_key = request.headers.get("X-Node-Key", "")
+        if not api_key:
+            return jsonify({"error": "X-Node-Key header erforderlich"}), 401
+
+        from models import ReceiverNode, Tenant
+        node = ReceiverNode.query.filter_by(api_key=api_key).first()
+        if not node:
+            return jsonify({"error": "Ungültiger API-Key"}), 401
+        if not node.is_active:
+            return jsonify({"error": "Empfänger deaktiviert"}), 403
+
+        tenant = db.session.get(Tenant, node.tenant_id)
+        if not tenant or not tenant.is_active:
+            return jsonify({"error": "Mandant deaktiviert"}), 403
+
+        g.receiver_node = node
+        g.tenant_id = node.tenant_id
+        return f(*args, **kwargs)
+    return decorated
+
+
 def seed_super_admin(app):
     """Create default super_admin user if none exists."""
     from models import User

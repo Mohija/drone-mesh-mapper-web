@@ -12,6 +12,7 @@ from providers.opensky_provider import OpenSkyProvider
 from providers.adsbfi_provider import AdsbFiProvider
 from providers.adsblol_provider import AdsbLolProvider
 from providers.ogn_provider import OgnProvider
+from providers.receiver_provider import ReceiverProvider
 
 logger = logging.getLogger("providers")
 
@@ -80,20 +81,24 @@ class ProviderRegistry:
             "adsblol": AdsbLolProvider(),
             "ogn": OgnProvider(),
         }
+        self._receiver_provider = ReceiverProvider()
 
     # Max radius for external APIs when "no limit" is requested (500km)
     MAX_EXTERNAL_RADIUS = 500000
 
     def get_all_drones(
-        self, center_lat: float, center_lon: float, radius_m: float, enabled_sources: list[str]
+        self, center_lat: float, center_lon: float, radius_m: float,
+        enabled_sources: list[str], tenant_id: str | None = None,
     ) -> list[dict]:
         """Fetch drones from all enabled sources in parallel.
         radius_m <= 0 means no radius filter (all drones).
         Deduplicates across sources, keeping the most metadata-rich entry.
+        tenant_id is required for receiver source (per-tenant isolation).
         """
         active = {sid: p for sid, p in self._providers.items() if sid in enabled_sources}
+        include_receiver = "receiver" in enabled_sources
 
-        if not active:
+        if not active and not include_receiver:
             return []
 
         all_drones = []
@@ -101,28 +106,40 @@ class ProviderRegistry:
         # External APIs always need a radius, use large default when disabled
         external_radius = radius_m if radius_m > 0 else self.MAX_EXTERNAL_RADIUS
 
-        with ThreadPoolExecutor(max_workers=len(active)) as executor:
-            futures = {
-                executor.submit(
-                    p.fetch_drones, center_lat, center_lon,
-                    radius_m if sid == "simulator" else external_radius
-                ): sid
-                for sid, p in active.items()
-            }
-            for future in as_completed(futures):
-                sid = futures[future]
-                try:
-                    drones = future.result()
-                    # Add compound IDs for non-simulator sources
-                    for d in drones:
-                        if sid != "simulator":
-                            d["id"] = f"{sid}_{d['basic_id']}"
-                    all_drones.extend(drones)
-                except Exception:
-                    logger.exception("Provider %s failed", sid)
+        if active:
+            with ThreadPoolExecutor(max_workers=len(active)) as executor:
+                futures = {
+                    executor.submit(
+                        p.fetch_drones, center_lat, center_lon,
+                        radius_m if sid == "simulator" else external_radius
+                    ): sid
+                    for sid, p in active.items()
+                }
+                for future in as_completed(futures):
+                    sid = futures[future]
+                    try:
+                        drones = future.result()
+                        # Add compound IDs for non-simulator sources
+                        for d in drones:
+                            if sid != "simulator":
+                                d["id"] = f"{sid}_{d['basic_id']}"
+                        all_drones.extend(drones)
+                    except Exception:
+                        logger.exception("Provider %s failed", sid)
+
+        # Add receiver drones (push-based, per-tenant)
+        if include_receiver and tenant_id:
+            try:
+                receiver_drones = self._receiver_provider.fetch_drones(tenant_id)
+                for d in receiver_drones:
+                    d["id"] = f"receiver_{d['basic_id']}"
+                all_drones.extend(receiver_drones)
+            except Exception:
+                logger.exception("ReceiverProvider failed")
 
         # Deduplicate across sources (same basic_id from different providers)
-        if len(active) > 1:
+        total_sources = len(active) + (1 if include_receiver else 0)
+        if total_sources > 1:
             before = len(all_drones)
             all_drones = _deduplicate_drones(all_drones)
             removed = before - len(all_drones)
@@ -131,9 +148,24 @@ class ProviderRegistry:
 
         return all_drones
 
-    def get_drone(self, compound_id: str) -> dict | None:
+    @property
+    def receiver_provider(self) -> ReceiverProvider:
+        """Access the receiver provider for ingest/version operations."""
+        return self._receiver_provider
+
+    def get_drone(self, compound_id: str, tenant_id: str | None = None) -> dict | None:
         """Get a single drone by compound ID (source_originalId)."""
         source, original_id = self._split_compound_id(compound_id)
+
+        # Receiver drones are handled separately (per-tenant)
+        if source == "receiver":
+            if not tenant_id:
+                return None
+            drone = self._receiver_provider.get_drone(tenant_id, original_id)
+            if drone:
+                drone["id"] = compound_id
+            return drone
+
         provider = self._providers.get(source)
         if not provider:
             return None
@@ -154,6 +186,10 @@ class ProviderRegistry:
         """Split compound ID into (source, original_id).
         Simulator IDs don't have a prefix, external IDs are source_originalId.
         """
+        # Check receiver prefix first
+        if compound_id.startswith("receiver_"):
+            return "receiver", compound_id[len("receiver_"):]
+
         for source_id in self._providers:
             if source_id == "simulator":
                 continue
