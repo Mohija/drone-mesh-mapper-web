@@ -5,6 +5,7 @@ import SettingsPage from './components/SettingsPage';
 import LoginPage from './components/LoginPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import FlightReportView from './components/FlightReportView';
+import HelpPage from './components/HelpPage';
 import AdminLayout from './components/admin/AdminLayout';
 import AdminDashboard from './components/admin/AdminDashboard';
 import TenantList from './components/admin/TenantList';
@@ -19,6 +20,7 @@ export default function App() {
       <Route path="/drone/:id" element={<ProtectedRoute><DroneDetailPage /></ProtectedRoute>} />
       <Route path="/report/:recordId" element={<ProtectedRoute><FlightReportView /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+      <Route path="/help" element={<ProtectedRoute><HelpPage /></ProtectedRoute>} />
       <Route path="/admin" element={<ProtectedRoute requiredRole="tenant_admin"><AdminLayout /></ProtectedRoute>}>
         <Route index element={<AdminDashboard />} />
         <Route path="tenants" element={<TenantList />} />

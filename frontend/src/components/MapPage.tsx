@@ -814,6 +814,26 @@ export default function MapPage() {
           &#9881;
         </button>
 
+        {/* Help button */}
+        <button
+          onClick={() => navigate('/help')}
+          title="Hilfe / Benutzerhandbuch"
+          data-testid="help-button"
+          style={{
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--border)',
+            borderRadius: 8,
+            padding: '8px 12px',
+            cursor: 'pointer',
+            color: 'var(--text-secondary)',
+            fontSize: 16,
+            display: 'flex',
+            alignItems: 'center',
+          }}
+        >
+          &#10067;
+        </button>
+
         {/* User info & logout */}
         <div style={{
           background: 'var(--bg-secondary)',

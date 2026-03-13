@@ -2,7 +2,7 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-13 (E2E-Tests erweitert, data-testid Attribute)
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-13 (Benutzerhandbuch mit Frontend-Integration)
 - **Typ:** Projekt | **Status:** Development
 
 ## Offene Aufgaben
@@ -16,6 +16,24 @@
 - [x] Umfassende E2E-Tests für Receiver-System (60 Tests, alle bestanden)
 
 ## Änderungshistorie
+
+### 2026-03-13 - Benutzerhandbuch (HelpPage) mit Frontend-Integration
+
+**Umfassendes Benutzerhandbuch als React-Komponente:**
+- `HelpPage.tsx`: 700+ Zeilen, 13 Abschnitte (Übersicht, Login, Karte, Drohnen, Flugzonen, NFZ, Verstöße, Berichte, Einstellungen, Admin, Empfänger, Hardware, Tipps)
+- 5 inline SVG-Diagramme: App-Layout, Rollen-Hierarchie, Netzwerk-Architektur, ESP-Setup, Quellfarben-Legende
+- Sidebar-Navigation mit Suchfilter
+- InfoBox-Hilfskomponente (Info/Warnung-Varianten)
+- Vollständige Hardware-Inbetriebnahme: esptool-Befehle, LED-Muster, Troubleshooting-Tabelle, Hardware-Vergleich
+- Theme-aware Styling mit CSS-Variablen
+
+**Frontend-Integration:**
+- Route `/help` in App.tsx mit ProtectedRoute
+- Hilfe-Button (❓) in MapPage.tsx Kontrollleiste (zwischen Einstellungen und Benutzerinfo)
+- Frontend-Build aktualisiert
+
+**Dateien:** `frontend/src/components/HelpPage.tsx` (neu), `frontend/src/App.tsx`, `frontend/src/components/MapPage.tsx`, `frontend/dist/`
+
 
 ### 2026-03-13 - ESP Hardware-Empfänger: Vollständige Implementierung (Phase 1-6)
 
