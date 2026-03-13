@@ -251,8 +251,13 @@ def build_firmware():
     node_id = data.get("node_id", "")
     hardware_type = data.get("hardware_type", "")
     backend_url = data.get("backend_url", "")
-    wifi_ssid = data.get("wifi_ssid", "")
-    wifi_password = data.get("wifi_password", "")
+    wifi_networks = data.get("wifi_networks", [])
+    # Backward compat: single wifi_ssid/wifi_password still works
+    if not wifi_networks:
+        ssid = data.get("wifi_ssid", "")
+        pwd = data.get("wifi_password", "")
+        if ssid:
+            wifi_networks = [{"ssid": ssid, "password": pwd}]
 
     if not node_id:
         return jsonify({"error": "node_id erforderlich"}), 400
@@ -281,8 +286,15 @@ def build_firmware():
     env = os.environ.copy()
     env["BACKEND_URL"] = backend_url
     env["API_KEY"] = node.api_key
-    env["WIFI_SSID"] = wifi_ssid
-    env["WIFI_PASS"] = wifi_password
+    # Set WiFi credentials (up to 3 networks)
+    suffixes = ["", "_2", "_3"]
+    for i, suffix in enumerate(suffixes):
+        if i < len(wifi_networks):
+            env[f"WIFI_SSID{suffix}"] = wifi_networks[i].get("ssid", "")
+            env[f"WIFI_PASS{suffix}"] = wifi_networks[i].get("password", "")
+        else:
+            env[f"WIFI_SSID{suffix}"] = ""
+            env[f"WIFI_PASS{suffix}"] = ""
     env["NODE_NAME"] = node.name[:20]
 
     try:

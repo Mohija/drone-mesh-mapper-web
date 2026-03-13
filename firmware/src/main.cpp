@@ -51,7 +51,9 @@ void setup() {
 
     // 2. WiFi (SoftAP provisioning: AP starts only when STA fails)
     String apSsid = String(AP_SSID_PREFIX) + String(NODE_NAME).substring(0, 8);
-    wifiMgr.begin(apSsid.c_str(), WIFI_SSID, WIFI_PASS);
+    const char* ssids[] = { WIFI_SSID, WIFI_SSID_2, WIFI_SSID_3 };
+    const char* passes[] = { WIFI_PASS, WIFI_PASS_2, WIFI_PASS_3 };
+    wifiMgr.begin(apSsid.c_str(), ssids, passes, MAX_WIFI_NETWORKS);
 
     // 3. Captive Portal web server
     portal.begin(&wifiMgr, &client, &scanner);

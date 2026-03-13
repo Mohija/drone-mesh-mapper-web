@@ -841,6 +841,7 @@ function SectionHardware() {
       <h4>ESP32-S3 (Empfohlen)</h4>
       <InfoBox type="info">
         Voller Funktionsumfang: BLE + WiFi Remote ID, HTTPS, viel RAM. Beste Wahl für stationäre Empfänger.
+        Alle Boards kommen mit vorgelöteten Pin-Headers — kein Löten nötig.
       </InfoBox>
       <table style={tableStyle}>
         <thead>
@@ -852,22 +853,24 @@ function SectionHardware() {
           </tr>
         </thead>
         <tbody>
-          <tr><td style={tdStyle}><strong>ESP32-S3-DevKitC-1 (N16R8)</strong> <a href="https://www.amazon.de/ESP32-S3-WROOM-1-N16R8-ESP32-S3-DevKitC-1-Entwicklung-Bluetooth/dp/B0C6KN35L2" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>16 MB Flash, 8 MB PSRAM, WiFi + BLE 5.0, USB-C. Xtensa Dual-Core 240 MHz.</td><td style={tdStyle}>~9 €</td><td style={tdStyle}>Ja</td></tr>
+          <tr style={groupRowStyle}><td style={tdStyle}><strong>ESP32-S3-DevKitC-1 N16R8 (vorgelötet, 2er-Pack)</strong> <a href="https://www.amazon.de/Diymore-DevKitC-Entwicklungsboard-Bluetooth-gel%C3%B6teten-2PCS/dp/B0DFCQGW4C" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a> <span style={groupBadgeStyle}>&#x1F517; 2 Teile = 1 Set</span></td><td style={tdStyle}>16 MB Flash, 8 MB PSRAM, WiFi + BLE 5.0, USB-C, Dual-Core 240 MHz. Pin-Headers bereits aufgelötet — sofort einsatzbereit.</td><td style={tdStyle}>~18 € (2 Stk.)</td><td style={tdStyle}>Ja</td></tr>
+          <tr style={groupRowStyle}><td style={tdStyle}><strong>GPIO Breakout Board für ESP32-S3</strong> <a href="https://www.amazon.de/Meshnology-Erweiterungsboard-Kunststoffdichtungen-Steckdosen-N40/dp/B0FLK4MDDW" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Steckboden mit Montagelöchern — ESP32 einstecken, im Gehäuse verschrauben. Kein Löten, kein Breadboard. 5V/3.3V Ausgänge, GPIO-Status-LEDs.</td><td style={tdStyle}>~12 €</td><td style={tdStyle}>Ja</td></tr>
           <tr><td style={tdStyle}>USB-A auf USB-C Kabel (1m) <a href="https://www.amazon.de/1-m-langes-usb-c-kabel-usb-a-auf-usb-c-von-amazon/dp/B07Q5JW4J3" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Datenkabel (nicht nur Lade!) für Flashen und Stromversorgung.</td><td style={tdStyle}>~7 €</td><td style={tdStyle}>Ja</td></tr>
           <tr><td style={tdStyle}>USB-Netzteil 5V/2A (USB-C) <a href="https://www.amazon.de/Bouge-Universal-Ladeger%C3%A4t-Kompatibilit%C3%A4t-Blackview/dp/B0C2Q5LK11" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Steckernetzteil für Dauerbetrieb. 5V, min. 1A (2A empfohlen).</td><td style={tdStyle}>~8 €</td><td style={tdStyle}>Ja</td></tr>
-          <tr><td style={tdStyle}>2,4 GHz WiFi-Antenne 3dBi (IPEX/U.FL) <a href="https://www.amazon.de/Bluetooth-Antenne-2-4GHz-geeignet-ESP8266/dp/B0CTG8XJSN" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Externe Antenne mit U.FL-Stecker + RP-SMA Pigtail. Verbessert WiFi-Beacon-Reichweite.</td><td style={tdStyle}>~6 €</td><td style={tdStyle}>Optional</td></tr>
-          <tr><td style={tdStyle}><strong>ABS-Gehäuse IP65 (100×68×50 mm)</strong> <a href="https://www.amazon.de/Elektronische-Wasserdichte-Industriegeh%C3%A4use-Anschlussdose-Verteilerdose/dp/B0DDWR9LP3" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Wasserdichtes Elektronik-Gehäuse für Außenmontage.</td><td style={tdStyle}>~7 €</td><td style={tdStyle}>Ja</td></tr>
-          <tr><td style={tdStyle}>Kabelverschraubung M16 IP68 (5er) <a href="https://www.amazon.de/Kabelverschraubung-M16-Hanibos-Kabeldurchf%C3%BChrung-Kabelverschraubungen/dp/B0BXRVX368" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Wasserdichte Kabel-Durchführung für USB-Kabel ins Gehäuse. M16×1,5.</td><td style={tdStyle}>~7 €</td><td style={tdStyle}>Optional</td></tr>
-          <tr><td style={tdStyle}>Nylon Abstandshalter M3 Set (260-tlg.) <a href="https://www.amazon.de/Schrauben-Abstandshalter-Schraubenmutter-Distanzh%C3%BClsen-Reparatur/dp/B0B2S6JLX4" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>M3 Standoffs zum Befestigen der Platine im Gehäuse. Isolierend.</td><td style={tdStyle}>~8 €</td><td style={tdStyle}>Optional</td></tr>
-          <tr><td style={tdStyle}>PoE-Splitter 5V USB-C <a href="https://www.amazon.de/UCTRONICS-PoE-Splitter-USB-C-USB-C-Adapter-Sicherheitskameras/dp/B087F4QCTR" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Stromversorgung über Ethernet-Kabel. Spart extra Stromkabel bei Outdoor-Installation.</td><td style={tdStyle}>~15 €</td><td style={tdStyle}>Optional</td></tr>
+          <tr><td style={tdStyle}><strong>ABS-Gehäuse IP65 (100×68×50 mm)</strong> <a href="https://www.amazon.de/Elektronische-Wasserdichte-Industriegeh%C3%A4use-Anschlussdose-Verteilerdose/dp/B0DDWR9LP3" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Wasserdichtes Elektronik-Gehäuse für Außenmontage. Board + Breakout passen zusammen hinein.</td><td style={tdStyle}>~7 €</td><td style={tdStyle}>Ja</td></tr>
+          <tr><td style={tdStyle}>2,4 GHz WiFi-Antenne 3dBi (IPEX/U.FL) <a href="https://www.amazon.de/Bluetooth-Antenne-2-4GHz-geeignet-ESP8266/dp/B0CTG8XJSN" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Externe Antenne mit U.FL-Stecker + RP-SMA Pigtail 17cm. Verbessert WiFi-Beacon-Reichweite.</td><td style={tdStyle}>~6 €</td><td style={tdStyle}>Optional</td></tr>
+          <tr><td style={tdStyle}>Kabelverschraubung M16 IP68 (5er-Pack) <a href="https://www.amazon.de/Kabelverschraubung-M16-Hanibos-Kabeldurchf%C3%BChrung-Kabelverschraubungen/dp/B0BXRVX368" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Wasserdichte Kabel-Durchführung für USB-Kabel ins Gehäuse. M16×1,5, 4–8 mm Kabeldurchmesser.</td><td style={tdStyle}>~7 €</td><td style={tdStyle}>Optional</td></tr>
+          <tr><td style={tdStyle}>PoE-Splitter 5V USB-C (IEEE 802.3af) <a href="https://www.amazon.de/UCTRONICS-PoE-Splitter-USB-C-USB-C-Adapter-Sicherheitskameras/dp/B087F4QCTR" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Stromversorgung über Ethernet-Kabel. Spart extra Stromkabel bei Outdoor-Installation.</td><td style={tdStyle}>~15 €</td><td style={tdStyle}>Optional</td></tr>
         </tbody>
       </table>
-      <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Geschätzte Gesamtkosten (Pflichtteile): <strong>~31 €</strong></p>
+      <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Geschätzte Gesamtkosten (Pflichtteile): <strong>~52 € (inkl. 2 Boards)</strong></p>
 
       {/* ESP32-C3 Shopping List */}
       <h4>ESP32-C3 (Kompakt)</h4>
       <InfoBox type="info">
         BLE + WiFi Remote ID, HTTPS – mit RISC-V Kern. Günstiger und kleiner als S3, aber weniger RAM.
+        Board kommt mit vorgelöteten Pin-Headers. Hinweis: Der kompakte C3-DevKitM-1 (30 Pins, 54×25mm) passt in keinen
+        Standard-Steckboden — Befestigung im Gehäuse mit Abstandshaltern und Klebepads.
       </InfoBox>
       <table style={tableStyle}>
         <thead>
@@ -879,13 +882,13 @@ function SectionHardware() {
           </tr>
         </thead>
         <tbody>
-          <tr><td style={tdStyle}><strong>ESP32-C3-DevKitM-1 (Espressif)</strong> <a href="https://www.amazon.de/Espressif-Entwicklungsboard-ESP32-C3-DevKitM-1/dp/B09P31Y4MF" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Offizielles Espressif Board, 4 MB Flash, WiFi + BLE 5.0, USB-C. RISC-V 160 MHz.</td><td style={tdStyle}>~9 €</td><td style={tdStyle}>Ja</td></tr>
+          <tr><td style={tdStyle}><strong>ESP32-C3-DevKitM-1 (vorgelötet)</strong> <a href="https://www.amazon.de/DollaTek-ESP32-C3-Bluetooth-Development-ESP32-C3-DevKitM-1/dp/B0BVQP3XPJ" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>DollaTek Board, 4 MB Flash, WiFi + BLE 5.0, Dual USB-C, RISC-V 160 MHz. Pin-Headers vorgelötet. Kompaktes Format (54×25 mm).</td><td style={tdStyle}>~9 €</td><td style={tdStyle}>Ja</td></tr>
           <tr><td style={tdStyle}>USB-A auf USB-C Kabel (1m) <a href="https://www.amazon.de/1-m-langes-usb-c-kabel-usb-a-auf-usb-c-von-amazon/dp/B07Q5JW4J3" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Datenkabel für Flashen und Stromversorgung.</td><td style={tdStyle}>~7 €</td><td style={tdStyle}>Ja</td></tr>
-          <tr><td style={tdStyle}>USB-Netzteil 5V/2A <a href="https://www.amazon.de/Ladeger%C3%A4t-Netzstecker-Steckdosenadapter-Ladestecker-Tischleuchte/dp/B0DNMKG9C3" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Steckernetzteil für Dauerbetrieb. Geringerer Verbrauch als S3.</td><td style={tdStyle}>~7 €</td><td style={tdStyle}>Ja</td></tr>
+          <tr><td style={tdStyle}>USB-Netzteil 5V/2A (USB-A) <a href="https://www.amazon.de/Ladeger%C3%A4t-Netzstecker-Steckdosenadapter-Ladestecker-Tischleuchte/dp/B0DNMKG9C3" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Steckernetzteil für Dauerbetrieb. Geringerer Verbrauch als S3.</td><td style={tdStyle}>~7 €</td><td style={tdStyle}>Ja</td></tr>
+          <tr><td style={tdStyle}><strong>ABS-Gehäuse IP65 (83×58×34 mm)</strong> <a href="https://www.amazon.de/Robustes-ABS-Elektronik-Projektbox-wasserdichtes-Abzweiggeh%C3%A4use-Gr%C3%B6%C3%9Fenoptionen/dp/B0DL9MG241" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Kompaktes wasserdichtes Gehäuse. Der kleine C3-DevKitM-1 passt problemlos hinein.</td><td style={tdStyle}>~5 €</td><td style={tdStyle}>Ja</td></tr>
+          <tr><td style={tdStyle}>Nylon Abstandshalter M3 Set (260-tlg.) <a href="https://www.amazon.de/Schrauben-Abstandshalter-Schraubenmutter-Distanzh%C3%BClsen-Reparatur/dp/B0B2S6JLX4" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>M3 Standoffs + Schrauben zur Befestigung der Platine im Gehäuse. Board mit Abstandshaltern positionieren und mit Klebepads fixieren.</td><td style={tdStyle}>~8 €</td><td style={tdStyle}>Optional</td></tr>
           <tr><td style={tdStyle}>2,4 GHz WiFi-Antenne 3dBi (IPEX/U.FL) <a href="https://www.amazon.de/Bluetooth-Antenne-2-4GHz-geeignet-ESP8266/dp/B0CTG8XJSN" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Externe Antenne. Optional da C3-MINI-1 bereits PCB-Antenne hat.</td><td style={tdStyle}>~6 €</td><td style={tdStyle}>Optional</td></tr>
-          <tr><td style={tdStyle}><strong>ABS-Gehäuse IP65 (83×58×34 mm)</strong> <a href="https://www.amazon.de/Robustes-ABS-Elektronik-Projektbox-wasserdichtes-Abzweiggeh%C3%A4use-Gr%C3%B6%C3%9Fenoptionen/dp/B0DL9MG241" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Kompaktes wasserdichtes Gehäuse für den kleinen C3.</td><td style={tdStyle}>~5 €</td><td style={tdStyle}>Ja</td></tr>
-          <tr><td style={tdStyle}>Kabelverschraubung M16 IP68 (5er) <a href="https://www.amazon.de/Kabelverschraubung-M16-Hanibos-Kabeldurchf%C3%BChrung-Kabelverschraubungen/dp/B0BXRVX368" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Wasserdichte Kabel-Durchführung.</td><td style={tdStyle}>~7 €</td><td style={tdStyle}>Optional</td></tr>
-          <tr><td style={tdStyle}>Nylon Abstandshalter M3 Set (260-tlg.) <a href="https://www.amazon.de/Schrauben-Abstandshalter-Schraubenmutter-Distanzh%C3%BClsen-Reparatur/dp/B0B2S6JLX4" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>M3 Standoffs für Platinen-Montage im Gehäuse.</td><td style={tdStyle}>~8 €</td><td style={tdStyle}>Optional</td></tr>
+          <tr><td style={tdStyle}>Kabelverschraubung M16 IP68 (5er-Pack) <a href="https://www.amazon.de/Kabelverschraubung-M16-Hanibos-Kabeldurchf%C3%BChrung-Kabelverschraubungen/dp/B0BXRVX368" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Wasserdichte Kabel-Durchführung.</td><td style={tdStyle}>~7 €</td><td style={tdStyle}>Optional</td></tr>
         </tbody>
       </table>
       <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Geschätzte Gesamtkosten (Pflichtteile): <strong>~28 €</strong></p>
@@ -894,6 +897,8 @@ function SectionHardware() {
       <h4>ESP8266 / NodeMCU (Budget)</h4>
       <InfoBox type="warning">
         Nur WiFi-Beacon ODID – kein BLE, kein HTTPS. Geeignet als günstige Ergänzung an Standorten mit bekanntem WiFi-Beacon-Verkehr.
+        NodeMCU kommt immer mit vorgelöteten Pin-Headers. Wichtig: NodeMCU Lolin V3 ist die breite Variante (28mm Pin-Abstand) —
+        nur kompatible Base Boards verwenden!
       </InfoBox>
       <table style={tableStyle}>
         <thead>
@@ -905,14 +910,14 @@ function SectionHardware() {
           </tr>
         </thead>
         <tbody>
-          <tr><td style={tdStyle}><strong>AZDelivery NodeMCU Lolin V3 (ESP8266)</strong> <a href="https://www.amazon.de/AZDelivery-NodeMCU-Lolin-WiFi-Parent/dp/B07Z5C3KQF" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>ESP-12F Board mit CH340G, Micro-USB, WiFi 2,4 GHz, inkl. E-Book.</td><td style={tdStyle}>~7 €</td><td style={tdStyle}>Ja</td></tr>
+          <tr style={groupRowStyle}><td style={tdStyle}><strong>AZDelivery NodeMCU Lolin V3 (vorgelötet)</strong> <a href="https://www.amazon.de/AZDelivery-NodeMCU-Lolin-WiFi-Parent/dp/B07Z5C3KQF" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a> <span style={groupBadgeStyle}>&#x1F517; 2 Teile = 1 Set</span></td><td style={tdStyle}>ESP-12F Board mit CH340G, Micro-USB, WiFi 2,4 GHz. Pin-Headers vorgelötet, inkl. E-Book. Breite Variante (28mm Pin-Abstand).</td><td style={tdStyle}>~7 €</td><td style={tdStyle}>Ja</td></tr>
+          <tr style={groupRowStyle}><td style={tdStyle}><strong>Base Board für NodeMCU V3 Wide (28mm)</strong> <a href="https://www.amazon.de/dp/B0D1KCYG3W" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>DUBEUYEW Base Board — bestätigt kompatibel mit breiter NodeMCU V3 (28mm Pin-Abstand). DC-Buchse 6–24V, 5V/3.3V Ausgänge, GPIO-Verdopplung, Montagelöcher (60×60mm).</td><td style={tdStyle}>~9 €</td><td style={tdStyle}>Ja</td></tr>
           <tr><td style={tdStyle}>Micro-USB Kabel (1m) <a href="https://www.amazon.de/KabelDirekt-Micro-Ladekabel-Datenkabel-schwarz/dp/B00L5G2IR6" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Datenkabel für Flashen und Stromversorgung. Auf Datenkabel achten!</td><td style={tdStyle}>~5 €</td><td style={tdStyle}>Ja</td></tr>
           <tr><td style={tdStyle}>USB-Netzteil 5V/2A (3er-Pack) <a href="https://www.amazon.de/Ladeger%C3%A4t-Netzstecker-Smartphones-Spielzeug-Spielkonsole-wei%C3%9F/dp/B0CM9G39DW" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Steckernetzteil mit USB-A Ausgang. 3er-Pack praktisch für mehrere Nodes.</td><td style={tdStyle}>~9 €</td><td style={tdStyle}>Ja</td></tr>
-          <tr><td style={tdStyle}><strong>ABS-Gehäuse klein (5er-Pack)</strong> <a href="https://www.amazon.de/Geh%C3%A4use-ABS-Kunststoff-Projektbox-elektronische-Schaltungen/dp/B08JHYNPH8" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Kleine ABS-Projektbox. NodeMCU passt in Standard-Projektboxen.</td><td style={tdStyle}>~6 €</td><td style={tdStyle}>Ja</td></tr>
-          <tr><td style={tdStyle}>Nylon Abstandshalter M3 Set (260-tlg.) <a href="https://www.amazon.de/Schrauben-Abstandshalter-Schraubenmutter-Distanzh%C3%BClsen-Reparatur/dp/B0B2S6JLX4" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Zur Montage der Platine im Gehäuse.</td><td style={tdStyle}>~8 €</td><td style={tdStyle}>Optional</td></tr>
+          <tr><td style={tdStyle}><strong>ABS-Gehäuse IP65 (100×68×50 mm)</strong> <a href="https://www.amazon.de/Elektronische-Wasserdichte-Industriegeh%C3%A4use-Anschlussdose-Verteilerdose/dp/B0DDWR9LP3" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Wasserdichtes Elektronik-Gehäuse. Passt NodeMCU + Base Board (60×60mm) mit etwas Luft.</td><td style={tdStyle}>~7 €</td><td style={tdStyle}>Ja</td></tr>
         </tbody>
       </table>
-      <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Geschätzte Gesamtkosten (Pflichtteile): <strong>~27 €</strong></p>
+      <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Geschätzte Gesamtkosten (Pflichtteile): <strong>~37 €</strong></p>
 
       <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', marginTop: 16 }}>
         Alle Links führen zu Amazon.de (Stand März 2026). Preise können variieren.
@@ -1000,6 +1005,17 @@ const linkBadgeStyle: React.CSSProperties = {
   display: 'inline-block', marginLeft: 6, padding: '1px 6px', borderRadius: 4,
   fontSize: 10, fontWeight: 600, background: 'rgba(20,184,166,0.15)',
   color: '#14b8a6', textDecoration: 'none', verticalAlign: 'middle',
+};
+
+const groupRowStyle: React.CSSProperties = {
+  borderLeft: '3px solid #3b82f6',
+  background: 'rgba(59,130,246,0.04)',
+};
+
+const groupBadgeStyle: React.CSSProperties = {
+  display: 'inline-block', marginLeft: 8, padding: '1px 7px', borderRadius: 4,
+  fontSize: 9, fontWeight: 600, background: 'rgba(59,130,246,0.15)',
+  color: '#3b82f6', verticalAlign: 'middle', whiteSpace: 'nowrap',
 };
 
 const codeBlockStyle: React.CSSProperties = {

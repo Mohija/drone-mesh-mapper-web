@@ -1058,8 +1058,9 @@ test.describe('Flash Wizard UI', () => {
 
     // Config fields visible
     await expect(page.locator('[data-testid="flash-backend-url"]')).toBeVisible();
-    await expect(page.locator('[data-testid="flash-wifi-ssid"]')).toBeVisible();
-    await expect(page.locator('[data-testid="flash-wifi-pass"]')).toBeVisible();
+    await expect(page.locator('[data-testid="flash-wifi-network-0"]')).toBeVisible();
+    await expect(page.locator('[data-testid="flash-wifi-ssid-0"]')).toBeVisible();
+    await expect(page.locator('[data-testid="flash-wifi-pass-0"]')).toBeVisible();
 
     // Backend URL should be pre-populated
     const urlValue = await page.locator('[data-testid="flash-backend-url"]').inputValue();

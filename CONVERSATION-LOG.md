@@ -2,7 +2,7 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-13 (SoftAP Provisioning für Firmware)
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-13 (Multi-SSID Firmware Build)
 - **Typ:** Projekt | **Status:** Development
 
 ## Offene Aufgaben
@@ -16,6 +16,50 @@
 - [x] Umfassende E2E-Tests für Receiver-System (60 Tests, alle bestanden)
 
 ## Änderungshistorie
+
+### 2026-03-13 - Multi-SSID Support: Bis zu 3 WiFi-Netzwerke im Firmware Build
+
+**Firmware-Architektur für Multi-SSID komplett überarbeitet:**
+- `config.h`: WIFI_SSID_2/3, WIFI_PASS_2/3, MAX_WIFI_NETWORKS=3
+- `platformio.ini`: Build-Flags für 3 WiFi-Slots
+- `wifi_manager.h/cpp`: WiFiCredential-Struct, Array-basierte Speicherung, Round-Robin + Scan-basierte Netzwerkauswahl (bestes RSSI)
+- `main.cpp`: Übergabe aller 3 SSID/Pass-Slots als Arrays an WiFiManager
+- `ReceiverFlashWizard.tsx`: Dynamische WiFi-Netzwerk-Liste (1-3 Netzwerke hinzufügen/entfernen)
+- `api.ts`: `buildFirmware()` akzeptiert `wifi_networks[]` statt einzelner SSID/Pass
+- `receiver_routes.py`: Backend setzt WIFI_SSID, WIFI_SSID_2, WIFI_SSID_3 als Env-Vars (rückwärtskompatibel)
+- E2E-Tests aktualisiert für neue data-testid-Selektoren
+
+**Firmware Compile-Fixes (odid_scanner):**
+- `odid_scanner.cpp`: `min(_count, maxCount)` schlug fehl wegen `volatile int` vs `int` Type-Mismatch → durch ternären Operator mit explizitem Cast ersetzt
+- `odid_scanner.h`: `OdidBleCallbacks` konnte nicht auf private `_addDetection()` zugreifen → `friend class` Deklaration hinzugefügt
+- Alle 3 Firmware-Varianten (ESP32-S3, ESP32-C3, ESP8266) bauen erfolgreich
+
+**Tests:** 268 E2E-Tests bestanden, alle 3 FW-Builds erfolgreich, TypeScript fehlerfrei
+
+**Dateien:** `firmware/src/config.h`, `firmware/platformio.ini`, `firmware/src/wifi_manager.h`, `firmware/src/wifi_manager.cpp`, `firmware/src/main.cpp`, `firmware/src/odid_scanner.cpp`, `firmware/src/odid_scanner.h`, `frontend/src/api.ts`, `frontend/src/components/admin/ReceiverFlashWizard.tsx`, `backend/routes/receiver_routes.py`, `frontend/e2e/receivers.spec.ts`, `frontend/dist/`
+
+### 2026-03-13 - Kompatibilitätsprüfung: Inkompatible Breakout Boards ersetzt
+
+**Recherche ergab 2 von 3 Breakout Boards waren inkompatibel:**
+- ESP32-C3: diymore 38-Pin Breakout (B0CG8YW5VH) passt NICHT auf 30-Pin C3-DevKitM-1 → ENTFERNT, durch Nylon Abstandshalter ersetzt
+- ESP8266: Terminal Adapter (B0CLD28SHQ) ist für ESP32, nicht NodeMCU (28mm vs 23mm Pin-Abstand) → ENTFERNT, durch DUBEUYEW Base Board (B0D1KCYG3W) ersetzt (bestätigt kompatibel mit Wide NodeMCU V3)
+- ESP32-S3: Meshnology N40 (B0FLK4MDDW) behauptet 44-Pin S3 Kompatibilität → beibehalten
+
+**Aktualisierte Gesamtkosten:** ESP32-S3 ~52€ (2 Boards), ESP32-C3 ~28€, ESP8266 ~37€
+**Empfehlungstext für C3 angepasst:** Hinweis auf fehlenden Steckboden
+**ReceiverList.tsx und HelpPage.tsx synchronisiert**
+
+**Dateien:** `frontend/src/components/admin/ReceiverList.tsx`, `frontend/src/components/HelpPage.tsx`, `frontend/dist/`
+
+### 2026-03-13 - Vorgelötete Boards & GPIO Breakout Boards für alle Varianten
+
+**Shopping-Listen erstellt (ReceiverList.tsx, HelpPage.tsx):**
+- Alle Controller-Boards durch vorgelötete Varianten ersetzt (kein Löten nötig)
+- ESP32-S3: diymore 2er-Pack mit gelöteten Pins (B0DFCQGW4C) + Meshnology GPIO Breakout (B0FLK4MDDW)
+- ESP8266: AZDelivery NodeMCU vorgelötet (B07Z5C3KQF)
+- GPIO Breakout Boards als Montagelösung: ESP einstecken, im Gehäuse verschrauben
+
+**Dateien:** `frontend/src/components/admin/ReceiverList.tsx`, `frontend/src/components/HelpPage.tsx`, `frontend/dist/`
 
 ### 2026-03-13 - SoftAP Provisioning: Automatischer Hotspot bei fehlendem WiFi
 

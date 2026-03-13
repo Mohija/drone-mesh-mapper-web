@@ -755,8 +755,7 @@ export async function buildFirmware(data: {
   node_id: string;
   hardware_type?: string;
   backend_url: string;
-  wifi_ssid?: string;
-  wifi_password?: string;
+  wifi_networks?: { ssid: string; password: string }[];
 }): Promise<Blob> {
   const res = await authFetch(`${API_BASE}/receivers/firmware/build`, {
     method: 'POST',

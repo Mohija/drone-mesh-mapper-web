@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include "config.h"
 
 #ifdef ESP32
   #include <WiFi.h>
@@ -8,9 +9,14 @@
   #include <ESP8266WiFi.h>
 #endif
 
+struct WiFiCredential {
+    String ssid;
+    String pass;
+};
+
 class WiFiManager {
 public:
-    void begin(const char* apSsid, const char* staSsid, const char* staPass);
+    void begin(const char* apSsid, const char* ssids[], const char* passes[], int count);
     void loop();
     bool isStaConnected() const;
     bool isApActive() const { return _apActive; }
@@ -28,8 +34,15 @@ public:
 
 private:
     String _apSsid;
-    String _staSsid;
-    String _staPass;
+
+    // Multi-network credentials (build-time)
+    WiFiCredential _networks[MAX_WIFI_NETWORKS];
+    int _networkCount = 0;
+
+    // Currently active credential (from portal or best match)
+    String _activeSsid;
+    String _activePass;
+
     unsigned long _lastReconnectAttempt = 0;
     unsigned long _lastScan = 0;
     bool _staConfigured = false;
@@ -37,10 +50,12 @@ private:
     // SoftAP provisioning state
     bool _apActive = false;
     bool _staWasConnected = false;
-    unsigned long _staConnectedAt = 0;     // When STA connected (for AP shutdown delay)
-    unsigned long _bootTime = 0;           // millis() at begin()
-    int _staConnectAttempts = 0;           // Track failed attempts
+    unsigned long _staConnectedAt = 0;
+    unsigned long _bootTime = 0;
+    int _staConnectAttempts = 0;
 
+    void _addNetwork(const char* ssid, const char* pass);
+    int _findBestNetwork();  // Scan-based: returns index of best matching network
     void _startAp();
     void _stopAp();
     void _connectSta();

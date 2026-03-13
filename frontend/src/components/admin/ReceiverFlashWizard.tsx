@@ -17,26 +17,40 @@ const STEP_LABELS: Record<Step, string> = {
   done: '5. Fertig',
 };
 
+interface WifiNetwork {
+  ssid: string;
+  password: string;
+}
+
 export default function ReceiverFlashWizard({ node, onClose }: Props) {
   const [step, setStep] = useState<Step>('intro');
   const [backendUrl, setBackendUrl] = useState(window.location.origin);
-  const [wifiSsid, setWifiSsid] = useState('');
-  const [wifiPass, setWifiPass] = useState('');
+  const [wifiNetworks, setWifiNetworks] = useState<WifiNetwork[]>([{ ssid: '', password: '' }]);
   const [building, setBuilding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [firmwareBlob, setFirmwareBlob] = useState<Blob | null>(null);
 
   const isEsp8266 = node.hardwareType === 'esp8266';
 
+  const updateNetwork = (index: number, field: keyof WifiNetwork, value: string) => {
+    setWifiNetworks(prev => prev.map((n, i) => i === index ? { ...n, [field]: value } : n));
+  };
+  const addNetwork = () => {
+    if (wifiNetworks.length < 3) setWifiNetworks(prev => [...prev, { ssid: '', password: '' }]);
+  };
+  const removeNetwork = (index: number) => {
+    if (wifiNetworks.length > 1) setWifiNetworks(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleBuild = async () => {
     setBuilding(true);
     setError(null);
     try {
+      const networks = wifiNetworks.filter(n => n.ssid.trim());
       const blob = await buildFirmware({
         node_id: node.id,
         backend_url: backendUrl,
-        wifi_ssid: wifiSsid,
-        wifi_password: wifiPass,
+        wifi_networks: networks.length > 0 ? networks : undefined,
       });
       setFirmwareBlob(blob);
       setStep('download');
@@ -150,6 +164,8 @@ export default function ReceiverFlashWizard({ node, onClose }: Props) {
             <div style={{ fontSize: 13, marginBottom: 16, color: 'var(--text-secondary)' }}>
               Konfiguriere die Firmware-Parameter. WiFi-Daten sind optional und können
               später über das Captive Portal des Empfängers konfiguriert werden.
+              Du kannst bis zu 3 Netzwerke hinterlegen — der Empfänger verbindet sich automatisch
+              mit dem stärksten verfügbaren.
             </div>
             <div style={{ marginBottom: 12 }}>
               <label style={labelStyle}>Backend-URL *</label>
@@ -161,26 +177,64 @@ export default function ReceiverFlashWizard({ node, onClose }: Props) {
                 style={inputStyle}
               />
             </div>
-            <div style={{ marginBottom: 12 }}>
-              <label style={labelStyle}>WiFi SSID (optional)</label>
-              <input
-                data-testid="flash-wifi-ssid"
-                value={wifiSsid}
-                onChange={e => setWifiSsid(e.target.value)}
-                placeholder="Dein WiFi-Netzwerk"
-                style={inputStyle}
-              />
-            </div>
+
             <div style={{ marginBottom: 16 }}>
-              <label style={labelStyle}>WiFi Passwort (optional)</label>
-              <input
-                data-testid="flash-wifi-pass"
-                type="password"
-                value={wifiPass}
-                onChange={e => setWifiPass(e.target.value)}
-                placeholder="WiFi-Passwort"
-                style={inputStyle}
-              />
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+                <label style={{ ...labelStyle, marginBottom: 0, flex: 1 }}>WiFi-Netzwerke (optional)</label>
+                {wifiNetworks.length < 3 && (
+                  <button
+                    data-testid="flash-wifi-add"
+                    onClick={addNetwork}
+                    style={{
+                      background: 'none', border: '1px solid var(--border)', borderRadius: 6,
+                      color: '#14b8a6', fontSize: 11, padding: '2px 8px', cursor: 'pointer',
+                    }}
+                  >
+                    + Netzwerk
+                  </button>
+                )}
+              </div>
+              {wifiNetworks.map((net, i) => (
+                <div
+                  key={i}
+                  data-testid={`flash-wifi-network-${i}`}
+                  style={{
+                    background: 'var(--bg-primary)', border: '1px solid var(--border)',
+                    borderRadius: 8, padding: 10, marginBottom: 8,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, flex: 1 }}>
+                      Netzwerk {i + 1}
+                    </span>
+                    {wifiNetworks.length > 1 && (
+                      <button
+                        data-testid={`flash-wifi-remove-${i}`}
+                        onClick={() => removeNetwork(i)}
+                        style={{
+                          background: 'none', border: 'none', color: 'var(--text-muted)',
+                          cursor: 'pointer', fontSize: 14, padding: '0 4px',
+                        }}
+                      >x</button>
+                    )}
+                  </div>
+                  <input
+                    data-testid={`flash-wifi-ssid-${i}`}
+                    value={net.ssid}
+                    onChange={e => updateNetwork(i, 'ssid', e.target.value)}
+                    placeholder="SSID"
+                    style={{ ...inputStyle, marginBottom: 6 }}
+                  />
+                  <input
+                    data-testid={`flash-wifi-pass-${i}`}
+                    type="password"
+                    value={net.password}
+                    onChange={e => updateNetwork(i, 'password', e.target.value)}
+                    placeholder="Passwort"
+                    style={inputStyle}
+                  />
+                </div>
+              ))}
             </div>
             <div style={{
               background: 'var(--bg-primary)', borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 12,

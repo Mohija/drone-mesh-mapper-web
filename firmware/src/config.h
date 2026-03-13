@@ -13,10 +13,25 @@
 #ifndef WIFI_SSID
 #define WIFI_SSID ""
 #endif
-
 #ifndef WIFI_PASS
 #define WIFI_PASS ""
 #endif
+
+#ifndef WIFI_SSID_2
+#define WIFI_SSID_2 ""
+#endif
+#ifndef WIFI_PASS_2
+#define WIFI_PASS_2 ""
+#endif
+
+#ifndef WIFI_SSID_3
+#define WIFI_SSID_3 ""
+#endif
+#ifndef WIFI_PASS_3
+#define WIFI_PASS_3 ""
+#endif
+
+#define MAX_WIFI_NETWORKS 3
 
 #ifndef NODE_NAME
 #define NODE_NAME "FlightArc-Node"

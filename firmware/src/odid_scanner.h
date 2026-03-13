@@ -26,6 +26,10 @@ public:
     int getDetections(OdidDetection* out, int maxCount);
     int getDetectionCount() const { return _count; }
 
+#if HAS_BLE
+    friend class OdidBleCallbacks;
+#endif
+
 private:
     OdidDetection _buffer[MAX_DETECTIONS];
     volatile int _count = 0;

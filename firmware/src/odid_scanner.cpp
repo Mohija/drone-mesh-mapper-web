@@ -36,7 +36,7 @@ void OdidScanner::loop() {
 }
 
 int OdidScanner::getDetections(OdidDetection* out, int maxCount) {
-    int copied = min(_count, maxCount);
+    int copied = ((int)_count < maxCount) ? (int)_count : maxCount;
     if (copied > 0) {
         memcpy(out, _buffer, sizeof(OdidDetection) * copied);
         _count = 0;

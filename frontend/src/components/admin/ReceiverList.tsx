@@ -22,65 +22,66 @@ interface ShoppingItem {
   link?: string;
   price?: string;
   required: boolean;
+  group?: string; // Items with same group belong together (e.g. "controller-set")
 }
 
 const SHOPPING_LISTS: Record<string, { title: string; note: string; items: ShoppingItem[] }> = {
   'esp32-s3': {
     title: 'ESP32-S3 (Empfohlen)',
-    note: 'Voller Funktionsumfang: BLE + WiFi Remote ID, HTTPS, viel RAM. Beste Wahl für stationäre Empfänger.',
+    note: 'Voller Funktionsumfang: BLE + WiFi Remote ID, HTTPS, viel RAM. Beste Wahl für stationäre Empfänger. Alle Boards kommen mit vorgelöteten Pin-Headers — kein Löten nötig.',
     items: [
-      { name: 'ESP32-S3-DevKitC-1 (N16R8)', desc: '16 MB Flash, 8 MB PSRAM, WiFi + BLE 5.0, USB-C. Xtensa Dual-Core 240 MHz.', price: '~9 €', required: true,
-        link: 'https://www.amazon.de/ESP32-S3-WROOM-1-N16R8-ESP32-S3-DevKitC-1-Entwicklung-Bluetooth/dp/B0C6KN35L2' },
+      { name: 'ESP32-S3-DevKitC-1 N16R8 (vorgelötet, 2er-Pack)', desc: '16 MB Flash, 8 MB PSRAM, WiFi + BLE 5.0, USB-C, Dual-Core 240 MHz. Pin-Headers bereits aufgelötet — sofort einsatzbereit.', price: '~18 € (2 Stk.)', required: true, group: 'controller-set',
+        link: 'https://www.amazon.de/Diymore-DevKitC-Entwicklungsboard-Bluetooth-gel%C3%B6teten-2PCS/dp/B0DFCQGW4C' },
+      { name: 'GPIO Breakout Board für ESP32-S3', desc: 'Steckboden mit Montagelöchern — ESP32 einstecken, im Gehäuse verschrauben. Kein Löten, kein Breadboard. 5V/3.3V Ausgänge, GPIO-Status-LEDs.', price: '~12 €', required: true, group: 'controller-set',
+        link: 'https://www.amazon.de/Meshnology-Erweiterungsboard-Kunststoffdichtungen-Steckdosen-N40/dp/B0FLK4MDDW' },
       { name: 'USB-A auf USB-C Kabel (1m)', desc: 'Datenkabel (nicht nur Lade!) für Flashen und Stromversorgung.', price: '~7 €', required: true,
         link: 'https://www.amazon.de/1-m-langes-usb-c-kabel-usb-a-auf-usb-c-von-amazon/dp/B07Q5JW4J3' },
       { name: 'USB-Netzteil 5V/2A (USB-C)', desc: 'Steckernetzteil für Dauerbetrieb. 5V, min. 1A (2A empfohlen).', price: '~8 €', required: true,
         link: 'https://www.amazon.de/Bouge-Universal-Ladeger%C3%A4t-Kompatibilit%C3%A4t-Blackview/dp/B0C2Q5LK11' },
+      { name: 'ABS-Gehäuse IP65 (100×68×50 mm)', desc: 'Wasserdichtes Elektronik-Gehäuse für Außenmontage. Board + Breakout passen zusammen hinein.', price: '~7 €', required: true,
+        link: 'https://www.amazon.de/Elektronische-Wasserdichte-Industriegeh%C3%A4use-Anschlussdose-Verteilerdose/dp/B0DDWR9LP3' },
       { name: '2,4 GHz WiFi-Antenne 3dBi (IPEX/U.FL)', desc: 'Externe Antenne mit U.FL-Stecker + RP-SMA Pigtail 17cm. Verbessert WiFi-Beacon-Reichweite.', price: '~6 €', required: false,
         link: 'https://www.amazon.de/Bluetooth-Antenne-2-4GHz-geeignet-ESP8266/dp/B0CTG8XJSN' },
-      { name: 'ABS-Gehäuse IP65 (100×68×50 mm)', desc: 'Wasserdichtes Elektronik-Gehäuse für Außenmontage. Grau, mit transparentem Deckel.', price: '~7 €', required: true,
-        link: 'https://www.amazon.de/Elektronische-Wasserdichte-Industriegeh%C3%A4use-Anschlussdose-Verteilerdose/dp/B0DDWR9LP3' },
       { name: 'Kabelverschraubung M16 IP68 (5er-Pack)', desc: 'Wasserdichte Kabel-Durchführung für USB-Kabel ins Gehäuse. M16×1,5, 4–8 mm Kabeldurchmesser.', price: '~7 €', required: false,
         link: 'https://www.amazon.de/Kabelverschraubung-M16-Hanibos-Kabeldurchf%C3%BChrung-Kabelverschraubungen/dp/B0BXRVX368' },
-      { name: 'Nylon Abstandshalter M3 Set (260-tlg.)', desc: 'M3 Schrauben, Muttern, Standoffs zum Befestigen der Platine im Gehäuse. Isolierend.', price: '~8 €', required: false,
-        link: 'https://www.amazon.de/Schrauben-Abstandshalter-Schraubenmutter-Distanzh%C3%BClsen-Reparatur/dp/B0B2S6JLX4' },
       { name: 'PoE-Splitter 5V USB-C (IEEE 802.3af)', desc: 'Stromversorgung über Ethernet-Kabel. Spart extra Stromkabel bei Outdoor-Installation.', price: '~15 €', required: false,
         link: 'https://www.amazon.de/UCTRONICS-PoE-Splitter-USB-C-USB-C-Adapter-Sicherheitskameras/dp/B087F4QCTR' },
     ],
   },
   'esp32-c3': {
     title: 'ESP32-C3 (Kompakt)',
-    note: 'BLE + WiFi Remote ID, HTTPS – mit RISC-V Kern. Günstiger und kleiner als S3, aber weniger RAM.',
+    note: 'BLE + WiFi Remote ID, HTTPS – mit RISC-V Kern. Günstiger und kleiner als S3, aber weniger RAM. Board kommt mit vorgelöteten Pin-Headers. Hinweis: Der kompakte C3-DevKitM-1 (30 Pins) passt in keinen Standard-Steckboden — Befestigung im Gehäuse mit Abstandshaltern und Klebepads.',
     items: [
-      { name: 'ESP32-C3-DevKitM-1 (Espressif)', desc: 'Offizielles Espressif Board, 4 MB Flash, WiFi + BLE 5.0, USB-C. RISC-V Single-Core 160 MHz.', price: '~9 €', required: true,
-        link: 'https://www.amazon.de/Espressif-Entwicklungsboard-ESP32-C3-DevKitM-1/dp/B09P31Y4MF' },
+      { name: 'ESP32-C3-DevKitM-1 (vorgelötet)', desc: 'DollaTek Board, 4 MB Flash, WiFi + BLE 5.0, Dual USB-C, RISC-V 160 MHz. Pin-Headers vorgelötet. Kompaktes Format (54×25 mm).', price: '~9 €', required: true,
+        link: 'https://www.amazon.de/DollaTek-ESP32-C3-Bluetooth-Development-ESP32-C3-DevKitM-1/dp/B0BVQP3XPJ' },
       { name: 'USB-A auf USB-C Kabel (1m)', desc: 'Datenkabel für Flashen und Stromversorgung.', price: '~7 €', required: true,
         link: 'https://www.amazon.de/1-m-langes-usb-c-kabel-usb-a-auf-usb-c-von-amazon/dp/B07Q5JW4J3' },
       { name: 'USB-Netzteil 5V/2A (USB-A)', desc: 'Steckernetzteil für Dauerbetrieb. Geringerer Verbrauch als S3.', price: '~7 €', required: true,
         link: 'https://www.amazon.de/Ladeger%C3%A4t-Netzstecker-Steckdosenadapter-Ladestecker-Tischleuchte/dp/B0DNMKG9C3' },
-      { name: '2,4 GHz WiFi-Antenne 3dBi (IPEX/U.FL)', desc: 'Externe Antenne mit U.FL-Stecker. Optional da C3-MINI-1 eine PCB-Antenne hat.', price: '~6 €', required: false,
-        link: 'https://www.amazon.de/Bluetooth-Antenne-2-4GHz-geeignet-ESP8266/dp/B0CTG8XJSN' },
-      { name: 'ABS-Gehäuse IP65 (83×58×34 mm)', desc: 'Kompaktes wasserdichtes Gehäuse. Der C3 ist klein genug für Mini-Gehäuse.', price: '~5 €', required: true,
+      { name: 'ABS-Gehäuse IP65 (83×58×34 mm)', desc: 'Kompaktes wasserdichtes Gehäuse. Der kleine C3-DevKitM-1 passt problemlos hinein.', price: '~5 €', required: true,
         link: 'https://www.amazon.de/Robustes-ABS-Elektronik-Projektbox-wasserdichtes-Abzweiggeh%C3%A4use-Gr%C3%B6%C3%9Fenoptionen/dp/B0DL9MG241' },
+      { name: 'Nylon Abstandshalter M3 Set (260-tlg.)', desc: 'M3 Standoffs + Schrauben zur Befestigung der Platine im Gehäuse. Board mit Abstandshaltern positionieren und mit Klebepads fixieren.', price: '~8 €', required: false,
+        link: 'https://www.amazon.de/Schrauben-Abstandshalter-Schraubenmutter-Distanzh%C3%BClsen-Reparatur/dp/B0B2S6JLX4' },
+      { name: '2,4 GHz WiFi-Antenne 3dBi (IPEX/U.FL)', desc: 'Externe Antenne. Optional da C3-MINI-1 bereits PCB-Antenne hat.', price: '~6 €', required: false,
+        link: 'https://www.amazon.de/Bluetooth-Antenne-2-4GHz-geeignet-ESP8266/dp/B0CTG8XJSN' },
       { name: 'Kabelverschraubung M16 IP68 (5er-Pack)', desc: 'Wasserdichte Kabel-Durchführung für USB-Kabel ins Gehäuse.', price: '~7 €', required: false,
         link: 'https://www.amazon.de/Kabelverschraubung-M16-Hanibos-Kabeldurchf%C3%BChrung-Kabelverschraubungen/dp/B0BXRVX368' },
-      { name: 'Nylon Abstandshalter M3 Set (260-tlg.)', desc: 'M3 Standoffs, Schrauben und Muttern für Platinen-Montage im Gehäuse.', price: '~8 €', required: false,
-        link: 'https://www.amazon.de/Schrauben-Abstandshalter-Schraubenmutter-Distanzh%C3%BClsen-Reparatur/dp/B0B2S6JLX4' },
     ],
   },
   'esp8266': {
     title: 'ESP8266 / NodeMCU (Budget)',
-    note: 'Nur WiFi-Beacon ODID – kein BLE, kein HTTPS. Geeignet als günstige Ergänzung an Standorten mit bekanntem WiFi-Beacon-Verkehr.',
+    note: 'Nur WiFi-Beacon ODID – kein BLE, kein HTTPS. NodeMCU kommt immer mit vorgelöteten Pin-Headers. Wichtig: NodeMCU Lolin V3 ist die breite Variante (28mm Pin-Abstand) — nur kompatible Base Boards verwenden!',
     items: [
-      { name: 'AZDelivery NodeMCU Lolin V3 (ESP8266)', desc: 'ESP-12F Board mit CH340G USB-Chip, Micro-USB, WiFi 2,4 GHz, inkl. E-Book.', price: '~7 €', required: true,
+      { name: 'AZDelivery NodeMCU Lolin V3 (vorgelötet)', desc: 'ESP-12F Board mit CH340G, Micro-USB, WiFi 2,4 GHz. Pin-Headers vorgelötet, inkl. E-Book. Breite Variante (28mm Pin-Abstand).', price: '~7 €', required: true, group: 'controller-set',
         link: 'https://www.amazon.de/AZDelivery-NodeMCU-Lolin-WiFi-Parent/dp/B07Z5C3KQF' },
+      { name: 'Base Board für NodeMCU V3 Wide (28mm)', desc: 'DUBEUYEW Base Board — bestätigt kompatibel mit breiter NodeMCU V3 (28mm Pin-Abstand). DC-Buchse 6–24V, 5V/3.3V Ausgänge, GPIO-Verdopplung, Montagelöcher (60×60mm).', price: '~9 €', required: true, group: 'controller-set',
+        link: 'https://www.amazon.de/dp/B0D1KCYG3W' },
       { name: 'Micro-USB Kabel (1m)', desc: 'Datenkabel für Flashen und Stromversorgung. Auf Datenkabel achten!', price: '~5 €', required: true,
         link: 'https://www.amazon.de/KabelDirekt-Micro-Ladekabel-Datenkabel-schwarz/dp/B00L5G2IR6' },
-      { name: 'USB-Netzteil 5V/2A (3er-Pack)', desc: 'Steckernetzteil mit USB-A Ausgang für Micro-USB Kabel. 3er-Pack praktisch für mehrere Nodes.', price: '~9 €', required: true,
+      { name: 'USB-Netzteil 5V/2A (3er-Pack)', desc: 'Steckernetzteil mit USB-A Ausgang. 3er-Pack praktisch für mehrere Nodes.', price: '~9 €', required: true,
         link: 'https://www.amazon.de/Ladeger%C3%A4t-Netzstecker-Smartphones-Spielzeug-Spielkonsole-wei%C3%9F/dp/B0CM9G39DW' },
-      { name: 'ABS-Gehäuse klein (5er-Pack)', desc: 'Kleine ABS-Projektbox für Elektronik. NodeMCU passt in Standard-Projektboxen.', price: '~6 €', required: true,
-        link: 'https://www.amazon.de/Geh%C3%A4use-ABS-Kunststoff-Projektbox-elektronische-Schaltungen/dp/B08JHYNPH8' },
-      { name: 'Nylon Abstandshalter M3 Set (260-tlg.)', desc: 'Zur Montage der Platine im Gehäuse. Auch nützlich für andere Projekte.', price: '~8 €', required: false,
-        link: 'https://www.amazon.de/Schrauben-Abstandshalter-Schraubenmutter-Distanzh%C3%BClsen-Reparatur/dp/B0B2S6JLX4' },
+      { name: 'ABS-Gehäuse IP65 (100×68×50 mm)', desc: 'Wasserdichtes Elektronik-Gehäuse. Passt NodeMCU + Base Board (60×60mm) mit etwas Luft.', price: '~7 €', required: true,
+        link: 'https://www.amazon.de/Elektronische-Wasserdichte-Industriegeh%C3%A4use-Anschlussdose-Verteilerdose/dp/B0DDWR9LP3' },
     ],
   },
 };
@@ -460,32 +461,56 @@ export default function ReceiverList() {
                       </tr>
                     </thead>
                     <tbody>
-                      {SHOPPING_LISTS[newType].items.map((item, i) => (
-                        <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
+                      {SHOPPING_LISTS[newType].items.map((item, i, arr) => {
+                        const isGroupStart = item.group && (i === 0 || arr[i - 1].group !== item.group);
+                        const isInGroup = !!item.group;
+                        const groupSize = item.group ? arr.filter(x => x.group === item.group).length : 0;
+                        return (
+                        <tr key={i} style={{
+                          borderBottom: '1px solid var(--border)',
+                          borderLeft: isInGroup ? '3px solid #3b82f6' : 'none',
+                          background: isInGroup ? 'rgba(59,130,246,0.04)' : 'transparent',
+                        }}>
                           <td style={{ padding: '8px', fontWeight: 500, color: 'var(--text-primary)' }}>
-                            {item.name}
-                            {item.link && (
-                              <a
-                                href={item.link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                data-testid={`shopping-link-${i}`}
-                                style={{
-                                  display: 'inline-block',
-                                  marginLeft: 6,
-                                  padding: '1px 6px',
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <span>{item.name}</span>
+                              {item.link && (
+                                <a
+                                  href={item.link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  data-testid={`shopping-link-${i}`}
+                                  style={{
+                                    display: 'inline-block',
+                                    padding: '1px 6px',
+                                    borderRadius: 4,
+                                    fontSize: 9,
+                                    fontWeight: 600,
+                                    background: 'rgba(20,184,166,0.15)',
+                                    color: '#14b8a6',
+                                    textDecoration: 'none',
+                                  }}
+                                >
+                                  Amazon &#8599;
+                                </a>
+                              )}
+                              {isGroupStart && groupSize > 1 && (
+                                <span style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 3,
+                                  padding: '1px 7px',
                                   borderRadius: 4,
                                   fontSize: 9,
                                   fontWeight: 600,
-                                  background: 'rgba(20,184,166,0.15)',
-                                  color: '#14b8a6',
-                                  textDecoration: 'none',
-                                  verticalAlign: 'middle',
-                                }}
-                              >
-                                Amazon &#8599;
-                              </a>
-                            )}
+                                  background: 'rgba(59,130,246,0.15)',
+                                  color: '#3b82f6',
+                                  whiteSpace: 'nowrap',
+                                }}>
+                                  &#x1F517; {groupSize} Teile = 1 Set
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td style={{ padding: '8px', color: 'var(--text-secondary)', fontSize: 11 }}>
                             {item.desc}
@@ -507,7 +532,8 @@ export default function ReceiverList() {
                             </span>
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
 
@@ -526,7 +552,7 @@ export default function ReceiverList() {
                       Geschätzte Gesamtkosten (Pflichtteile):
                     </span>
                     <span data-testid="shopping-list-total" style={{ fontWeight: 700, color: '#14b8a6' }}>
-                      {newType === 'esp32-s3' ? '~31 €' : newType === 'esp32-c3' ? '~28 €' : '~27 €'}
+                      {newType === 'esp32-s3' ? '~52 € (2 Boards)' : newType === 'esp32-c3' ? '~28 €' : '~37 €'}
                     </span>
                   </div>
                   <div style={{ marginTop: 6, fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>
@@ -556,8 +582,8 @@ export default function ReceiverList() {
                     )}
                     {newType === 'esp32-c3' && (
                       <>
-                        <strong>Gute Alternative.</strong> Der ESP32-C3 bietet ebenfalls BLE + WiFi und HTTPS,
-                        ist aber kleiner und günstiger. Ideal wenn Platz oder Budget begrenzt sind. Etwas weniger RAM als der S3.
+                        <strong>Kompakteste Variante.</strong> Der ESP32-C3 bietet BLE + WiFi und HTTPS, ist aber deutlich kleiner und günstiger.
+                        Kein passender Steckboden verfügbar — Befestigung im Gehäuse mit Abstandshaltern/Klebepads. Etwas weniger RAM als der S3.
                       </>
                     )}
                     {newType === 'esp8266' && (
