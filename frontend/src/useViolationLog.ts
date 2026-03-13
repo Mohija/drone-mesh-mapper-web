@@ -40,7 +40,7 @@ export interface UseViolationLogReturn {
   hasOtherRecords: (droneId: string, excludeRecordId: string) => boolean;
 }
 
-export function useViolationLog(): UseViolationLogReturn {
+export function useViolationLog(violationVersion?: number): UseViolationLogReturn {
   const [records, setRecords] = useState<ViolationRecord[]>([]);
   const [collapsed, setCollapsed] = useState(true);
   // Track which record IDs we already alerted on (survives re-renders)
@@ -50,15 +50,26 @@ export function useViolationLog(): UseViolationLogReturn {
   // For getDroneIdForRecord / hasOtherRecords — keep in ref so callbacks are stable
   const recordsRef = useRef(records);
   recordsRef.current = records;
+  // Track last seen violation version to skip redundant fetches
+  const lastViolationVersionRef = useRef<number | undefined>(undefined);
 
   /**
    * Fetch violation records from backend and merge with local UI state.
    * Detects NEW active violations (not yet alerted) → plays sound + auto-tracks.
+   * Skips fetch when violation_version from /api/drones hasn't changed.
    */
   const sync = useCallback(async (
     drones: Drone[],
     onAutoTrack?: (drone: Drone) => void,
   ) => {
+    // Skip fetch if violation version hasn't changed (saves bandwidth)
+    if (violationVersion !== undefined &&
+        lastViolationVersionRef.current !== undefined &&
+        violationVersion === lastViolationVersionRef.current) {
+      return;
+    }
+    lastViolationVersionRef.current = violationVersion;
+
     let serverRecords: ServerViolationRecord[];
     try {
       const data = await fetchViolations();
@@ -113,13 +124,15 @@ export function useViolationLog(): UseViolationLogReturn {
         }
       }
     }
-  }, []);
+  }, [violationVersion]);
 
   const deleteRecord = useCallback(async (recordId: string) => {
     // Optimistic: remove locally first, then sync to backend
     alertedRef.current.delete(recordId);
     trackingVisRef.current.delete(recordId);
     setRecords(prev => prev.filter(r => r.id !== recordId));
+    // Reset version so next sync fetches fresh data after server-side re-detection
+    lastViolationVersionRef.current = undefined;
     try {
       await deleteViolationRecord(recordId);
     } catch { /* best-effort — next sync will reconcile */ }
@@ -137,6 +150,8 @@ export function useViolationLog(): UseViolationLogReturn {
     setRecords([]);
     alertedRef.current.clear();
     trackingVisRef.current.clear();
+    // Reset version so next sync always fetches fresh data
+    lastViolationVersionRef.current = undefined;
     try {
       await clearViolationRecords();
     } catch { /* best-effort */ }

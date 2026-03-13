@@ -2,10 +2,48 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-12 (v1.4.0 - Multi-Tenant-System + Mandanten-Isolation)
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-13 (Adress-Geocoding für Einsatz-Zonen)
 - **Typ:** Projekt | **Status:** Development
 
 ## Änderungshistorie
+
+### 2026-03-13 - Adress-Geocoding für Einsatz-Zonen
+**Änderungen:**
+- **Forward-Geocoding (Backend):** `_forward_geocode(address)` via Nominatim API — wandelt Adressen in Koordinaten um
+- **Neuer Endpoint `GET /api/geocode?q=...`:** Standalone Forward-Geocoding für autorisierte Benutzer
+- **`POST /api/zones/mission` erweitert:** Akzeptiert jetzt `lat`+`lon` ODER `address` (mindestens eins erforderlich). `lat`/`lon` hat Vorrang wenn beides angegeben. Bei Adresse wird `resolved_address` in der Response zurückgegeben
+- **Frontend FlightZonesPanel:** Toggle zwischen "Kartenmitte" und "Adresse"-Modus. Adress-Eingabefeld mit automatischer Geocodierung und Fehleranzeige
+- **Frontend API:** `forwardGeocode()` und `createMissionZone()` mit optionalem `address`-Feld
+- **useFlightZones Hook:** `createMissionZoneByAddress()` für Adress-basierte Zonenerstellung
+- **PS1-Script aktualisiert:** Neuer `-Address` Parameter als Alternative zu `-Lat`/`-Lon`. Validierung: mindestens Koordinaten oder Adresse erforderlich
+- **E2E-Tests:** 8 neue Tests (Geocode API: resolve/404/400, Mission Zone mit Adresse: create/precedence/bad-addr, UI: mode-toggle/address-create/error-display)
+- **Alle 73 Unit-Tests bestehen**
+**Dateien:** `backend/app.py`, `frontend/src/api.ts`, `frontend/src/useFlightZones.ts`, `frontend/src/components/FlightZonesPanel.tsx`, `frontend/src/components/MapPage.tsx`, `frontend/e2e/flight-zones.spec.ts`, `examples/create_mission_zone.ps1`
+
+### 2026-03-13 - Simulation-Neustart, Einsatz-Zonen, E2E-Test-Fixes
+**Änderungen:**
+- **Simulation-Neustart:** Neuer Button in Settings zum Neustarten der Dronen-Simulation (nur wenn Simulator aktiv, tenant_admin+)
+- **Einsatz-Zonen (Mission Zones):** `POST /api/zones/mission` erstellt kreisförmige 100m-Zone an gegebener Position; Button im FlightZonesPanel; `circle_polygon()` Haversine-Berechnung
+- **Map-Navigation:** `onSelectZone` fliegt jetzt zum Zonenzentrum nach Erstellung
+- **API-Beispiele:** Python + PowerShell Beispielskripts für Mission Zone API via Live-Proxy
+- **E2E Multi-Tenant-Tests komplett repariert:** 38/38 Tests bestehen
+  - UID-Stabilität über Worker-Restarts (File-basierte State-Persistenz)
+  - Rollenbasierte Zone-Operationen (tenant_admin für CRUD, user für Read)
+  - Cross-Tenant-Isolation mit tenant_admin-Headers
+  - apiLogin wirft jetzt bei Login-Fehlern statt "Bearer undefined"
+  - Cleanup entfernt alle e2e-* Daten (nicht nur aktuelle UID)
+- **Violations-API-Format:** `data.violations` → `data.records` in E2E-Tests korrigiert
+- **E2E Mission Zone Tenant Isolation:** 3 neue Tests prüfen PS1-Script-Flow (Tenant-Lookup → Login mit tenant_id → Zone erstellen → Isolation verifizieren)
+- **Echtzeit-Sync für alle Tenant-Clients:** Version-Counter-Pattern generalisiert für Zones, Violations und Settings
+  - `zone_version`: bei jeder Zone-Mutation (create/update/delete/assign/unassign)
+  - `violation_version`: bei neuen/beendeten Violations, Delete, Clear, Comment-Update (nur bei tatsächlicher Änderung)
+  - `settings_version`: bei Settings-Update (Sources, Center, Radius)
+  - Alle drei Versionen im `/api/drones`-Response mitgeliefert (piggyback auf bestehendem 2s-Polling)
+  - Frontend `useViolationLog` skippt API-Fetch wenn violation_version unverändert (spart ~25 API-Calls/s bei 50 Clients)
+  - `clearAll`/`deleteRecord` resetten Version-Ref für sofortiges Refetch nach Re-Detection
+- **E2E Zone Auto-Refresh:** 4 Tests (zone_version im Response, Inkrement bei Create/Delete, UI-Auto-Update innerhalb eines Poll-Zyklus)
+- **E2E Violation-Fix:** Umlaut-Encoding `Zonenverstoesze` → `Zonenverstöße`, Re-Detection-Count auf ≥2 statt ≥initialCount, `.first()` für mehrdeutige Drone-Selektoren
+**Dateien:** `backend/app.py`, `backend/flight_zones.py`, `frontend/src/api.ts`, `frontend/src/types/drone.ts`, `frontend/src/components/SettingsPage.tsx`, `frontend/src/components/FlightZonesPanel.tsx`, `frontend/src/components/MapPage.tsx`, `frontend/src/useFlightZones.ts`, `frontend/e2e/multi-tenant.spec.ts`, `frontend/e2e/flight-zones.spec.ts`, `frontend/e2e/helpers.ts`, `examples/create_mission_zone.py`, `examples/create_mission_zone.ps1`
 
 ### 2026-03-12 - Mandanten-Isolation für Zones, Settings, Archives, Center
 **Änderungen:**

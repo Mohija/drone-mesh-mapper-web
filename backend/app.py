@@ -176,6 +176,9 @@ def get_drones():
         "count": len(drones),
         "center": {"lat": center_lat, "lon": center_lon},
         "sources": enabled,
+        "zone_version": zones.get_zone_version(tenant_id=tid),
+        "violation_version": zones.get_violation_version(tenant_id=tid),
+        "settings_version": settings.get_version(tenant_id=tid),
     })
 
 
@@ -244,6 +247,30 @@ def get_status():
     """Get simulation status."""
     return jsonify({
         "running": fleet.running,
+        "drone_count": len(fleet.drones),
+        "center": {"lat": fleet.center_lat, "lon": fleet.center_lon},
+    })
+
+
+@app.route("/api/simulation/restart", methods=["POST"])
+@login_required
+@role_required("tenant_admin")
+def restart_simulation():
+    """Restart the drone simulation (reinitializes all drones with fresh state)."""
+    tid = g.tenant_id or DEFAULT_TENANT_ID
+    enabled = settings.get_enabled_sources(tenant_id=tid)
+    if "simulator" not in enabled:
+        return jsonify({"error": "Simulator ist nicht aktiviert"}), 400
+
+    # Use tenant center if available, otherwise default
+    tenant_settings = settings.get_all(tenant_id=tid)
+    center_lat = tenant_settings.get("center_lat") or DEFAULT_LAT
+    center_lon = tenant_settings.get("center_lon") or DEFAULT_LON
+
+    fleet.set_center(center_lat, center_lon)
+    logger.info("Simulation restarted by tenant=%s at (%.6f, %.6f)", tid, center_lat, center_lon)
+    return jsonify({
+        "status": "restarted",
         "drone_count": len(fleet.drones),
         "center": {"lat": fleet.center_lat, "lon": fleet.center_lon},
     })
@@ -663,6 +690,107 @@ def create_zone():
         return jsonify(zone), 201
     except ValueError as e:
         zone_logger.warning("Zone creation rejected: %s", e)
+        return jsonify({"error": str(e)}), 400
+
+
+def _forward_geocode(address: str) -> dict | None:
+    """Forward-geocode an address string via Nominatim → {lat, lon, display_name} or None."""
+    try:
+        resp = http_requests.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={"q": address, "format": "json", "limit": 1, "addressdetails": 1},
+            headers={"User-Agent": "FlightArc/1.4 (drone monitoring)"},
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            return None
+        results = resp.json()
+        if not results:
+            return None
+        hit = results[0]
+        return {
+            "lat": float(hit["lat"]),
+            "lon": float(hit["lon"]),
+            "display_name": hit.get("display_name", address),
+        }
+    except Exception as exc:
+        zone_logger.warning("Forward geocode failed for '%s': %s", address, exc)
+        return None
+
+
+@app.route("/api/geocode", methods=["GET"])
+@login_required
+def geocode_address():
+    """Forward-geocode an address string.
+    Query: ?q=Musterstraße 1, Berlin
+    Returns: { lat, lon, display_name } or 404.
+    """
+    query = (request.args.get("q") or "").strip()
+    if not query:
+        return jsonify({"error": "q Parameter ist erforderlich"}), 400
+    result = _forward_geocode(query)
+    if not result:
+        return jsonify({"error": "Adresse nicht gefunden"}), 404
+    return jsonify(result)
+
+
+@app.route("/api/zones/mission", methods=["POST"])
+@login_required
+def create_mission_zone():
+    """Create a circular 100m-radius mission (Einsatz) flight zone.
+    Body: { "name": "...", "lat": 52.0, "lon": 8.5 }
+      OR: { "name": "...", "address": "Musterstraße 1, Berlin" }
+      OR both (lat/lon takes precedence).
+    At least lat+lon or address must be provided.
+    Tenant is taken from the auth token.
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Request body required"}), 400
+
+    name = (data.get("name") or "").strip()
+    lat = data.get("lat")
+    lon = data.get("lon")
+    address = (data.get("address") or "").strip()
+
+    if not name:
+        return jsonify({"error": "name ist erforderlich"}), 400
+
+    # Resolve coordinates: lat/lon take precedence, otherwise geocode address
+    resolved_address = None
+    if lat is not None and lon is not None:
+        try:
+            lat = float(lat)
+            lon = float(lon)
+        except (TypeError, ValueError):
+            return jsonify({"error": "lat und lon müssen Zahlen sein"}), 400
+    elif address:
+        geo = _forward_geocode(address)
+        if not geo:
+            return jsonify({"error": f"Adresse nicht gefunden: {address}"}), 400
+        lat = geo["lat"]
+        lon = geo["lon"]
+        resolved_address = geo["display_name"]
+        zone_logger.info("Geocoded '%s' → (%.6f, %.6f)", address, lat, lon)
+    else:
+        return jsonify({"error": "lat+lon oder address ist erforderlich"}), 400
+
+    from flight_zones import circle_polygon
+    polygon = circle_polygon(lat, lon, radius_m=100, num_points=36)
+
+    try:
+        zone = zones.create_zone({
+            "name": name,
+            "color": "#f97316",
+            "polygon": polygon,
+        }, tenant_id=g.tenant_id)
+        zone_logger.info("POST /api/zones/mission - created %s: %s at (%.6f, %.6f)", zone["id"], name, lat, lon)
+        result = zone
+        if resolved_address:
+            result["resolved_address"] = resolved_address
+        return jsonify(result), 201
+    except ValueError as e:
+        zone_logger.warning("Mission zone rejected: %s", e)
         return jsonify({"error": str(e)}), 400
 
 

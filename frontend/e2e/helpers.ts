@@ -19,7 +19,14 @@ export async function apiLogin(request: APIRequestContext, username = 'admin', p
   const res = await request.post('/api/auth/login', {
     data: { username, password },
   });
+  if (!res.ok()) {
+    const body = await res.text();
+    throw new Error(`Login failed for ${username}: ${res.status()} ${body}`);
+  }
   const data = await res.json();
+  if (!data.access_token) {
+    throw new Error(`Login response for ${username} missing access_token`);
+  }
   return { Authorization: `Bearer ${data.access_token}` };
 }
 

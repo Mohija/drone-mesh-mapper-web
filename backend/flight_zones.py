@@ -16,6 +16,28 @@ class FlightZoneManager:
     def __init__(self, app=None, tenant_id=None):
         self._app = app
         self._default_tenant_id = tenant_id
+        self._zone_versions: dict[str, int] = {}       # tenant_id -> version counter
+        self._violation_versions: dict[str, int] = {}  # tenant_id -> version counter
+
+    def get_zone_version(self, tenant_id=None) -> int:
+        """Return current zone version for a tenant (increments on every mutation)."""
+        tid = tenant_id or self._default_tenant_id
+        return self._zone_versions.get(tid, 0)
+
+    def _bump_version(self, tenant_id=None):
+        """Increment zone version for a tenant so clients know to refetch."""
+        tid = tenant_id or self._default_tenant_id
+        self._zone_versions[tid] = self._zone_versions.get(tid, 0) + 1
+
+    def get_violation_version(self, tenant_id=None) -> int:
+        """Return current violation version for a tenant."""
+        tid = tenant_id or self._default_tenant_id
+        return self._violation_versions.get(tid, 0)
+
+    def _bump_violation_version(self, tenant_id=None):
+        """Increment violation version so clients refetch violation records."""
+        tid = tenant_id or self._default_tenant_id
+        self._violation_versions[tid] = self._violation_versions.get(tid, 0) + 1
 
     def bind(self, app, tenant_id):
         self._app = app
@@ -78,6 +100,7 @@ class FlightZoneManager:
             db.session.commit()
             result = zone.to_dict()
 
+        self._bump_version(tid)
         logger.info("Created zone %s: name=%s points=%d", result["id"], name, len(polygon))
         return result
 
@@ -113,6 +136,7 @@ class FlightZoneManager:
             db.session.commit()
             result = zone.to_dict()
 
+        self._bump_version(tid)
         logger.info("Updated zone %s", zone_id)
         return result
 
@@ -130,6 +154,7 @@ class FlightZoneManager:
             db.session.delete(zone)
             db.session.commit()
 
+        self._bump_version(tid)
         logger.info("Deleted zone %s", zone_id)
         return True
 
@@ -152,6 +177,7 @@ class FlightZoneManager:
             db.session.commit()
             result = zone.to_dict()
 
+        self._bump_version(tid)
         logger.info("Assigned %d drone(s) to zone %s", len(drone_ids), zone_id)
         return result
 
@@ -173,6 +199,7 @@ class FlightZoneManager:
             db.session.commit()
             result = zone.to_dict()
 
+        self._bump_version(tid)
         logger.info("Unassigned %d drone(s) from zone %s", len(drone_ids), zone_id)
         return result
 
@@ -297,9 +324,11 @@ class FlightZoneManager:
                 existing_keys[(record.drone_id, record.zone_id)] = record
 
             # End violations where drone left zone
+            changed = False
             for key, record in existing_keys.items():
                 if key not in active_pairs:
                     record.end_time = now
+                    changed = True
 
             # Create new violations or append trail snapshots
             for key, details in active_pairs.items():
@@ -330,6 +359,7 @@ class FlightZoneManager:
                         start_time=now,
                         trail_data=[snapshot],
                     ))
+                    changed = True
                 else:
                     # Append trail snapshot to existing active violation
                     record = existing_keys[key]
@@ -339,8 +369,10 @@ class FlightZoneManager:
 
             db.session.commit()
 
-        logger.debug("update_violations tenant=%s: %d active pairs, %d db records",
-                      tid, len(active_pairs), len(existing_keys))
+        if changed:
+            self._bump_violation_version(tid)
+        logger.debug("update_violations tenant=%s: %d active pairs, %d db records, changed=%s",
+                      tid, len(active_pairs), len(existing_keys), changed)
 
     def list_violations(self, tenant_id=None) -> list[dict]:
         """Get all violation records for a tenant (active + ended)."""
@@ -375,6 +407,8 @@ class FlightZoneManager:
                 return False
             record.comments = comments
             db.session.commit()
+        self._bump_violation_version(tid)
+        logger.debug("Updated comments on violation %s", record_id)
         return True
 
     def delete_violation(self, record_id: str, tenant_id=None) -> bool:
@@ -389,6 +423,8 @@ class FlightZoneManager:
                 return False
             db.session.delete(record)
             db.session.commit()
+        self._bump_violation_version(tid)
+        logger.debug("Deleted violation record %s", record_id)
         return True
 
     def clear_violations(self, tenant_id=None) -> int:
@@ -400,8 +436,34 @@ class FlightZoneManager:
         with self._ctx():
             count = VR.query.filter_by(tenant_id=tid).delete()
             db.session.commit()
+        if count > 0:
+            self._bump_violation_version(tid)
         logger.info("Cleared %d violation records for tenant %s", count, tid)
         return count
+
+
+def circle_polygon(lat: float, lon: float, radius_m: float, num_points: int = 36) -> list[list[float]]:
+    """Generate a circular polygon around a center point.
+
+    Returns a list of [lat, lon] pairs approximating a circle.
+    """
+    import math
+    R = 6371000  # earth radius in meters
+    points = []
+    for i in range(num_points):
+        bearing = math.radians(i * (360 / num_points))
+        lat1 = math.radians(lat)
+        lon1 = math.radians(lon)
+        lat2 = math.asin(
+            math.sin(lat1) * math.cos(radius_m / R)
+            + math.cos(lat1) * math.sin(radius_m / R) * math.cos(bearing)
+        )
+        lon2 = lon1 + math.atan2(
+            math.sin(bearing) * math.sin(radius_m / R) * math.cos(lat1),
+            math.cos(radius_m / R) - math.sin(lat1) * math.sin(lat2),
+        )
+        points.append([round(math.degrees(lat2), 6), round(math.degrees(lon2), 6)])
+    return points
 
 
 def point_in_polygon(lat: float, lon: float, polygon: list[list[float]]) -> bool:

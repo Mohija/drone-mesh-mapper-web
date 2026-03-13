@@ -3,6 +3,7 @@ import type { FlightZone } from './types/drone';
 import {
   fetchFlightZones,
   createFlightZone,
+  createMissionZone as apiCreateMissionZone,
   updateFlightZone as apiUpdateZone,
   deleteFlightZone as apiDeleteZone,
   assignDronesToZone,
@@ -48,6 +49,8 @@ export interface UseFlightZonesReturn {
   undoLastPoint: () => void;
   cancelDrawing: () => void;
   finishDrawing: (name: string, color: string, minAGL: number | null, maxAGL: number | null) => Promise<void>;
+  createMissionZone: (name: string, lat: number, lon: number) => Promise<FlightZone>;
+  createMissionZoneByAddress: (name: string, address: string) => Promise<FlightZone & { resolved_address?: string }>;
   deleteZone: (zoneId: string) => Promise<void>;
   updateZone: (zoneId: string, updates: Partial<Pick<FlightZone, 'name' | 'color' | 'polygon' | 'minAltitudeAGL' | 'maxAltitudeAGL'>>) => Promise<void>;
   assignDrones: (zoneId: string, droneIds: string[]) => Promise<void>;
@@ -55,20 +58,27 @@ export interface UseFlightZonesReturn {
   colorIndex: number;
 }
 
-export function useFlightZones(): UseFlightZonesReturn {
+export function useFlightZones(zoneVersion?: number): UseFlightZonesReturn {
   const [zones, setZones] = useState<FlightZone[]>([]);
   const [drawingMode, setDrawingMode] = useState(false);
   const [pendingPoints, setPendingPoints] = useState<[number, number][]>([]);
   const colorIndexRef = useRef(0);
+  const lastVersionRef = useRef<number | undefined>(undefined);
 
-  // Load zones on mount + refresh periodically (30s) so all users in a tenant
-  // see zones created by other users without a page reload.
+  // Load zones on mount
   useEffect(() => {
-    const load = () => fetchFlightZones().then(setZones).catch(() => {});
-    load();
-    const iv = setInterval(load, 30_000);
-    return () => clearInterval(iv);
+    fetchFlightZones().then(setZones).catch(() => {});
   }, []);
+
+  // Refetch zones whenever zone_version from the drones API changes
+  // (piggybacks on the existing 2s drone poll → near-instant zone updates)
+  useEffect(() => {
+    if (zoneVersion === undefined) return;
+    if (lastVersionRef.current !== undefined && zoneVersion !== lastVersionRef.current) {
+      fetchFlightZones().then(setZones).catch(() => {});
+    }
+    lastVersionRef.current = zoneVersion;
+  }, [zoneVersion]);
 
   const startDrawing = useCallback(() => {
     setDrawingMode(true);
@@ -119,6 +129,18 @@ export function useFlightZones(): UseFlightZonesReturn {
     }
   }, [pendingPoints]);
 
+  const createMissionZone = useCallback(async (name: string, lat: number, lon: number): Promise<FlightZone> => {
+    const zone = await apiCreateMissionZone({ name, lat, lon });
+    setZones(prev => [...prev, zone]);
+    return zone;
+  }, []);
+
+  const createMissionZoneByAddress = useCallback(async (name: string, address: string): Promise<FlightZone & { resolved_address?: string }> => {
+    const zone = await apiCreateMissionZone({ name, address });
+    setZones(prev => [...prev, zone]);
+    return zone;
+  }, []);
+
   const deleteZone = useCallback(async (zoneId: string) => {
     await apiDeleteZone(zoneId);
     setZones(prev => prev.filter(z => z.id !== zoneId));
@@ -149,6 +171,8 @@ export function useFlightZones(): UseFlightZonesReturn {
     undoLastPoint,
     cancelDrawing,
     finishDrawing,
+    createMissionZone,
+    createMissionZoneByAddress,
     deleteZone,
     updateZone,
     assignDrones,

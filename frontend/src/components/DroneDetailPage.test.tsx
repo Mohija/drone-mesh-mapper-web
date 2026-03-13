@@ -12,6 +12,7 @@ vi.mock('../api', () => ({
   fetchDrone: (...args: unknown[]) => mockFetchDrone(...args),
   fetchDroneHistory: (...args: unknown[]) => mockFetchDroneHistory(...args),
   lookupAircraft: vi.fn().mockResolvedValue({ identifier: 'TEST', found: false }),
+  reverseGeocode: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('../elevationGrid', () => ({

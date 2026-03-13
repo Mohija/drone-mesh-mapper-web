@@ -26,6 +26,7 @@ vi.mock('../config/noFlyZones', () => ({
 
 vi.mock('../api', () => ({
   lookupAircraft: vi.fn().mockResolvedValue({ identifier: 'TEST', found: false }),
+  reverseGeocode: vi.fn().mockResolvedValue(null),
 }));
 
 function renderPanel(droneOverrides = {}, onClose = vi.fn()) {

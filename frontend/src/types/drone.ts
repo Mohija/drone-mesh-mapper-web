@@ -62,6 +62,9 @@ export interface DronesResponse {
   count: number;
   center: { lat: number; lon: number };
   sources?: string[];
+  zone_version?: number;
+  violation_version?: number;
+  settings_version?: number;
 }
 
 export interface AircraftLookup {

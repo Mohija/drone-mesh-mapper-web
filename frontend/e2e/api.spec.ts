@@ -162,6 +162,43 @@ test.describe('API Endpoints', () => {
     expect(data.center).toHaveProperty('lon');
   });
 
+  test('POST /api/simulation/restart restarts simulation', async ({ request }) => {
+    // Get battery before restart
+    const before = await (await request.get('/api/drones/AZTEST001', { headers: authHeaders })).json();
+    const batteryBefore = before.battery;
+
+    const res = await request.post('/api/simulation/restart', { headers: authHeaders });
+    expect(res.status()).toBe(200);
+    const data = await res.json();
+    expect(data.status).toBe('restarted');
+    expect(data.drone_count).toBe(5);
+    expect(data.center).toHaveProperty('lat');
+    expect(data.center).toHaveProperty('lon');
+
+    // Verify drones were reinitialized (battery should be fresh 60-100%)
+    const after = await (await request.get('/api/drones/AZTEST001', { headers: authHeaders })).json();
+    expect(after.battery).toBeGreaterThanOrEqual(60);
+  });
+
+  test('POST /api/simulation/restart 400 when simulator disabled', async ({ request }) => {
+    // Disable simulator
+    await request.post('/api/settings', {
+      headers: authHeaders,
+      data: { sources: { simulator: { enabled: false } } },
+    });
+
+    const res = await request.post('/api/simulation/restart', { headers: authHeaders });
+    expect(res.status()).toBe(400);
+    const data = await res.json();
+    expect(data.error).toContain('nicht aktiviert');
+
+    // Re-enable simulator
+    await request.post('/api/settings', {
+      headers: authHeaders,
+      data: { sources: { simulator: { enabled: true } } },
+    });
+  });
+
   test('unauthenticated request returns 401', async ({ request }) => {
     const res = await request.get('/api/drones');
     expect(res.status()).toBe(401);

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { DataSourceSettings } from '../types/drone';
-import { fetchSettings, updateSettings } from '../api';
+import { fetchSettings, updateSettings, restartSimulation } from '../api';
 import { useTheme } from '../ThemeContext';
 import { useAuth } from '../AuthContext';
 import { getUserItem, setUserItem } from '../userStorage';
@@ -23,6 +23,8 @@ export default function SettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [violationSound, setViolationSound] = useState(() => getUserItem('violation-sound') !== 'off');
+  const [restarting, setRestarting] = useState(false);
+  const [restarted, setRestarted] = useState(false);
 
   useEffect(() => {
     fetchSettings()
@@ -43,6 +45,20 @@ export default function SettingsPage() {
       },
     });
     setSaved(false);
+  };
+
+  const handleRestart = async () => {
+    setRestarting(true);
+    setError(null);
+    try {
+      await restartSimulation();
+      setRestarted(true);
+      setTimeout(() => setRestarted(false), 2000);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Neustart fehlgeschlagen');
+    } finally {
+      setRestarting(false);
+    }
   };
 
   const handleSave = async () => {
@@ -299,6 +315,31 @@ export default function SettingsPage() {
                   {cfg.description}
                 </div>
               </div>
+
+              {/* Restart button (simulator only) */}
+              {id === 'simulator' && cfg.enabled && canManage && (
+                <button
+                  onClick={handleRestart}
+                  disabled={restarting}
+                  title="Simulation neu starten"
+                  data-testid="restart-simulation"
+                  style={{
+                    padding: '4px 10px',
+                    background: restarted ? 'var(--status-active)' : 'var(--bg-tertiary)',
+                    border: '1px solid var(--border)',
+                    color: restarted ? '#fff' : 'var(--text-secondary)',
+                    borderRadius: 6,
+                    fontSize: 12,
+                    cursor: restarting ? 'not-allowed' : 'pointer',
+                    opacity: restarting ? 0.7 : 1,
+                    transition: 'background 0.2s, color 0.2s',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                  }}
+                >
+                  {restarting ? 'Neustart...' : restarted ? 'Neugestartet!' : 'Neustart'}
+                </button>
+              )}
 
               {/* Toggle */}
               <button

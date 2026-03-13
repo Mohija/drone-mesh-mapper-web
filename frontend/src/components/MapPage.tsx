@@ -75,10 +75,13 @@ export default function MapPage() {
   const [selectedViolationRecordId, setSelectedViolationRecordId] = useState<string | null>(null);
   const [violationTableHeight, setViolationTableHeight] = useState(0);
   const handleViolationHeightChange = useCallback((h: number) => setViolationTableHeight(h), []);
+  const [zoneVersion, setZoneVersion] = useState<number | undefined>(undefined);
+  const [violationVersion, setViolationVersion] = useState<number | undefined>(undefined);
+  const [settingsVersion, setSettingsVersion] = useState<number | undefined>(undefined);
   const tracking = useTracking();
   const hasActiveTracking = [...tracking.trackedFlights.values()].some(f => f.state === 'tracking');
-  const flightZones = useFlightZones();
-  const violationLog = useViolationLog();
+  const flightZones = useFlightZones(zoneVersion);
+  const violationLog = useViolationLog(violationVersion);
 
   // Refs to break the dependency chain: loadDrones must NOT depend on tracking/violation
   // state, otherwise every trail update recreates loadDrones → resets the polling interval
@@ -119,6 +122,9 @@ export default function MapPage() {
 
       setDrones(data.drones);
       setDroneCount(data.count);
+      setZoneVersion(data.zone_version);
+      setViolationVersion(data.violation_version);
+      setSettingsVersion(data.settings_version);
       setError(null);
 
       setSelectedDrone(prev => {
@@ -766,12 +772,22 @@ export default function MapPage() {
               drawingMode={flightZones.drawingMode}
               pendingPoints={flightZones.pendingPoints}
               snappable={flightZones.snappable}
+              mapCenter={currentCenter}
               onStartDrawing={flightZones.startDrawing}
               onCancelDrawing={flightZones.cancelDrawing}
               onUndoPoint={flightZones.undoLastPoint}
               onFinishDrawing={flightZones.finishDrawing}
+              onCreateMissionZone={flightZones.createMissionZone}
+              onCreateMissionZoneByAddress={flightZones.createMissionZoneByAddress}
               onDeleteZone={flightZones.deleteZone}
-              onSelectZone={() => {}}
+              onSelectZone={(zoneId) => {
+                const zone = flightZones.zones.find(z => z.id === zoneId);
+                if (zone && zone.polygon.length > 0) {
+                  const latSum = zone.polygon.reduce((s, p) => s + p[0], 0);
+                  const lonSum = zone.polygon.reduce((s, p) => s + p[1], 0);
+                  setFocusPosition({ lat: latSum / zone.polygon.length, lon: lonSum / zone.polygon.length });
+                }
+              }}
               onAssignZone={(zoneId) => setAssignZoneId(zoneId)}
               onClose={() => setZonesPanelOpen(false)}
               readOnly={!canManage}

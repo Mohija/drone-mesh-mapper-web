@@ -52,6 +52,17 @@ class SettingsManager:
         self._tenant_id = None
         self._app = None
         self._mem_settings = {"sources": _deep_copy(DEFAULT_SOURCES)}
+        self._versions: dict[str, int] = {}  # tenant_id -> version counter
+
+    def get_version(self, tenant_id=None) -> int:
+        """Return current settings version for a tenant."""
+        tid = tenant_id or self._tenant_id or "__default__"
+        return self._versions.get(tid, 0)
+
+    def _bump_version(self, tenant_id=None):
+        """Increment settings version so clients know to refetch."""
+        tid = tenant_id or self._tenant_id or "__default__"
+        self._versions[tid] = self._versions.get(tid, 0) + 1
 
     def bind(self, tenant_id: str, app):
         """Bind this manager to a specific tenant and Flask app."""
@@ -121,8 +132,9 @@ class SettingsManager:
                         self._write_to_db(tid, updates)
                 else:
                     self._write_to_db(tid, updates)
-                logger.info("Settings updated for tenant %s: enabled=%s",
-                            tid, self.get_enabled_sources(tenant_id=tid))
+                self._bump_version(tid)
+                logger.info("Settings updated for tenant %s (v%d): enabled=%s",
+                            tid, self.get_version(tid), self.get_enabled_sources(tenant_id=tid))
                 return
             except Exception:
                 logger.exception("Failed to update settings in DB")
@@ -133,7 +145,9 @@ class SettingsManager:
                 for src_id, src_cfg in updates["sources"].items():
                     if src_id in self._mem_settings["sources"]:
                         self._mem_settings["sources"][src_id].update(src_cfg)
-        logger.info("Settings updated (in-memory): enabled=%s", self.get_enabled_sources())
+        self._bump_version(tenant_id)
+        logger.info("Settings updated (in-memory, v%d): enabled=%s",
+                    self.get_version(tenant_id), self.get_enabled_sources())
 
     def _write_to_db(self, tenant_id, updates):
         """Write settings update to DB."""

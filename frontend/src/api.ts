@@ -163,6 +163,15 @@ export async function updateSettings(settings: Partial<DataSourceSettings>): Pro
   return res.json();
 }
 
+export async function restartSimulation(): Promise<{ status: string; drone_count: number }> {
+  const res = await authFetch(`${API_BASE}/simulation/restart`, { method: 'POST' });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `API error: ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function lookupAircraft(
   identifier: string,
   callsign?: string,
@@ -330,6 +339,40 @@ export async function fetchFlightZones(): Promise<FlightZone[]> {
   const res = await authFetch(`${API_BASE}/zones`);
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
+}
+
+export async function createMissionZone(data: {
+  name: string;
+  lat?: number;
+  lon?: number;
+  address?: string;
+}): Promise<FlightZone & { resolved_address?: string }> {
+  const res = await authFetch(`${API_BASE}/zones/mission`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `API error: ${res.status}`);
+  }
+  return res.json();
+}
+
+export interface GeocodeResult {
+  lat: number;
+  lon: number;
+  display_name: string;
+}
+
+export async function forwardGeocode(query: string): Promise<GeocodeResult | null> {
+  try {
+    const res = await authFetch(`${API_BASE}/geocode?q=${encodeURIComponent(query)}`);
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
 }
 
 export async function createFlightZone(data: {

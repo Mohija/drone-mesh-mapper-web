@@ -7,10 +7,13 @@ interface Props {
   drawingMode: boolean;
   pendingPoints: [number, number][];
   snappable: boolean;
+  mapCenter: { lat: number; lon: number };
   onStartDrawing: () => void;
   onCancelDrawing: () => void;
   onUndoPoint: () => void;
   onFinishDrawing: (name: string, color: string, minAGL: number | null, maxAGL: number | null) => Promise<void>;
+  onCreateMissionZone: (name: string, lat: number, lon: number) => Promise<{ id: string }>;
+  onCreateMissionZoneByAddress: (name: string, address: string) => Promise<{ id: string; resolved_address?: string }>;
   onDeleteZone: (zoneId: string) => Promise<void>;
   onSelectZone: (zoneId: string) => void;
   onAssignZone: (zoneId: string) => void;
@@ -24,10 +27,13 @@ export default function FlightZonesPanel({
   drawingMode,
   pendingPoints,
   snappable,
+  mapCenter,
   onStartDrawing,
   onCancelDrawing,
   onUndoPoint,
   onFinishDrawing,
+  onCreateMissionZone,
+  onCreateMissionZoneByAddress,
   onDeleteZone,
   onSelectZone,
   onAssignZone,
@@ -39,6 +45,11 @@ export default function FlightZonesPanel({
   const [minAGL, setMinAGL] = useState('');
   const [maxAGL, setMaxAGL] = useState('');
   const [saving, setSaving] = useState(false);
+  const [missionName, setMissionName] = useState('');
+  const [missionAddress, setMissionAddress] = useState('');
+  const [missionMode, setMissionMode] = useState<'map' | 'address'>('map');
+  const [creatingMission, setCreatingMission] = useState(false);
+  const [missionError, setMissionError] = useState('');
 
   const handleFinish = async () => {
     if (!newName.trim() || pendingPoints.length < 3) return;
@@ -107,6 +118,155 @@ export default function FlightZonesPanel({
       </div>
 
       <div style={{ maxHeight: 400, overflow: 'auto', padding: '8px 14px' }}>
+        {/* Mission zone quick-create (only for admins, not during drawing) */}
+        {!readOnly && !drawingMode && (
+          <div
+            data-testid="mission-zone-section"
+            style={{
+              marginBottom: 12,
+              padding: '10px 12px',
+              background: 'rgba(249, 115, 22, 0.08)',
+              border: '1px solid rgba(249, 115, 22, 0.3)',
+              borderRadius: 8,
+            }}
+          >
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#f97316', marginBottom: 6 }}>
+              Einsatz-Zone (100m Radius)
+            </div>
+            <input
+              type="text"
+              value={missionName}
+              onChange={(e) => { setMissionName(e.target.value); setMissionError(''); }}
+              placeholder="Einsatzname..."
+              data-testid="mission-zone-name"
+              style={{
+                width: '100%',
+                padding: '6px 10px',
+                marginBottom: 6,
+                background: 'var(--bg-tertiary)',
+                border: '1px solid var(--border)',
+                borderRadius: 4,
+                color: 'var(--text-primary)',
+                fontSize: 12,
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
+            />
+            {/* Mode toggle: Kartenmitte / Adresse */}
+            <div style={{ display: 'flex', gap: 0, marginBottom: 6, borderRadius: 4, overflow: 'hidden', border: '1px solid var(--border)' }}>
+              <button
+                onClick={() => { setMissionMode('map'); setMissionError(''); }}
+                data-testid="mission-mode-map"
+                style={{
+                  flex: 1,
+                  padding: '4px 8px',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: missionMode === 'map' ? '#f97316' : 'var(--bg-tertiary)',
+                  color: missionMode === 'map' ? '#fff' : 'var(--text-secondary)',
+                }}
+              >
+                Kartenmitte
+              </button>
+              <button
+                onClick={() => { setMissionMode('address'); setMissionError(''); }}
+                data-testid="mission-mode-address"
+                style={{
+                  flex: 1,
+                  padding: '4px 8px',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  border: 'none',
+                  borderLeft: '1px solid var(--border)',
+                  cursor: 'pointer',
+                  background: missionMode === 'address' ? '#f97316' : 'var(--bg-tertiary)',
+                  color: missionMode === 'address' ? '#fff' : 'var(--text-secondary)',
+                }}
+              >
+                Adresse
+              </button>
+            </div>
+            {missionMode === 'address' && (
+              <input
+                type="text"
+                value={missionAddress}
+                onChange={(e) => { setMissionAddress(e.target.value); setMissionError(''); }}
+                placeholder="Straße Nr, Stadt..."
+                data-testid="mission-zone-address"
+                style={{
+                  width: '100%',
+                  padding: '6px 10px',
+                  marginBottom: 6,
+                  background: 'var(--bg-tertiary)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 4,
+                  color: 'var(--text-primary)',
+                  fontSize: 12,
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+              />
+            )}
+            {missionError && (
+              <div data-testid="mission-zone-error" style={{ fontSize: 11, color: 'var(--status-error)', marginBottom: 4 }}>
+                {missionError}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button
+                onClick={async () => {
+                  if (!missionName.trim()) return;
+                  setMissionError('');
+                  setCreatingMission(true);
+                  try {
+                    let zone: { id: string };
+                    if (missionMode === 'address') {
+                      if (!missionAddress.trim()) {
+                        setMissionError('Adresse ist erforderlich');
+                        return;
+                      }
+                      zone = await onCreateMissionZoneByAddress(missionName.trim(), missionAddress.trim());
+                      setMissionAddress('');
+                    } else {
+                      zone = await onCreateMissionZone(missionName.trim(), mapCenter.lat, mapCenter.lon);
+                    }
+                    setMissionName('');
+                    onSelectZone(zone.id);
+                  } catch (err: unknown) {
+                    const msg = err instanceof Error ? err.message : 'Fehler beim Erstellen';
+                    setMissionError(msg);
+                  } finally {
+                    setCreatingMission(false);
+                  }
+                }}
+                disabled={!missionName.trim() || creatingMission || (missionMode === 'address' && !missionAddress.trim())}
+                data-testid="mission-zone-create"
+                style={{
+                  flex: 1,
+                  padding: '6px 12px',
+                  background: missionName.trim() ? '#f97316' : 'var(--bg-tertiary)',
+                  color: missionName.trim() ? '#fff' : 'var(--text-muted)',
+                  border: 'none',
+                  borderRadius: 4,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: missionName.trim() && !creatingMission ? 'pointer' : 'default',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {creatingMission ? 'Erstellen...' : 'Erstellen'}
+              </button>
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
+              {missionMode === 'map'
+                ? 'Erstellt eine kreisförmige Zone am aktuellen Kartenmittelpunkt'
+                : 'Adresse wird automatisch in Koordinaten umgewandelt'}
+            </div>
+          </div>
+        )}
+
         {/* Drawing mode UI (only for admins) */}
         {!readOnly && drawingMode ? (
           <div data-testid="drawing-mode-ui" style={{ marginBottom: 12 }}>
