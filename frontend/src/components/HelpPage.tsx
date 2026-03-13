@@ -766,21 +766,25 @@ function SectionHardware() {
       </p>
       <h3>Schritt 4: Erstinbetriebnahme</h3>
       <ol>
-        <li><strong>Strom anschließen</strong> — Der ESP startet und die LED blinkt schnell (Boot).</li>
+        <li><strong>Strom anschließen</strong> — Der ESP startet und die LED blinkt schnell (Boot / WiFi-Verbindung wird versucht).</li>
         <li><strong>WiFi-Verbindung</strong> —
           <ul>
             <li>Wenn WiFi-Daten in der Firmware eingebettet: Verbindet sich automatisch. LED blinkt langsam (WiFi OK).</li>
-            <li>Wenn kein WiFi konfiguriert: Der ESP erstellt einen Hotspot <strong>„FlightArc-XXXX"</strong>.</li>
+            <li>Wenn kein WiFi konfiguriert oder das Netzwerk nicht erreichbar ist: Nach 30 Sekunden startet der ESP
+              automatisch einen Hotspot <strong>„FlightArc-XXXX"</strong> (LED: Dreifach-Blinken).</li>
           </ul>
         </li>
-        <li><strong>Captive Portal</strong> (bei Hotspot) — Verbinde dich mit dem Hotspot, ein Konfigurationsportal öffnet sich:
+        <li><strong>Captive Portal</strong> (bei Hotspot) — Verbinde dich mit dem Hotspot <strong>„FlightArc-XXXX"</strong>,
+          ein Konfigurationsportal öffnet sich automatisch:
           <ul>
-            <li>WiFi-Netzwerk auswählen oder eingeben</li>
-            <li>Passwort eingeben</li>
+            <li>WiFi-Netzwerk auswählen oder manuell eingeben</li>
+            <li>Passwort eingeben → „Verbinden" klicken</li>
             <li>Optional: GPS-Position über Browser-Geolocation setzen</li>
-            <li>Speichern und ESP startet neu</li>
+            <li>Der ESP verbindet sich mit dem WiFi und der <strong>Hotspot schaltet sich automatisch ab</strong></li>
           </ul>
         </li>
+        <li><strong>Automatische Wiederherstellung</strong> — Falls das WiFi-Netzwerk ausfällt, startet der ESP den
+          Hotspot erneut. Sobald das Netzwerk wieder da ist, verbindet er sich automatisch und der Hotspot geht aus.</li>
         <li><strong>Online</strong> — LED leuchtet dauerhaft. Der Empfänger sendet nun Heartbeats (alle 30s) und Erkennungen (alle 2s).</li>
       </ol>
       <h3>LED-Anzeige</h3>
@@ -789,7 +793,8 @@ function SectionHardware() {
           <tr><th style={thStyle}>Muster</th><th style={thStyle}>Bedeutung</th></tr>
         </thead>
         <tbody>
-          <tr><td style={tdStyle}>Schnelles Blinken (100ms)</td><td style={tdStyle}>Boot / Startvorgang</td></tr>
+          <tr><td style={tdStyle}>Schnelles Blinken (100ms)</td><td style={tdStyle}>Boot — versucht sich mit WiFi zu verbinden</td></tr>
+          <tr><td style={tdStyle}>Dreifach-Blinken (alle 2s)</td><td style={tdStyle}>Hotspot aktiv — wartet auf WiFi-Konfiguration über Captive Portal</td></tr>
           <tr><td style={tdStyle}>Langsames Blinken (500ms)</td><td style={tdStyle}>WiFi verbunden, warte auf Backend</td></tr>
           <tr><td style={tdStyle}>Dauerhaft an</td><td style={tdStyle}>Online — verbunden mit FlightArc Backend</td></tr>
           <tr><td style={tdStyle}>Kurzes Aufblitzen</td><td style={tdStyle}>Drohne erkannt!</td></tr>
@@ -803,7 +808,7 @@ function SectionHardware() {
         </thead>
         <tbody>
           <tr><td style={tdStyle}>ESP wird nicht erkannt</td><td style={tdStyle}>Anderes USB-Kabel versuchen (Datenkabel!). CP2102/CH340 Treiber installieren.</td></tr>
-          <tr><td style={tdStyle}>Kein WiFi-Hotspot</td><td style={tdStyle}>10 Sekunden warten. Falls kein Hotspot: Board resetten (EN/RST-Taste).</td></tr>
+          <tr><td style={tdStyle}>Kein WiFi-Hotspot</td><td style={tdStyle}>30 Sekunden warten — der Hotspot startet erst nach dem STA-Timeout. Falls danach kein Hotspot: Board resetten (EN/RST-Taste).</td></tr>
           <tr><td style={tdStyle}>Empfänger bleibt „Offline"</td><td style={tdStyle}>Backend-URL prüfen. Firewall-Port 3020 offen? HTTP statt HTTPS bei ESP8266.</td></tr>
           <tr><td style={tdStyle}>Doppelblinken (Fehler)</td><td style={tdStyle}>WiFi-Zugangsdaten falsch? Captive Portal prüfen. Backend erreichbar?</td></tr>
           <tr><td style={tdStyle}>Keine Drohnen erkannt</td><td style={tdStyle}>Nur Drohnen mit Remote ID / ODID-Beacon werden erkannt. ESP8266 kann kein BLE.</td></tr>

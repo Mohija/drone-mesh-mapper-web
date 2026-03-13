@@ -49,7 +49,7 @@ void setup() {
     led.begin();
     led.setState(LED_BOOT);
 
-    // 2. WiFi (AP always on + STA connect)
+    // 2. WiFi (SoftAP provisioning: AP starts only when STA fails)
     String apSsid = String(AP_SSID_PREFIX) + String(NODE_NAME).substring(0, 8);
     wifiMgr.begin(apSsid.c_str(), WIFI_SSID, WIFI_PASS);
 
@@ -76,7 +76,11 @@ void loop() {
 
     // LED state based on connectivity
     if (!wifiMgr.isStaConnected()) {
-        led.setState(LED_BOOT);
+        if (wifiMgr.isApActive()) {
+            led.setState(LED_AP_ACTIVE);  // AP mode — waiting for provisioning
+        } else {
+            led.setState(LED_BOOT);       // Trying to connect
+        }
     } else if (!client.isBackendReachable()) {
         led.setState(LED_WIFI_OK);
     } else {

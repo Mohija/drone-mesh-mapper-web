@@ -72,6 +72,7 @@ function load(){
   fetch('/status').then(r=>r.json()).then(d=>{
     let h='';
     h+='<div class="status '+(d.wifi_connected?'ok':'err')+'">WiFi: '+(d.wifi_connected?d.wifi_ssid+' ('+d.wifi_rssi+' dBm)':'Nicht verbunden')+'</div>';
+    if(d.ap_active)h+='<div class="status warn">Hotspot aktiv: '+d.ap_ssid+' (IP: '+d.ap_ip+')</div>';
     h+='<div class="status '+(d.backend_ok?'ok':'warn')+'">Backend: '+(d.backend_ok?'Erreichbar':'Nicht erreichbar')+'</div>';
     h+='<div class="status ok">Erkennungen: '+d.detections+'</div>';
     h+='<div class="status">Uptime: '+Math.floor(d.uptime/60)+'min | Heap: '+Math.floor(d.free_heap/1024)+'KB</div>';
@@ -199,6 +200,9 @@ void CaptivePortal::begin(WiFiManager* wifi, FlightArcClient* client, OdidScanne
         doc["wifi_connected"] = _portal->_wifi->isStaConnected();
         doc["wifi_ssid"] = _portal->_wifi->getConnectedSsid();
         doc["wifi_rssi"] = _portal->_wifi->getRssi();
+        doc["ap_active"] = _portal->_wifi->isApActive();
+        doc["ap_ssid"] = _portal->_wifi->isApActive() ? _portal->_wifi->getApSsid() : "";
+        doc["ap_ip"] = _portal->_wifi->getApIp();
         doc["backend_ok"] = _portal->_client->isBackendReachable();
         doc["detections"] = _portal->_scanner->getDetectionCount();
         doc["uptime"] = millis() / 1000;

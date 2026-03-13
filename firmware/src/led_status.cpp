@@ -39,6 +39,18 @@ void LedStatus::loop() {
             }
             break;
 
+        case LED_AP_ACTIVE:
+            // Triple blink every 2s (AP hotspot active)
+            {
+                unsigned long phase = (now / 200) % 10;
+                bool on = (phase == 0 || phase == 2 || phase == 4);
+                if (on != _ledOn) {
+                    _ledOn = on;
+                    digitalWrite(LED_PIN, _ledOn ? HIGH : LOW);
+                }
+            }
+            break;
+
         case LED_WIFI_OK:
             // Slow blink: 500ms on/off
             if (now - _lastToggle > 500) {

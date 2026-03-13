@@ -4,7 +4,8 @@
 #include "config.h"
 
 enum LedState {
-    LED_BOOT,           // Fast blink (100ms) - no WiFi
+    LED_BOOT,           // Fast blink (100ms) - connecting to WiFi
+    LED_AP_ACTIVE,      // Triple blink every 2s - AP hotspot active, waiting for provisioning
     LED_WIFI_OK,        // Slow blink (500ms) - WiFi OK, no backend
     LED_ONLINE,         // Solid on - heartbeat OK
     LED_DETECTION,      // Brief flash off (50ms) - detection received

@@ -2,7 +2,7 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-13 (Einkaufslisten für Hardware-Empfänger)
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-13 (SoftAP Provisioning für Firmware)
 - **Typ:** Projekt | **Status:** Development
 
 ## Offene Aufgaben
@@ -16,6 +16,37 @@
 - [x] Umfassende E2E-Tests für Receiver-System (60 Tests, alle bestanden)
 
 ## Änderungshistorie
+
+### 2026-03-13 - SoftAP Provisioning: Automatischer Hotspot bei fehlendem WiFi
+
+**WiFi-Manager komplett überarbeitet (wifi_manager.cpp/h):**
+- Kein permanent aktiver AP mehr — AP startet nur wenn nötig
+- Boot: Versucht zuerst STA-only Verbindung zum konfigurierten WiFi
+- Nach 30s ohne STA-Verbindung (WIFI_AP_TIMEOUT_MS): AP-Hotspot startet automatisch
+- Sofortiger AP-Start wenn keine WiFi-Credentials konfiguriert
+- AP schaltet sich 5s nach erfolgreicher STA-Verbindung automatisch ab (WIFI_AP_SHUTDOWN_DELAY)
+- Bei STA-Verbindungsverlust: AP startet erneut für Re-Provisioning
+- Neue Methoden: isApActive(), getApSsid(), _startAp(), _stopAp(), _updateWiFiMode()
+- Verbindungsversuche werden gezählt und geloggt
+
+**Neuer LED-State LED_AP_ACTIVE (led_status.h/cpp):**
+- Dreifach-Blinken alle 2s — signalisiert aktiven Hotspot / Wartend auf Konfiguration
+- Unterscheidet sich klar von LED_BOOT (schnell) und LED_ERROR (doppelt)
+
+**Captive Portal Status erweitert (web_server.cpp):**
+- /status Endpoint meldet jetzt: ap_active, ap_ssid, ap_ip
+- Portal-HTML zeigt Hotspot-Status an wenn AP aktiv
+
+**Config (config.h):**
+- WIFI_AP_TIMEOUT_MS = 30000 (AP-Start nach 30s ohne STA)
+- WIFI_AP_SHUTDOWN_DELAY = 5000 (AP-Stop 5s nach STA-Verbindung)
+
+**Benutzerhandbuch (HelpPage.tsx) aktualisiert:**
+- Neues LED-Muster dokumentiert (Dreifach-Blinken = Hotspot aktiv)
+- Inbetriebnahme-Anleitung beschreibt automatisches AP-Provisioning
+- Troubleshooting: 30s Wartezeit vor Hotspot-Start
+
+**Dateien:** `firmware/src/wifi_manager.h`, `firmware/src/wifi_manager.cpp`, `firmware/src/config.h`, `firmware/src/main.cpp`, `firmware/src/led_status.h`, `firmware/src/led_status.cpp`, `firmware/src/web_server.cpp`, `frontend/src/components/HelpPage.tsx`, `frontend/dist/`
 
 ### 2026-03-13 - Einkaufslisten für Hardware-Empfänger
 

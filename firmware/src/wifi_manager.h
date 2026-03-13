@@ -13,8 +13,10 @@ public:
     void begin(const char* apSsid, const char* staSsid, const char* staPass);
     void loop();
     bool isStaConnected() const;
+    bool isApActive() const { return _apActive; }
     String getStaIp() const;
     String getApIp() const;
+    String getApSsid() const { return _apSsid; }
     String getConnectedSsid() const;
     int getRssi() const;
 
@@ -32,8 +34,17 @@ private:
     unsigned long _lastScan = 0;
     bool _staConfigured = false;
 
+    // SoftAP provisioning state
+    bool _apActive = false;
+    bool _staWasConnected = false;
+    unsigned long _staConnectedAt = 0;     // When STA connected (for AP shutdown delay)
+    unsigned long _bootTime = 0;           // millis() at begin()
+    int _staConnectAttempts = 0;           // Track failed attempts
+
     void _startAp();
+    void _stopAp();
     void _connectSta();
     void _saveCredentials();
     void _loadCredentials();
+    void _updateWiFiMode();
 };

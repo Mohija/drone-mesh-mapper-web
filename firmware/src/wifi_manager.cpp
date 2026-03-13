@@ -17,31 +17,75 @@ void WiFiManager::begin(const char* apSsid, const char* staSsid, const char* sta
     _apSsid = String(apSsid);
     _staSsid = String(staSsid);
     _staPass = String(staPass);
+    _bootTime = millis();
 
     // Load saved credentials (override build-time ones if available)
     _loadCredentials();
 
-    // Start AP (always active)
-    _startAp();
-
-    // Connect to STA if configured
     if (_staSsid.length() > 0) {
+        // We have WiFi credentials — start in STA-only mode first
         _staConfigured = true;
+        Serial.printf("[WiFi] STA mode — trying to connect to: %s\n", _staSsid.c_str());
+#ifdef ESP32
+        WiFi.mode(WIFI_STA);
+#else
+        WiFi.mode(WIFI_STA);
+#endif
         _connectSta();
+    } else {
+        // No credentials at all — start AP immediately for provisioning
+        Serial.println("[WiFi] No credentials configured — starting AP for provisioning");
+        _startAp();
     }
 }
 
 void WiFiManager::loop() {
     unsigned long now = millis();
 
-    // Auto-reconnect STA
-    if (_staConfigured && !isStaConnected() && (now - _lastReconnectAttempt > WIFI_RECONNECT_MS)) {
+    bool connected = isStaConnected();
+
+    // ── STA just connected ───────────────────────────────────
+    if (connected && !_staWasConnected) {
+        _staWasConnected = true;
+        _staConnectedAt = now;
+        _staConnectAttempts = 0;
+        Serial.printf("[WiFi] STA connected! IP: %s (SSID: %s, RSSI: %d)\n",
+                      getStaIp().c_str(), getConnectedSsid().c_str(), getRssi());
+    }
+
+    // ── STA just disconnected ────────────────────────────────
+    if (!connected && _staWasConnected) {
+        _staWasConnected = false;
+        _staConnectedAt = 0;
+        Serial.println("[WiFi] STA connection lost!");
+    }
+
+    // ── AP shutdown: turn off AP once STA is stable ──────────
+    if (connected && _apActive && _staConnectedAt > 0) {
+        if (now - _staConnectedAt > WIFI_AP_SHUTDOWN_DELAY) {
+            Serial.println("[WiFi] STA stable — shutting down AP");
+            _stopAp();
+        }
+    }
+
+    // ── AP startup: start AP when STA can't connect ──────────
+    if (!connected && !_apActive) {
+        // Start AP after timeout since boot, or immediately if no credentials
+        if (!_staConfigured || (now - _bootTime > WIFI_AP_TIMEOUT_MS)) {
+            Serial.println("[WiFi] STA not connected — starting AP for provisioning");
+            _startAp();
+        }
+    }
+
+    // ── STA reconnect attempts ───────────────────────────────
+    if (_staConfigured && !connected && (now - _lastReconnectAttempt > WIFI_RECONNECT_MS)) {
         _lastReconnectAttempt = now;
-        Serial.println("[WiFi] Reconnecting STA...");
+        _staConnectAttempts++;
+        Serial.printf("[WiFi] Reconnecting STA (attempt %d)...\n", _staConnectAttempts);
         _connectSta();
     }
 
-    // Periodic scan (for captive portal network list)
+    // ── Periodic WiFi scan (for captive portal network list) ─
     if (now - _lastScan > WIFI_SCAN_INTERVAL_MS) {
         _lastScan = now;
         WiFi.scanNetworks(true); // async scan
@@ -57,7 +101,8 @@ String WiFiManager::getStaIp() const {
 }
 
 String WiFiManager::getApIp() const {
-    return WiFi.softAPIP().toString();
+    if (_apActive) return WiFi.softAPIP().toString();
+    return "";
 }
 
 String WiFiManager::getConnectedSsid() const {
@@ -74,8 +119,14 @@ void WiFiManager::setStaCredentials(const String& ssid, const String& pass) {
     _staSsid = ssid;
     _staPass = pass;
     _staConfigured = true;
+    _staConnectAttempts = 0;
     _saveCredentials();
     Serial.printf("[WiFi] New credentials saved: %s\n", ssid.c_str());
+
+    // If AP is active, switch to AP+STA to try connecting
+    if (_apActive) {
+        _updateWiFiMode();
+    }
     _connectSta();
 }
 
@@ -96,13 +147,49 @@ String WiFiManager::getScanResultsJson() {
 }
 
 void WiFiManager::_startAp() {
-#ifdef ESP32
-    WiFi.mode(WIFI_AP_STA);
-#else
-    WiFi.mode(WIFI_AP_STA);
-#endif
+    if (_apActive) return;
+
+    _updateWiFiMode();
     WiFi.softAP(_apSsid.c_str());
-    Serial.printf("[WiFi] AP started: %s (IP: %s)\n", _apSsid.c_str(), getApIp().c_str());
+    _apActive = true;
+    Serial.printf("[WiFi] AP started: %s (IP: %s)\n", _apSsid.c_str(), WiFi.softAPIP().toString().c_str());
+}
+
+void WiFiManager::_stopAp() {
+    if (!_apActive) return;
+
+    WiFi.softAPdisconnect(true);
+#ifdef ESP32
+    WiFi.mode(WIFI_STA);
+#else
+    WiFi.mode(WIFI_STA);
+#endif
+    _apActive = false;
+    Serial.println("[WiFi] AP stopped");
+
+    // Re-trigger STA if it dropped during mode switch
+    if (_staConfigured && !isStaConnected()) {
+        _connectSta();
+    }
+}
+
+void WiFiManager::_updateWiFiMode() {
+    // Set mode based on what we need
+    if (_apActive || !_staConfigured) {
+        // Need AP (+ STA if configured)
+#ifdef ESP32
+        WiFi.mode(_staConfigured ? WIFI_AP_STA : WIFI_AP);
+#else
+        WiFi.mode(_staConfigured ? WIFI_AP_STA : WIFI_AP);
+#endif
+    } else {
+        // STA only
+#ifdef ESP32
+        WiFi.mode(WIFI_STA);
+#else
+        WiFi.mode(WIFI_STA);
+#endif
+    }
 }
 
 void WiFiManager::_connectSta() {
