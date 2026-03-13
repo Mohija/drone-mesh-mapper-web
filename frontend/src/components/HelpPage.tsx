@@ -824,6 +824,95 @@ function SectionHardware() {
           <tr><td style={tdStyle}>Empfehlung</td><td style={tdStyle}>Beste Wahl</td><td style={tdStyle}>Kompakt & günstig</td><td style={tdStyle}>Nur für WiFi-only</td></tr>
         </tbody>
       </table>
+
+      <h3>Einkaufslisten</h3>
+      <p>
+        Hier findest du für jeden Hardware-Typ eine vollständige Einkaufsliste mit allen Komponenten,
+        die du für den Aufbau eines Empfängers benötigst. Die gleiche Liste wird auch beim Erstellen
+        eines Empfängers in der Admin-Oberfläche angezeigt.
+      </p>
+
+      {/* ESP32-S3 Shopping List */}
+      <h4>ESP32-S3 (Empfohlen)</h4>
+      <InfoBox type="info">
+        Voller Funktionsumfang: BLE + WiFi Remote ID, HTTPS, viel RAM. Beste Wahl für stationäre Empfänger.
+      </InfoBox>
+      <table style={tableStyle}>
+        <thead>
+          <tr>
+            <th style={thStyle}>Komponente</th>
+            <th style={thStyle}>Beschreibung</th>
+            <th style={thStyle}>Ca. Preis</th>
+            <th style={thStyle}>Pflicht</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td style={tdStyle}><strong>ESP32-S3-DevKitC-1 (N16R8)</strong></td><td style={tdStyle}>16 MB Flash, 8 MB PSRAM – Board mit USB-C</td><td style={tdStyle}>~8–12 €</td><td style={tdStyle}>Ja</td></tr>
+          <tr><td style={tdStyle}>USB-C Kabel</td><td style={tdStyle}>Für Stromversorgung & erstes Flashen</td><td style={tdStyle}>~3 €</td><td style={tdStyle}>Ja</td></tr>
+          <tr><td style={tdStyle}>USB-Netzteil (5V / min. 1A)</td><td style={tdStyle}>Für Dauerbetrieb – USB-C oder Micro-USB je nach Board</td><td style={tdStyle}>~5–8 €</td><td style={tdStyle}>Ja</td></tr>
+          <tr><td style={tdStyle}>2,4 GHz WiFi-Antenne (IPEX/U.FL)</td><td style={tdStyle}>Externe Antenne für bessere WiFi-Beacon-Reichweite</td><td style={tdStyle}>~3 €</td><td style={tdStyle}>Optional</td></tr>
+          <tr><td style={tdStyle}><strong>Gehäuse (100×68×50 mm ABS IP65)</strong></td><td style={tdStyle}>Wetterfestes Gehäuse für Außenmontage</td><td style={tdStyle}>~5–10 €</td><td style={tdStyle}>Ja</td></tr>
+          <tr><td style={tdStyle}>Kabelverschraubung M12/M16</td><td style={tdStyle}>Wasserdichte USB-Kabel-Durchführung ins Gehäuse</td><td style={tdStyle}>~2 €</td><td style={tdStyle}>Optional</td></tr>
+          <tr><td style={tdStyle}>Montagematerial</td><td style={tdStyle}>Kabelbinder, Schrauben, Abstandhalter für Mast/Wand-Montage</td><td style={tdStyle}>~3–5 €</td><td style={tdStyle}>Optional</td></tr>
+          <tr><td style={tdStyle}>Outdoor PoE-Splitter (5V)</td><td style={tdStyle}>Stromversorgung über Ethernet-Kabel (spart extra Stromkabel)</td><td style={tdStyle}>~8–12 €</td><td style={tdStyle}>Optional</td></tr>
+        </tbody>
+      </table>
+      <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Geschätzte Gesamtkosten (Pflichtteile): <strong>~21–35 €</strong></p>
+
+      {/* ESP32-C3 Shopping List */}
+      <h4>ESP32-C3 (Kompakt)</h4>
+      <InfoBox type="info">
+        BLE + WiFi Remote ID, HTTPS – mit RISC-V Kern. Günstiger und kleiner als S3, aber weniger RAM.
+      </InfoBox>
+      <table style={tableStyle}>
+        <thead>
+          <tr>
+            <th style={thStyle}>Komponente</th>
+            <th style={thStyle}>Beschreibung</th>
+            <th style={thStyle}>Ca. Preis</th>
+            <th style={thStyle}>Pflicht</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td style={tdStyle}><strong>ESP32-C3-DevKitM-1</strong></td><td style={tdStyle}>RISC-V Board mit BLE 5.0 + WiFi – USB-C</td><td style={tdStyle}>~5–8 €</td><td style={tdStyle}>Ja</td></tr>
+          <tr><td style={tdStyle}>USB-C Kabel</td><td style={tdStyle}>Für Stromversorgung & erstes Flashen</td><td style={tdStyle}>~3 €</td><td style={tdStyle}>Ja</td></tr>
+          <tr><td style={tdStyle}>USB-Netzteil (5V / min. 500mA)</td><td style={tdStyle}>Für Dauerbetrieb – geringerer Stromverbrauch als S3</td><td style={tdStyle}>~5–8 €</td><td style={tdStyle}>Ja</td></tr>
+          <tr><td style={tdStyle}>2,4 GHz WiFi-Antenne (IPEX/U.FL)</td><td style={tdStyle}>Externe Antenne für bessere Reichweite</td><td style={tdStyle}>~3 €</td><td style={tdStyle}>Optional</td></tr>
+          <tr><td style={tdStyle}><strong>Gehäuse (83×58×33 mm ABS IP65)</strong></td><td style={tdStyle}>Kompaktes wetterfestes Gehäuse</td><td style={tdStyle}>~4–8 €</td><td style={tdStyle}>Ja</td></tr>
+          <tr><td style={tdStyle}>Kabelverschraubung M12</td><td style={tdStyle}>Wasserdichte Kabel-Durchführung</td><td style={tdStyle}>~2 €</td><td style={tdStyle}>Optional</td></tr>
+          <tr><td style={tdStyle}>Montagematerial</td><td style={tdStyle}>Kabelbinder, Schrauben für Befestigung</td><td style={tdStyle}>~3–5 €</td><td style={tdStyle}>Optional</td></tr>
+        </tbody>
+      </table>
+      <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Geschätzte Gesamtkosten (Pflichtteile): <strong>~17–27 €</strong></p>
+
+      {/* ESP8266 Shopping List */}
+      <h4>ESP8266 / NodeMCU (Budget)</h4>
+      <InfoBox type="warning">
+        Nur WiFi-Beacon ODID – kein BLE, kein HTTPS. Geeignet als günstige Ergänzung an Standorten mit bekanntem WiFi-Beacon-Verkehr.
+      </InfoBox>
+      <table style={tableStyle}>
+        <thead>
+          <tr>
+            <th style={thStyle}>Komponente</th>
+            <th style={thStyle}>Beschreibung</th>
+            <th style={thStyle}>Ca. Preis</th>
+            <th style={thStyle}>Pflicht</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td style={tdStyle}><strong>NodeMCU v2/v3 (ESP8266)</strong></td><td style={tdStyle}>ESP-12E Board mit Micro-USB</td><td style={tdStyle}>~3–5 €</td><td style={tdStyle}>Ja</td></tr>
+          <tr><td style={tdStyle}>Micro-USB Kabel</td><td style={tdStyle}>Für Stromversorgung & erstes Flashen</td><td style={tdStyle}>~2 €</td><td style={tdStyle}>Ja</td></tr>
+          <tr><td style={tdStyle}>USB-Netzteil (5V / min. 500mA)</td><td style={tdStyle}>Für Dauerbetrieb</td><td style={tdStyle}>~5–8 €</td><td style={tdStyle}>Ja</td></tr>
+          <tr><td style={tdStyle}><strong>Gehäuse (70×45×30 mm ABS)</strong></td><td style={tdStyle}>Kleines Gehäuse – NodeMCU passt in Standard-Projektboxen</td><td style={tdStyle}>~3–5 €</td><td style={tdStyle}>Ja</td></tr>
+          <tr><td style={tdStyle}>Montagematerial</td><td style={tdStyle}>Kabelbinder oder doppelseitiges Klebeband</td><td style={tdStyle}>~2–3 €</td><td style={tdStyle}>Optional</td></tr>
+        </tbody>
+      </table>
+      <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Geschätzte Gesamtkosten (Pflichtteile): <strong>~13–20 €</strong></p>
+
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', marginTop: 16 }}>
+        Preise sind Richtwerte (Stand 2026). Bezugsquellen: AliExpress, Amazon, Berrybase, Mouser.
+        Die Einkaufslisten werden auch beim Erstellen eines Empfängers in der Admin-Oberfläche angezeigt.
+      </p>
     </div>
   );
 }

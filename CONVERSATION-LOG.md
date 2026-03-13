@@ -2,7 +2,7 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-13 (Benutzerhandbuch mit Frontend-Integration)
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-13 (Einkaufslisten für Hardware-Empfänger)
 - **Typ:** Projekt | **Status:** Development
 
 ## Offene Aufgaben
@@ -16,6 +16,20 @@
 - [x] Umfassende E2E-Tests für Receiver-System (60 Tests, alle bestanden)
 
 ## Änderungshistorie
+
+### 2026-03-13 - Einkaufslisten für Hardware-Empfänger
+
+**Shopping-Listen pro Hardware-Typ im Erstellen-Formular:**
+- ESP32-S3 (8 Komponenten, ~21–35 € Pflichtteile) — als "Beste Wahl" markiert
+- ESP32-C3 (7 Komponenten, ~17–27 € Pflichtteile) — "Gute Alternative"
+- ESP8266 (5 Komponenten, ~13–20 € Pflichtteile) — "Nur für Spezialfälle"
+- Aufklappbare Einkaufsliste im Empfänger-Erstellen-Formular (ReceiverList.tsx)
+- Jede Liste mit Pflicht/Optional-Kennzeichnung, Preisen, Gesamtkostenschätzung
+- Empfehlungsbox pro Variante mit farbcodierter Bewertung
+- Hardware-Typ im Select mit ★-Markierung für Empfehlung
+- Gleiche Listen auch im Benutzerhandbuch (HelpPage.tsx) unter "Hardware-Inbetriebnahme"
+
+**Dateien:** `frontend/src/components/admin/ReceiverList.tsx`, `frontend/src/components/HelpPage.tsx`, `frontend/dist/`
 
 ### 2026-03-13 - Benutzerhandbuch (HelpPage) mit Frontend-Integration
 

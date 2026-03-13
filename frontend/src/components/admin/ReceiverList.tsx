@@ -11,10 +11,59 @@ import type { ReceiverNode, ReceiverStats } from '../../api';
 import ReceiverFlashWizard from './ReceiverFlashWizard';
 
 const HARDWARE_TYPES = [
-  { value: 'esp32-s3', label: 'ESP32-S3', desc: 'BLE + WiFi ODID, HTTPS' },
+  { value: 'esp32-s3', label: 'ESP32-S3', desc: 'BLE + WiFi ODID, HTTPS', recommended: true },
   { value: 'esp32-c3', label: 'ESP32-C3', desc: 'BLE + WiFi ODID, HTTPS' },
   { value: 'esp8266', label: 'ESP8266', desc: 'Nur WiFi-Beacon ODID, kein BLE, kein HTTPS', limited: true },
 ];
+
+interface ShoppingItem {
+  name: string;
+  desc: string;
+  link?: string;
+  price?: string;
+  required: boolean;
+}
+
+const SHOPPING_LISTS: Record<string, { title: string; note: string; items: ShoppingItem[] }> = {
+  'esp32-s3': {
+    title: 'ESP32-S3 (Empfohlen)',
+    note: 'Voller Funktionsumfang: BLE + WiFi Remote ID, HTTPS, viel RAM. Beste Wahl für stationäre Empfänger.',
+    items: [
+      { name: 'ESP32-S3-DevKitC-1 (N16R8)', desc: '16 MB Flash, 8 MB PSRAM – Board mit USB-C', price: '~8–12 €', required: true },
+      { name: 'USB-C Kabel', desc: 'Für Stromversorgung & erstes Flashen', price: '~3 €', required: true },
+      { name: 'USB-Netzteil (5V / min. 1A)', desc: 'Für Dauerbetrieb – USB-C oder Micro-USB je nach Board', price: '~5–8 €', required: true },
+      { name: '2,4 GHz WiFi-Antenne (IPEX/U.FL)', desc: 'Externe Antenne für bessere WiFi-Beacon-Reichweite. Nur nötig wenn Board keinen PCB-Antennen-Anschluss hat.', price: '~3 €', required: false },
+      { name: 'Gehäuse (z.B. 100×68×50 mm ABS IP65)', desc: 'Wetterfestes Gehäuse für Außenmontage, z.B. Sonoff IP66 oder generisches ABS-Gehäuse', price: '~5–10 €', required: true },
+      { name: 'Kabelverschraubung M12/M16', desc: 'Für wasserdichte USB-Kabel-Durchführung ins Gehäuse', price: '~2 €', required: false },
+      { name: 'Montagematerial (Kabelbinder, Schrauben, Abstandhalter)', desc: 'Zur Befestigung des Boards im Gehäuse und Montage an Mast/Wand', price: '~3–5 €', required: false },
+      { name: 'Outdoor PoE-Splitter (5V Micro-USB/USB-C)', desc: 'Für Stromversorgung über Ethernet-Kabel (spart extra Stromkabel)', price: '~8–12 €', required: false },
+    ],
+  },
+  'esp32-c3': {
+    title: 'ESP32-C3 (Kompakt)',
+    note: 'BLE + WiFi Remote ID, HTTPS – mit RISC-V Kern. Günstiger und kleiner als S3, aber weniger RAM.',
+    items: [
+      { name: 'ESP32-C3-DevKitM-1', desc: 'RISC-V Board mit BLE 5.0 + WiFi – USB-C', price: '~5–8 €', required: true },
+      { name: 'USB-C Kabel', desc: 'Für Stromversorgung & erstes Flashen', price: '~3 €', required: true },
+      { name: 'USB-Netzteil (5V / min. 500mA)', desc: 'Für Dauerbetrieb – geringerer Stromverbrauch als S3', price: '~5–8 €', required: true },
+      { name: '2,4 GHz WiFi-Antenne (IPEX/U.FL)', desc: 'Externe Antenne für bessere Reichweite (optional bei PCB-Antenne)', price: '~3 €', required: false },
+      { name: 'Gehäuse (z.B. 83×58×33 mm ABS IP65)', desc: 'Kompaktes wetterfestes Gehäuse – C3-Board ist klein genug für Mini-Gehäuse', price: '~4–8 €', required: true },
+      { name: 'Kabelverschraubung M12', desc: 'Für wasserdichte Kabel-Durchführung', price: '~2 €', required: false },
+      { name: 'Montagematerial (Kabelbinder, Schrauben)', desc: 'Befestigung Board + Gehäuse', price: '~3–5 €', required: false },
+    ],
+  },
+  'esp8266': {
+    title: 'ESP8266 / NodeMCU (Budget)',
+    note: 'Nur WiFi-Beacon ODID – kein BLE, kein HTTPS. Geeignet als günstige Ergänzung an Standorten mit bekanntem WiFi-Beacon-Verkehr.',
+    items: [
+      { name: 'NodeMCU v2/v3 (ESP8266)', desc: 'ESP-12E Board mit Micro-USB', price: '~3–5 €', required: true },
+      { name: 'Micro-USB Kabel', desc: 'Für Stromversorgung & erstes Flashen', price: '~2 €', required: true },
+      { name: 'USB-Netzteil (5V / min. 500mA)', desc: 'Für Dauerbetrieb', price: '~5–8 €', required: true },
+      { name: 'Gehäuse (z.B. 70×45×30 mm ABS)', desc: 'Kleines Gehäuse – NodeMCU passt in Standard-Projektboxen', price: '~3–5 €', required: true },
+      { name: 'Montagematerial', desc: 'Kabelbinder oder doppelseitiges Klebeband zur Befestigung', price: '~2–3 €', required: false },
+    ],
+  },
+};
 
 const STATUS_COLORS: Record<string, string> = {
   online: '#22c55e',
@@ -62,6 +111,9 @@ export default function ReceiverList() {
 
   // Expanded row
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Shopping list toggle
+  const [showShopping, setShowShopping] = useState(false);
 
   // Flash wizard
   const [flashNode, setFlashNode] = useState<ReceiverNode | null>(null);
@@ -306,7 +358,7 @@ export default function ReceiverList() {
               >
                 {HARDWARE_TYPES.map(t => (
                   <option key={t.value} value={t.value}>
-                    {t.label}{t.limited ? ' (eingeschränkt)' : ''}
+                    {t.label}{t.recommended ? ' ★ Empfohlen' : ''}{t.limited ? ' (eingeschränkt)' : ''}
                   </option>
                 ))}
               </select>
@@ -341,6 +393,141 @@ export default function ReceiverList() {
               color: '#eab308',
             }}>
               ESP8266 ist eine Light-Variante: Kein BLE (nur WiFi-Beacon ODID), kein HTTPS, eingeschränkter RAM.
+            </div>
+          )}
+
+          {/* Shopping list */}
+          {SHOPPING_LISTS[newType] && (
+            <div data-testid="shopping-list-section" style={{ marginTop: 12 }}>
+              <button
+                data-testid="shopping-list-toggle"
+                onClick={() => setShowShopping(!showShopping)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--accent)',
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  padding: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                <span style={{ transform: showShopping ? 'rotate(90deg)' : 'rotate(0)', transition: 'transform 0.2s', display: 'inline-block' }}>&#9654;</span>
+                Einkaufsliste: {SHOPPING_LISTS[newType].title}
+              </button>
+              {showShopping && (
+                <div data-testid="shopping-list-content" style={{
+                  marginTop: 8,
+                  padding: '12px 14px',
+                  background: 'var(--bg-primary)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 8,
+                }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10, lineHeight: 1.5 }}>
+                    {SHOPPING_LISTS[newType].note}
+                  </div>
+
+                  <table data-testid="shopping-list-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                        <th style={{ padding: '6px 8px', textAlign: 'left', fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Komponente</th>
+                        <th style={{ padding: '6px 8px', textAlign: 'left', fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Beschreibung</th>
+                        <th style={{ padding: '6px 8px', textAlign: 'center', fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Ca. Preis</th>
+                        <th style={{ padding: '6px 8px', textAlign: 'center', fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Pflicht</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {SHOPPING_LISTS[newType].items.map((item, i) => (
+                        <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
+                          <td style={{ padding: '8px', fontWeight: 500, color: 'var(--text-primary)' }}>
+                            {item.name}
+                          </td>
+                          <td style={{ padding: '8px', color: 'var(--text-secondary)', fontSize: 11 }}>
+                            {item.desc}
+                          </td>
+                          <td style={{ padding: '8px', textAlign: 'center', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                            {item.price || '-'}
+                          </td>
+                          <td style={{ padding: '8px', textAlign: 'center' }}>
+                            <span style={{
+                              display: 'inline-block',
+                              padding: '1px 6px',
+                              borderRadius: 4,
+                              fontSize: 10,
+                              fontWeight: 600,
+                              background: item.required ? 'rgba(34,197,94,0.15)' : 'rgba(107,114,128,0.15)',
+                              color: item.required ? '#22c55e' : '#6b7280',
+                            }}>
+                              {item.required ? 'Ja' : 'Optional'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  {/* Total estimate */}
+                  <div style={{
+                    marginTop: 10,
+                    padding: '8px 10px',
+                    background: 'rgba(20,184,166,0.08)',
+                    borderRadius: 6,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    fontSize: 12,
+                  }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>
+                      Geschätzte Gesamtkosten (Pflichtteile):
+                    </span>
+                    <span data-testid="shopping-list-total" style={{ fontWeight: 700, color: '#14b8a6' }}>
+                      {newType === 'esp32-s3' ? '~21–35 €' : newType === 'esp32-c3' ? '~17–27 €' : '~13–20 €'}
+                    </span>
+                  </div>
+                  <div style={{ marginTop: 6, fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                    Preise sind Richtwerte (Stand 2026). Bezugsquellen: AliExpress, Amazon, Berrybase, Mouser.
+                  </div>
+
+                  {/* Best choice recommendation */}
+                  <div data-testid="shopping-recommendation" style={{
+                    marginTop: 10,
+                    padding: '8px 12px',
+                    borderRadius: 6,
+                    fontSize: 12,
+                    lineHeight: 1.5,
+                    background: newType === 'esp32-s3'
+                      ? 'rgba(34,197,94,0.1)'
+                      : newType === 'esp32-c3'
+                        ? 'rgba(59,130,246,0.1)'
+                        : 'rgba(234,179,8,0.1)',
+                    border: `1px solid ${newType === 'esp32-s3' ? '#22c55e' : newType === 'esp32-c3' ? '#3b82f6' : '#eab308'}`,
+                    color: newType === 'esp32-s3' ? '#22c55e' : newType === 'esp32-c3' ? '#3b82f6' : '#eab308',
+                  }}>
+                    {newType === 'esp32-s3' && (
+                      <>
+                        <strong>★ Beste Wahl für dieses Projekt.</strong> Der ESP32-S3 bietet BLE + WiFi Remote ID Erkennung,
+                        HTTPS-Verschlüsselung und genug RAM für gleichzeitiges Scannen und Senden. Ideal als stationärer Empfänger.
+                      </>
+                    )}
+                    {newType === 'esp32-c3' && (
+                      <>
+                        <strong>Gute Alternative.</strong> Der ESP32-C3 bietet ebenfalls BLE + WiFi und HTTPS,
+                        ist aber kleiner und günstiger. Ideal wenn Platz oder Budget begrenzt sind. Etwas weniger RAM als der S3.
+                      </>
+                    )}
+                    {newType === 'esp8266' && (
+                      <>
+                        <strong>Nur für Spezialfälle.</strong> Der ESP8266 erkennt nur WiFi-Beacon ODID — kein BLE, kein HTTPS.
+                        Nur sinnvoll als Budget-Ergänzung an Standorten, wo bekannt WiFi-Beacon-Drohnen fliegen.
+                        Für den vollen Funktionsumfang wird <strong>ESP32-S3</strong> empfohlen.
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
