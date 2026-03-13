@@ -29,38 +29,58 @@ const SHOPPING_LISTS: Record<string, { title: string; note: string; items: Shopp
     title: 'ESP32-S3 (Empfohlen)',
     note: 'Voller Funktionsumfang: BLE + WiFi Remote ID, HTTPS, viel RAM. Beste Wahl für stationäre Empfänger.',
     items: [
-      { name: 'ESP32-S3-DevKitC-1 (N16R8)', desc: '16 MB Flash, 8 MB PSRAM – Board mit USB-C', price: '~8–12 €', required: true },
-      { name: 'USB-C Kabel', desc: 'Für Stromversorgung & erstes Flashen', price: '~3 €', required: true },
-      { name: 'USB-Netzteil (5V / min. 1A)', desc: 'Für Dauerbetrieb – USB-C oder Micro-USB je nach Board', price: '~5–8 €', required: true },
-      { name: '2,4 GHz WiFi-Antenne (IPEX/U.FL)', desc: 'Externe Antenne für bessere WiFi-Beacon-Reichweite. Nur nötig wenn Board keinen PCB-Antennen-Anschluss hat.', price: '~3 €', required: false },
-      { name: 'Gehäuse (z.B. 100×68×50 mm ABS IP65)', desc: 'Wetterfestes Gehäuse für Außenmontage, z.B. Sonoff IP66 oder generisches ABS-Gehäuse', price: '~5–10 €', required: true },
-      { name: 'Kabelverschraubung M12/M16', desc: 'Für wasserdichte USB-Kabel-Durchführung ins Gehäuse', price: '~2 €', required: false },
-      { name: 'Montagematerial (Kabelbinder, Schrauben, Abstandhalter)', desc: 'Zur Befestigung des Boards im Gehäuse und Montage an Mast/Wand', price: '~3–5 €', required: false },
-      { name: 'Outdoor PoE-Splitter (5V Micro-USB/USB-C)', desc: 'Für Stromversorgung über Ethernet-Kabel (spart extra Stromkabel)', price: '~8–12 €', required: false },
+      { name: 'ESP32-S3-DevKitC-1 (N16R8)', desc: '16 MB Flash, 8 MB PSRAM, WiFi + BLE 5.0, USB-C. Xtensa Dual-Core 240 MHz.', price: '~9 €', required: true,
+        link: 'https://www.amazon.de/ESP32-S3-WROOM-1-N16R8-ESP32-S3-DevKitC-1-Entwicklung-Bluetooth/dp/B0C6KN35L2' },
+      { name: 'USB-A auf USB-C Kabel (1m)', desc: 'Datenkabel (nicht nur Lade!) für Flashen und Stromversorgung.', price: '~7 €', required: true,
+        link: 'https://www.amazon.de/1-m-langes-usb-c-kabel-usb-a-auf-usb-c-von-amazon/dp/B07Q5JW4J3' },
+      { name: 'USB-Netzteil 5V/2A (USB-C)', desc: 'Steckernetzteil für Dauerbetrieb. 5V, min. 1A (2A empfohlen).', price: '~8 €', required: true,
+        link: 'https://www.amazon.de/Bouge-Universal-Ladeger%C3%A4t-Kompatibilit%C3%A4t-Blackview/dp/B0C2Q5LK11' },
+      { name: '2,4 GHz WiFi-Antenne 3dBi (IPEX/U.FL)', desc: 'Externe Antenne mit U.FL-Stecker + RP-SMA Pigtail 17cm. Verbessert WiFi-Beacon-Reichweite.', price: '~6 €', required: false,
+        link: 'https://www.amazon.de/Bluetooth-Antenne-2-4GHz-geeignet-ESP8266/dp/B0CTG8XJSN' },
+      { name: 'ABS-Gehäuse IP65 (100×68×50 mm)', desc: 'Wasserdichtes Elektronik-Gehäuse für Außenmontage. Grau, mit transparentem Deckel.', price: '~7 €', required: true,
+        link: 'https://www.amazon.de/Elektronische-Wasserdichte-Industriegeh%C3%A4use-Anschlussdose-Verteilerdose/dp/B0DDWR9LP3' },
+      { name: 'Kabelverschraubung M16 IP68 (5er-Pack)', desc: 'Wasserdichte Kabel-Durchführung für USB-Kabel ins Gehäuse. M16×1,5, 4–8 mm Kabeldurchmesser.', price: '~7 €', required: false,
+        link: 'https://www.amazon.de/Kabelverschraubung-M16-Hanibos-Kabeldurchf%C3%BChrung-Kabelverschraubungen/dp/B0BXRVX368' },
+      { name: 'Nylon Abstandshalter M3 Set (260-tlg.)', desc: 'M3 Schrauben, Muttern, Standoffs zum Befestigen der Platine im Gehäuse. Isolierend.', price: '~8 €', required: false,
+        link: 'https://www.amazon.de/Schrauben-Abstandshalter-Schraubenmutter-Distanzh%C3%BClsen-Reparatur/dp/B0B2S6JLX4' },
+      { name: 'PoE-Splitter 5V USB-C (IEEE 802.3af)', desc: 'Stromversorgung über Ethernet-Kabel. Spart extra Stromkabel bei Outdoor-Installation.', price: '~15 €', required: false,
+        link: 'https://www.amazon.de/UCTRONICS-PoE-Splitter-USB-C-USB-C-Adapter-Sicherheitskameras/dp/B087F4QCTR' },
     ],
   },
   'esp32-c3': {
     title: 'ESP32-C3 (Kompakt)',
     note: 'BLE + WiFi Remote ID, HTTPS – mit RISC-V Kern. Günstiger und kleiner als S3, aber weniger RAM.',
     items: [
-      { name: 'ESP32-C3-DevKitM-1', desc: 'RISC-V Board mit BLE 5.0 + WiFi – USB-C', price: '~5–8 €', required: true },
-      { name: 'USB-C Kabel', desc: 'Für Stromversorgung & erstes Flashen', price: '~3 €', required: true },
-      { name: 'USB-Netzteil (5V / min. 500mA)', desc: 'Für Dauerbetrieb – geringerer Stromverbrauch als S3', price: '~5–8 €', required: true },
-      { name: '2,4 GHz WiFi-Antenne (IPEX/U.FL)', desc: 'Externe Antenne für bessere Reichweite (optional bei PCB-Antenne)', price: '~3 €', required: false },
-      { name: 'Gehäuse (z.B. 83×58×33 mm ABS IP65)', desc: 'Kompaktes wetterfestes Gehäuse – C3-Board ist klein genug für Mini-Gehäuse', price: '~4–8 €', required: true },
-      { name: 'Kabelverschraubung M12', desc: 'Für wasserdichte Kabel-Durchführung', price: '~2 €', required: false },
-      { name: 'Montagematerial (Kabelbinder, Schrauben)', desc: 'Befestigung Board + Gehäuse', price: '~3–5 €', required: false },
+      { name: 'ESP32-C3-DevKitM-1 (Espressif)', desc: 'Offizielles Espressif Board, 4 MB Flash, WiFi + BLE 5.0, USB-C. RISC-V Single-Core 160 MHz.', price: '~9 €', required: true,
+        link: 'https://www.amazon.de/Espressif-Entwicklungsboard-ESP32-C3-DevKitM-1/dp/B09P31Y4MF' },
+      { name: 'USB-A auf USB-C Kabel (1m)', desc: 'Datenkabel für Flashen und Stromversorgung.', price: '~7 €', required: true,
+        link: 'https://www.amazon.de/1-m-langes-usb-c-kabel-usb-a-auf-usb-c-von-amazon/dp/B07Q5JW4J3' },
+      { name: 'USB-Netzteil 5V/2A (USB-A)', desc: 'Steckernetzteil für Dauerbetrieb. Geringerer Verbrauch als S3.', price: '~7 €', required: true,
+        link: 'https://www.amazon.de/Ladeger%C3%A4t-Netzstecker-Steckdosenadapter-Ladestecker-Tischleuchte/dp/B0DNMKG9C3' },
+      { name: '2,4 GHz WiFi-Antenne 3dBi (IPEX/U.FL)', desc: 'Externe Antenne mit U.FL-Stecker. Optional da C3-MINI-1 eine PCB-Antenne hat.', price: '~6 €', required: false,
+        link: 'https://www.amazon.de/Bluetooth-Antenne-2-4GHz-geeignet-ESP8266/dp/B0CTG8XJSN' },
+      { name: 'ABS-Gehäuse IP65 (83×58×34 mm)', desc: 'Kompaktes wasserdichtes Gehäuse. Der C3 ist klein genug für Mini-Gehäuse.', price: '~5 €', required: true,
+        link: 'https://www.amazon.de/Robustes-ABS-Elektronik-Projektbox-wasserdichtes-Abzweiggeh%C3%A4use-Gr%C3%B6%C3%9Fenoptionen/dp/B0DL9MG241' },
+      { name: 'Kabelverschraubung M16 IP68 (5er-Pack)', desc: 'Wasserdichte Kabel-Durchführung für USB-Kabel ins Gehäuse.', price: '~7 €', required: false,
+        link: 'https://www.amazon.de/Kabelverschraubung-M16-Hanibos-Kabeldurchf%C3%BChrung-Kabelverschraubungen/dp/B0BXRVX368' },
+      { name: 'Nylon Abstandshalter M3 Set (260-tlg.)', desc: 'M3 Standoffs, Schrauben und Muttern für Platinen-Montage im Gehäuse.', price: '~8 €', required: false,
+        link: 'https://www.amazon.de/Schrauben-Abstandshalter-Schraubenmutter-Distanzh%C3%BClsen-Reparatur/dp/B0B2S6JLX4' },
     ],
   },
   'esp8266': {
     title: 'ESP8266 / NodeMCU (Budget)',
     note: 'Nur WiFi-Beacon ODID – kein BLE, kein HTTPS. Geeignet als günstige Ergänzung an Standorten mit bekanntem WiFi-Beacon-Verkehr.',
     items: [
-      { name: 'NodeMCU v2/v3 (ESP8266)', desc: 'ESP-12E Board mit Micro-USB', price: '~3–5 €', required: true },
-      { name: 'Micro-USB Kabel', desc: 'Für Stromversorgung & erstes Flashen', price: '~2 €', required: true },
-      { name: 'USB-Netzteil (5V / min. 500mA)', desc: 'Für Dauerbetrieb', price: '~5–8 €', required: true },
-      { name: 'Gehäuse (z.B. 70×45×30 mm ABS)', desc: 'Kleines Gehäuse – NodeMCU passt in Standard-Projektboxen', price: '~3–5 €', required: true },
-      { name: 'Montagematerial', desc: 'Kabelbinder oder doppelseitiges Klebeband zur Befestigung', price: '~2–3 €', required: false },
+      { name: 'AZDelivery NodeMCU Lolin V3 (ESP8266)', desc: 'ESP-12F Board mit CH340G USB-Chip, Micro-USB, WiFi 2,4 GHz, inkl. E-Book.', price: '~7 €', required: true,
+        link: 'https://www.amazon.de/AZDelivery-NodeMCU-Lolin-WiFi-Parent/dp/B07Z5C3KQF' },
+      { name: 'Micro-USB Kabel (1m)', desc: 'Datenkabel für Flashen und Stromversorgung. Auf Datenkabel achten!', price: '~5 €', required: true,
+        link: 'https://www.amazon.de/KabelDirekt-Micro-Ladekabel-Datenkabel-schwarz/dp/B00L5G2IR6' },
+      { name: 'USB-Netzteil 5V/2A (3er-Pack)', desc: 'Steckernetzteil mit USB-A Ausgang für Micro-USB Kabel. 3er-Pack praktisch für mehrere Nodes.', price: '~9 €', required: true,
+        link: 'https://www.amazon.de/Ladeger%C3%A4t-Netzstecker-Smartphones-Spielzeug-Spielkonsole-wei%C3%9F/dp/B0CM9G39DW' },
+      { name: 'ABS-Gehäuse klein (5er-Pack)', desc: 'Kleine ABS-Projektbox für Elektronik. NodeMCU passt in Standard-Projektboxen.', price: '~6 €', required: true,
+        link: 'https://www.amazon.de/Geh%C3%A4use-ABS-Kunststoff-Projektbox-elektronische-Schaltungen/dp/B08JHYNPH8' },
+      { name: 'Nylon Abstandshalter M3 Set (260-tlg.)', desc: 'Zur Montage der Platine im Gehäuse. Auch nützlich für andere Projekte.', price: '~8 €', required: false,
+        link: 'https://www.amazon.de/Schrauben-Abstandshalter-Schraubenmutter-Distanzh%C3%BClsen-Reparatur/dp/B0B2S6JLX4' },
     ],
   },
 };
@@ -444,6 +464,28 @@ export default function ReceiverList() {
                         <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
                           <td style={{ padding: '8px', fontWeight: 500, color: 'var(--text-primary)' }}>
                             {item.name}
+                            {item.link && (
+                              <a
+                                href={item.link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                data-testid={`shopping-link-${i}`}
+                                style={{
+                                  display: 'inline-block',
+                                  marginLeft: 6,
+                                  padding: '1px 6px',
+                                  borderRadius: 4,
+                                  fontSize: 9,
+                                  fontWeight: 600,
+                                  background: 'rgba(20,184,166,0.15)',
+                                  color: '#14b8a6',
+                                  textDecoration: 'none',
+                                  verticalAlign: 'middle',
+                                }}
+                              >
+                                Amazon &#8599;
+                              </a>
+                            )}
                           </td>
                           <td style={{ padding: '8px', color: 'var(--text-secondary)', fontSize: 11 }}>
                             {item.desc}
@@ -484,7 +526,7 @@ export default function ReceiverList() {
                       Geschätzte Gesamtkosten (Pflichtteile):
                     </span>
                     <span data-testid="shopping-list-total" style={{ fontWeight: 700, color: '#14b8a6' }}>
-                      {newType === 'esp32-s3' ? '~21–35 €' : newType === 'esp32-c3' ? '~17–27 €' : '~13–20 €'}
+                      {newType === 'esp32-s3' ? '~31 €' : newType === 'esp32-c3' ? '~28 €' : '~27 €'}
                     </span>
                   </div>
                   <div style={{ marginTop: 6, fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>
