@@ -6,8 +6,11 @@ import {
   deleteReceiver,
   fetchReceiverStats,
   downloadFirmware,
+  fetchConnectionLog,
+  toggleConnectionLog,
+  clearConnectionLog,
 } from '../../api';
-import type { ReceiverNode, ReceiverStats } from '../../api';
+import type { ReceiverNode, ReceiverStats, ConnectionLogEntry } from '../../api';
 import ReceiverFlashWizard from './ReceiverFlashWizard';
 
 const HARDWARE_TYPES = [
@@ -112,6 +115,111 @@ function formatUptime(seconds: number | null): string {
   return `${Math.floor(seconds / 86400)}d ${Math.floor((seconds % 86400) / 3600)}h`;
 }
 
+function ConnectionLogViewer({ entries, receiverFilter, onClear, onClose, receivers, onFilterChange }: {
+  entries: ConnectionLogEntry[];
+  receiverFilter: string | null;
+  onClear: () => void;
+  onClose: () => void;
+  receivers: ReceiverNode[];
+  onFilterChange: (id: string | null) => void;
+}) {
+  return (
+    <div data-testid="connection-log" style={{
+      background: '#0d1117', border: '1px solid #30363d',
+      borderRadius: 10, marginBottom: 20, overflow: 'hidden',
+    }}>
+      {/* Header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px',
+        borderBottom: '1px solid #30363d', flexWrap: 'wrap',
+      }}>
+        <span style={{ color: '#3fb950', fontWeight: 700, fontSize: 13 }}>Connection Log</span>
+        <select
+          data-testid="log-filter"
+          value={receiverFilter || ''}
+          onChange={e => onFilterChange(e.target.value || null)}
+          style={{
+            background: '#161b22', border: '1px solid #30363d', borderRadius: 4,
+            color: '#c9d1d9', fontSize: 11, padding: '3px 8px',
+          }}
+        >
+          <option value="">Alle Empfänger</option>
+          {receivers.map(r => (
+            <option key={r.id} value={r.id}>{r.name} ({r.id})</option>
+          ))}
+        </select>
+        <span style={{ color: '#8b949e', fontSize: 11, marginLeft: 'auto' }}>
+          {entries.length} Einträge
+        </span>
+        <button onClick={onClear} style={{
+          background: 'none', border: '1px solid #30363d', borderRadius: 4,
+          color: '#8b949e', fontSize: 10, padding: '2px 8px', cursor: 'pointer',
+        }}>Leeren</button>
+        <button onClick={onClose} style={{
+          background: 'none', border: 'none', color: '#8b949e',
+          fontSize: 16, cursor: 'pointer', padding: '0 4px',
+        }}>x</button>
+      </div>
+
+      {/* Log entries */}
+      <div style={{
+        maxHeight: 300, overflow: 'auto', padding: '4px 0',
+        fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6,
+      }}>
+        {entries.length === 0 ? (
+          <div style={{ color: '#8b949e', padding: '20px', textAlign: 'center' }}>
+            Noch keine Einträge. Warte auf Empfänger-Kommunikation...
+          </div>
+        ) : entries.map((e, i) => {
+          const time = new Date(e.timestamp * 1000).toLocaleTimeString('de-DE', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          const isError = e.http_status >= 400;
+          const isHeartbeat = e.endpoint === '/heartbeat';
+          const isIngest = e.endpoint === '/ingest';
+          return (
+            <div key={i} style={{
+              padding: '2px 14px',
+              color: isError ? '#f85149' : isIngest ? '#3fb950' : isHeartbeat ? '#58a6ff' : '#c9d1d9',
+              borderBottom: '1px solid rgba(48,54,61,0.3)',
+            }}>
+              <span style={{ color: '#8b949e' }}>{time}</span>
+              {' '}
+              <span style={{
+                display: 'inline-block', width: 28, textAlign: 'center',
+                background: isError ? 'rgba(248,81,73,0.15)' : 'rgba(63,185,80,0.1)',
+                borderRadius: 3, fontSize: 10, fontWeight: 600,
+                color: isError ? '#f85149' : '#3fb950',
+              }}>{e.http_status}</span>
+              {' '}
+              <span style={{ color: '#d2a8ff', fontWeight: 500 }}>{e.endpoint}</span>
+              {' '}
+              {e.receiver_name
+                ? <span style={{ color: '#79c0ff' }}>[{e.receiver_name}]</span>
+                : e.receiver_id
+                  ? <span style={{ color: '#79c0ff' }}>[{e.receiver_id}]</span>
+                  : <span style={{ color: '#f85149' }}>[unbekannt]</span>
+              }
+              {e.detections_count != null && (
+                <span style={{ color: '#3fb950' }}> {e.detections_count} Drohnen</span>
+              )}
+              {e.error && (
+                <span style={{ color: '#f85149' }}> {e.error}</span>
+              )}
+              {isHeartbeat && e.wifi_ssid && (
+                <span style={{ color: '#8b949e' }}>
+                  {' '}WiFi:{e.wifi_ssid} {e.wifi_rssi != null && `(${e.wifi_rssi}dBm)`}
+                  {e.free_heap != null && ` Heap:${(e.free_heap / 1024).toFixed(0)}KB`}
+                  {e.firmware_version && ` FW:${e.firmware_version}`}
+                </span>
+              )}
+              {e.ip && <span style={{ color: '#484f58' }}> {e.ip}</span>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function ReceiverList() {
   const [receivers, setReceivers] = useState<ReceiverNode[]>([]);
   const [stats, setStats] = useState<ReceiverStats | null>(null);
@@ -134,6 +242,12 @@ export default function ReceiverList() {
   const [flashNode, setFlashNode] = useState<ReceiverNode | null>(null);
   const [flashRegenKey, setFlashRegenKey] = useState(false);
 
+  // Connection log
+  const [logEnabled, setLogEnabled] = useState(false);
+  const [logEntries, setLogEntries] = useState<ConnectionLogEntry[]>([]);
+  const [logReceiverId, setLogReceiverId] = useState<string | null>(null); // null = all
+  const [showLog, setShowLog] = useState(false);
+
   const loadData = useCallback(async () => {
     try {
       const [r, s] = await Promise.all([fetchReceivers(), fetchReceiverStats()]);
@@ -147,11 +261,45 @@ export default function ReceiverList() {
     }
   }, []);
 
+  const loadLog = useCallback(async (receiverId?: string | null) => {
+    try {
+      const res = await fetchConnectionLog(receiverId || undefined);
+      setLogEnabled(res.enabled);
+      setLogEntries(res.entries);
+    } catch { /* silent */ }
+  }, []);
+
   useEffect(() => {
     loadData();
+    loadLog();
     const interval = setInterval(loadData, 30000);
     return () => clearInterval(interval);
-  }, [loadData]);
+  }, [loadData, loadLog]);
+
+  // Poll log when visible and enabled
+  useEffect(() => {
+    if (!showLog || !logEnabled) return;
+    const interval = setInterval(() => loadLog(logReceiverId), 3000);
+    return () => clearInterval(interval);
+  }, [showLog, logEnabled, logReceiverId, loadLog]);
+
+  const handleToggleLog = async () => {
+    try {
+      const res = await toggleConnectionLog(!logEnabled);
+      setLogEnabled(res.enabled);
+      if (res.enabled) {
+        setShowLog(true);
+        loadLog(logReceiverId);
+      }
+    } catch { /* silent */ }
+  };
+
+  const handleClearLog = async () => {
+    try {
+      await clearConnectionLog();
+      setLogEntries([]);
+    } catch { /* silent */ }
+  };
 
   const handleCreate = async () => {
     if (!newName.trim()) return;
@@ -208,7 +356,51 @@ export default function ReceiverList() {
         >
           + Neuer Empfänger
         </button>
+        <button
+          data-testid="connection-log-toggle"
+          onClick={handleToggleLog}
+          style={{
+            padding: '8px 16px',
+            background: logEnabled ? '#22c55e' : 'var(--bg-tertiary)',
+            color: logEnabled ? '#fff' : 'var(--text-secondary)',
+            border: `1px solid ${logEnabled ? '#22c55e' : 'var(--border)'}`,
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          {logEnabled ? 'Log aktiv' : 'Log aus'}
+        </button>
+        {logEnabled && (
+          <button
+            onClick={() => { setLogReceiverId(null); setShowLog(!showLog); if (!showLog) loadLog(null); }}
+            style={{
+              padding: '8px 16px',
+              background: showLog ? 'var(--accent)' : 'var(--bg-tertiary)',
+              color: showLog ? '#fff' : 'var(--text-secondary)',
+              border: `1px solid ${showLog ? 'var(--accent)' : 'var(--border)'}`,
+              borderRadius: 8,
+              fontSize: 13,
+              cursor: 'pointer',
+            }}
+          >
+            {showLog ? 'Log ausblenden' : 'Log anzeigen'}
+          </button>
+        )}
       </div>
+
+      {/* Connection Log Viewer */}
+      {showLog && logEnabled && (
+        <ConnectionLogViewer
+          entries={logEntries}
+          receiverFilter={logReceiverId}
+          onClear={handleClearLog}
+          onClose={() => setShowLog(false)}
+          receivers={receivers}
+          onFilterChange={(id) => { setLogReceiverId(id); loadLog(id); }}
+        />
+      )}
 
       {/* Stats */}
       {stats && (
@@ -705,7 +897,7 @@ export default function ReceiverList() {
                             </button>
                           )}
                           <button
-                            data-testid={`receiver-flash-${node.id}`}
+                            data-testid={`receiver-build-${node.id}`}
                             onClick={() => { setFlashRegenKey(!!node.lastBuildAt); setFlashNode(node); }}
                             style={{
                               padding: '5px 12px',
@@ -720,6 +912,28 @@ export default function ReceiverList() {
                           >
                             {node.lastBuildAt ? 'Neu bauen (neuer Key)' : 'Firmware bauen'}
                           </button>
+                          {logEnabled && (
+                            <button
+                              data-testid={`receiver-log-${node.id}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setLogReceiverId(node.id);
+                                setShowLog(true);
+                                loadLog(node.id);
+                              }}
+                              style={{
+                                padding: '5px 12px',
+                                background: logReceiverId === node.id && showLog ? '#eab308' : 'var(--bg-tertiary)',
+                                border: '1px solid var(--border)',
+                                borderRadius: 6,
+                                color: logReceiverId === node.id && showLog ? '#fff' : 'var(--text-secondary)',
+                                cursor: 'pointer',
+                                fontSize: 11,
+                              }}
+                            >
+                              Kommunikations-Log
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

@@ -2,7 +2,7 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-14 (v1.5.1: Async Build mit Polling, Proxy-kompatibel)
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-14 (v1.5.2: Connection Log für Empfänger-Kommunikation)
 - **Typ:** Projekt | **Status:** Development
 
 ## Offene Aufgaben
@@ -16,6 +16,24 @@
 - [x] Umfassende E2E-Tests für Receiver-System (60 Tests, alle bestanden)
 
 ## Änderungshistorie
+
+### 2026-03-14 - v1.5.2: Connection Log für Empfänger-Kommunikation
+
+**Neues Feature: Echtzeit-Kommunikationslog für Hardware-Empfänger**
+- Backend: `ConnectionLog` Service mit In-Memory Ring-Buffer (max 500 Einträge/Tenant)
+- Backend: Loggt automatisch Heartbeats, Ingest-Requests und Auth-Fehler
+- Backend: Jeder Log-Eintrag enthält: Timestamp, Receiver-ID/Name, Endpoint, HTTP-Status, Fehler, Detections-Count, IP, WiFi/Heap/FW-Details
+- Backend: Auth-Fehler (ungültiger Key, fehlender Header, deaktivierter Empfänger) werden als globale Einträge geloggt
+- Backend: API-Endpoints: `GET /connection-log`, `POST /connection-log/toggle`, `POST /connection-log/clear`
+- Frontend: "Log aktiv/aus" Toggle-Button in der Empfänger-Übersicht
+- Frontend: Globales Log-Fenster (Terminal-Style) mit Filter nach Empfänger
+- Frontend: Per-Receiver "Kommunikations-Log" Button in der Detail-Ansicht
+- Frontend: Farbcodierte Einträge (grün=Ingest, blau=Heartbeat, rot=Fehler)
+- Frontend: Auto-Polling alle 3s wenn Log sichtbar und aktiviert
+- Log kann ein-/ausgeschaltet und geleert werden
+
+**Dateien (neu):** `backend/services/__init__.py`, `backend/services/connection_log.py`
+**Dateien (geändert):** `backend/auth.py`, `backend/routes/receiver_routes.py`, `frontend/src/api.ts`, `frontend/src/components/admin/ReceiverList.tsx`, `manifest.json`
 
 ### 2026-03-14 - v1.5.1: Async Firmware Build mit Polling (Proxy-kompatibel)
 

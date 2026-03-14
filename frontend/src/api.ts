@@ -850,6 +850,52 @@ export async function pollBuildStatus(nodeId: string): Promise<BuildStatus> {
   return res.json();
 }
 
+// ─── Connection Log ──────────────────────────────────────
+
+export interface ConnectionLogEntry {
+  timestamp: number;
+  receiver_id: string | null;
+  receiver_name: string | null;
+  endpoint: string;
+  method: string;
+  http_status: number;
+  error: string | null;
+  detections_count: number | null;
+  ip: string | null;
+  firmware_version: string | null;
+  wifi_ssid: string | null;
+  wifi_rssi: number | null;
+  free_heap: number | null;
+  uptime_seconds: number | null;
+}
+
+export interface ConnectionLogResponse {
+  enabled: boolean;
+  entries: ConnectionLogEntry[];
+}
+
+export async function fetchConnectionLog(receiverId?: string): Promise<ConnectionLogResponse> {
+  const params = receiverId ? `?receiver_id=${encodeURIComponent(receiverId)}` : '';
+  const res = await authFetch(`${API_BASE}/receivers/connection-log${params}`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function toggleConnectionLog(enabled: boolean): Promise<{ enabled: boolean }> {
+  const res = await authFetch(`${API_BASE}/receivers/connection-log/toggle`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled }),
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function clearConnectionLog(): Promise<void> {
+  const res = await authFetch(`${API_BASE}/receivers/connection-log/clear`, { method: 'POST' });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+}
+
 export async function downloadFirmware(nodeId: string): Promise<Blob> {
   const res = await authFetch(`${API_BASE}/receivers/firmware/download/${encodeURIComponent(nodeId)}`);
   if (!res.ok) {

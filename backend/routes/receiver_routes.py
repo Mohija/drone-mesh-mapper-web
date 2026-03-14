@@ -198,6 +198,13 @@ def ingest():
         detections=detections,
     )
 
+    # Connection log
+    from services.connection_log import connection_log
+    connection_log.log(g.tenant_id,
+        receiver_id=node.id, receiver_name=node.name,
+        endpoint="/ingest", method="POST", http_status=200,
+        detections_count=len(detections), ip=request.remote_addr)
+
     return jsonify({"ok": True, "stored": count})
 
 
@@ -232,6 +239,18 @@ def heartbeat():
             node.last_location_accuracy = data["accuracy"]
 
     db.session.commit()
+
+    # Connection log
+    from services.connection_log import connection_log
+    connection_log.log(g.tenant_id,
+        receiver_id=node.id, receiver_name=node.name,
+        endpoint="/heartbeat", method="POST", http_status=200,
+        ip=request.remote_addr,
+        firmware_version=data.get("firmware_version"),
+        wifi_ssid=data.get("wifi_ssid"),
+        wifi_rssi=data.get("wifi_rssi"),
+        free_heap=data.get("free_heap"),
+        uptime_seconds=data.get("uptime_seconds"))
 
     logger.debug("Heartbeat from receiver %s (%s)", node.id, node.name)
     return jsonify({"ok": True, "server_time": time.time()})
@@ -913,6 +932,54 @@ def build_firmware_status(node_id):
         "checks": job.get("checks"),
         "result": job.get("result"),
     })
+
+
+@receiver_bp.route("/connection-log", methods=["GET"])
+@login_required
+@role_required("tenant_admin")
+def get_connection_log():
+    """Get connection log entries. Optional ?receiver_id= filter."""
+    from services.connection_log import connection_log
+    receiver_id = request.args.get("receiver_id")
+    limit = min(int(request.args.get("limit", 100)), 500)
+    if receiver_id:
+        entries = connection_log.get_for_receiver(g.tenant_id, receiver_id, limit)
+    else:
+        # Merge tenant-specific + global (auth failures) entries
+        tenant_entries = connection_log.get_all(g.tenant_id, limit)
+        global_entries = connection_log.get_all("_global", limit)
+        entries = sorted(tenant_entries + global_entries, key=lambda e: e["timestamp"], reverse=True)[:limit]
+    return jsonify({
+        "enabled": connection_log.is_enabled(g.tenant_id),
+        "entries": entries,
+    })
+
+
+@receiver_bp.route("/connection-log/toggle", methods=["POST"])
+@login_required
+@role_required("tenant_admin")
+def toggle_connection_log():
+    """Enable or disable connection logging."""
+    from services.connection_log import connection_log
+    data = request.get_json(silent=True) or {}
+    enabled = data.get("enabled", True)
+    if enabled:
+        connection_log.enable(g.tenant_id)
+        connection_log.enable("_global")  # Also capture auth failures
+    else:
+        connection_log.disable(g.tenant_id)
+    logger.info("Connection log %s for tenant %s", "enabled" if enabled else "disabled", g.tenant_id)
+    return jsonify({"enabled": connection_log.is_enabled(g.tenant_id)})
+
+
+@receiver_bp.route("/connection-log/clear", methods=["POST"])
+@login_required
+@role_required("tenant_admin")
+def clear_connection_log():
+    """Clear all connection log entries."""
+    from services.connection_log import connection_log
+    connection_log.clear(g.tenant_id)
+    return jsonify({"ok": True})
 
 
 @receiver_bp.route("/firmware/board-info", methods=["GET"])

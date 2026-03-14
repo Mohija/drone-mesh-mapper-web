@@ -140,15 +140,35 @@ def node_auth_required(f):
     """Decorator: requires valid X-Node-Key header. Sets g.receiver_node, g.tenant_id."""
     @wraps(f)
     def decorated(*args, **kwargs):
+        from services.connection_log import connection_log
+
         api_key = request.headers.get("X-Node-Key", "")
+        client_ip = request.remote_addr or ""
+
         if not api_key:
+            # Log failed auth attempt (broadcast to all tenants that have logging enabled)
+            connection_log.log("_global",
+                receiver_id=None, receiver_name=None,
+                endpoint=request.path, method=request.method,
+                http_status=401, error="X-Node-Key header fehlt",
+                ip=client_ip)
             return jsonify({"error": "X-Node-Key header erforderlich"}), 401
 
         from models import ReceiverNode, Tenant
         node = ReceiverNode.query.filter_by(api_key=api_key).first()
         if not node:
+            connection_log.log("_global",
+                receiver_id=None, receiver_name=None,
+                endpoint=request.path, method=request.method,
+                http_status=401, error=f"Ungültiger API-Key ({api_key[:8]}...)",
+                ip=client_ip)
             return jsonify({"error": "Ungültiger API-Key"}), 401
         if not node.is_active:
+            connection_log.log(node.tenant_id,
+                receiver_id=node.id, receiver_name=node.name,
+                endpoint=request.path, method=request.method,
+                http_status=403, error="Empfänger deaktiviert",
+                ip=client_ip)
             return jsonify({"error": "Empfänger deaktiviert"}), 403
 
         tenant = db.session.get(Tenant, node.tenant_id)

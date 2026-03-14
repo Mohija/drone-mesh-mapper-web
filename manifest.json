@@ -2,7 +2,7 @@
   "name": "flight-arc",
   "displayName": "FlightArc",
   "description": "Web-App für Echtzeit-Visualisierung und Tracking von Drohnen und Luftfahrzeugen auf interaktiver Karte. Python-Backend mit React-Frontend für Live-Updates, Höhenprofile, Flugverbotszonen und Aircraft Lookup.",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "type": "project",
   "category": "web",
   "icon": "radar",
