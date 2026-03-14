@@ -4,15 +4,15 @@ import {
   createReceiver,
   updateReceiver,
   deleteReceiver,
-  regenerateReceiverKey,
   fetchReceiverStats,
+  downloadFirmware,
 } from '../../api';
 import type { ReceiverNode, ReceiverStats } from '../../api';
 import ReceiverFlashWizard from './ReceiverFlashWizard';
 
 const HARDWARE_TYPES = [
-  { value: 'esp32-s3', label: 'ESP32-S3', desc: 'BLE + WiFi ODID, HTTPS', recommended: true },
-  { value: 'esp32-c3', label: 'ESP32-C3', desc: 'BLE + WiFi ODID, HTTPS' },
+  { value: 'esp32-s3', label: 'ESP32-S3', desc: 'BLE + WiFi ODID, HTTPS | DIO 8MB', recommended: true },
+  { value: 'esp32-c3', label: 'ESP32-C3', desc: 'BLE + WiFi ODID, HTTPS | QIO 4MB' },
   { value: 'esp8266', label: 'ESP8266', desc: 'Nur WiFi-Beacon ODID, kein BLE, kein HTTPS', limited: true },
 ];
 
@@ -28,21 +28,19 @@ interface ShoppingItem {
 const SHOPPING_LISTS: Record<string, { title: string; note: string; items: ShoppingItem[] }> = {
   'esp32-s3': {
     title: 'ESP32-S3 (Empfohlen)',
-    note: 'Voller Funktionsumfang: BLE + WiFi Remote ID, HTTPS, viel RAM. Beste Wahl für stationäre Empfänger. Alle Boards kommen mit vorgelöteten Pin-Headers — kein Löten nötig.',
+    note: 'Voller Funktionsumfang: BLE + WiFi Remote ID (inkl. NAN/DJI), HTTPS, Dual-Core, viel RAM. Beste Wahl für stationäre Empfänger. Das empfohlene Board hat einen IPEX-Anschluss und kommt mit externer 2,4 GHz Antenne — wichtig für Outdoor-Gehäuse und maximale Reichweite.',
     items: [
-      { name: 'ESP32-S3-DevKitC-1 N16R8 (vorgelötet, 2er-Pack)', desc: '16 MB Flash, 8 MB PSRAM, WiFi + BLE 5.0, USB-C, Dual-Core 240 MHz. Pin-Headers bereits aufgelötet — sofort einsatzbereit.', price: '~18 € (2 Stk.)', required: true, group: 'controller-set',
-        link: 'https://www.amazon.de/Diymore-DevKitC-Entwicklungsboard-Bluetooth-gel%C3%B6teten-2PCS/dp/B0DFCQGW4C' },
+      { name: 'ESP32-S3-DevKitC-1 N16R8 mit IPEX + Antenne', desc: 'Heemol Board: 16 MB Flash, 8 MB PSRAM, WiFi + BLE 5.0, USB-C, Dual-Core 240 MHz. Mit IPEX-Anschluss + 2,4 GHz Antenne im Lieferumfang. Pin-Headers vorgelötet.', price: '~15 €', required: true, group: 'controller-set',
+        link: 'https://www.amazon.de/Heemol-DevKitC-1-Entwicklung-Bluetooth-Anschlie%C3%9Fbare/dp/B0FKFXC6F8' },
       { name: 'GPIO Breakout Board für ESP32-S3', desc: 'Steckboden mit Montagelöchern — ESP32 einstecken, im Gehäuse verschrauben. Kein Löten, kein Breadboard. 5V/3.3V Ausgänge, GPIO-Status-LEDs.', price: '~12 €', required: true, group: 'controller-set',
         link: 'https://www.amazon.de/Meshnology-Erweiterungsboard-Kunststoffdichtungen-Steckdosen-N40/dp/B0FLK4MDDW' },
       { name: 'USB-A auf USB-C Kabel (1m)', desc: 'Datenkabel (nicht nur Lade!) für Flashen und Stromversorgung.', price: '~7 €', required: true,
         link: 'https://www.amazon.de/1-m-langes-usb-c-kabel-usb-a-auf-usb-c-von-amazon/dp/B07Q5JW4J3' },
       { name: 'USB-Netzteil 5V/2A (USB-C)', desc: 'Steckernetzteil für Dauerbetrieb. 5V, min. 1A (2A empfohlen).', price: '~8 €', required: true,
         link: 'https://www.amazon.de/Bouge-Universal-Ladeger%C3%A4t-Kompatibilit%C3%A4t-Blackview/dp/B0C2Q5LK11' },
-      { name: 'ABS-Gehäuse IP65 (100×68×50 mm)', desc: 'Wasserdichtes Elektronik-Gehäuse für Außenmontage. Board + Breakout passen zusammen hinein.', price: '~7 €', required: true,
+      { name: 'ABS-Gehäuse IP65 (100×68×50 mm)', desc: 'Wasserdichtes Elektronik-Gehäuse für Außenmontage. Board + Breakout passen zusammen hinein. Antenne durch Kabelverschraubung nach außen führen.', price: '~7 €', required: true,
         link: 'https://www.amazon.de/Elektronische-Wasserdichte-Industriegeh%C3%A4use-Anschlussdose-Verteilerdose/dp/B0DDWR9LP3' },
-      { name: '2,4 GHz WiFi-Antenne 3dBi (IPEX/U.FL)', desc: 'Externe Antenne mit U.FL-Stecker + RP-SMA Pigtail 17cm. Verbessert WiFi-Beacon-Reichweite.', price: '~6 €', required: false,
-        link: 'https://www.amazon.de/Bluetooth-Antenne-2-4GHz-geeignet-ESP8266/dp/B0CTG8XJSN' },
-      { name: 'Kabelverschraubung M16 IP68 (5er-Pack)', desc: 'Wasserdichte Kabel-Durchführung für USB-Kabel ins Gehäuse. M16×1,5, 4–8 mm Kabeldurchmesser.', price: '~7 €', required: false,
+      { name: 'Kabelverschraubung M16 IP68 (5er-Pack)', desc: 'Wasserdichte Kabel-Durchführung für USB-Kabel und Antennenkabel ins Gehäuse. M16×1,5, 4-8 mm Kabeldurchmesser.', price: '~7 €', required: false,
         link: 'https://www.amazon.de/Kabelverschraubung-M16-Hanibos-Kabeldurchf%C3%BChrung-Kabelverschraubungen/dp/B0BXRVX368' },
       { name: 'PoE-Splitter 5V USB-C (IEEE 802.3af)', desc: 'Stromversorgung über Ethernet-Kabel. Spart extra Stromkabel bei Outdoor-Installation.', price: '~15 €', required: false,
         link: 'https://www.amazon.de/UCTRONICS-PoE-Splitter-USB-C-USB-C-Adapter-Sicherheitskameras/dp/B087F4QCTR' },
@@ -126,10 +124,6 @@ export default function ReceiverList() {
   const [newType, setNewType] = useState('esp32-s3');
   const [creating, setCreating] = useState(false);
 
-  // Newly created key (shown once)
-  const [newKey, setNewKey] = useState<{ id: string; key: string } | null>(null);
-  const [copied, setCopied] = useState(false);
-
   // Expanded row
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -138,6 +132,7 @@ export default function ReceiverList() {
 
   // Flash wizard
   const [flashNode, setFlashNode] = useState<ReceiverNode | null>(null);
+  const [flashRegenKey, setFlashRegenKey] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -163,8 +158,7 @@ export default function ReceiverList() {
     setCreating(true);
     setError(null);
     try {
-      const node = await createReceiver({ name: newName.trim(), hardware_type: newType });
-      setNewKey({ id: node.id, key: node.apiKey! });
+      await createReceiver({ name: newName.trim(), hardware_type: newType });
       setNewName('');
       setShowCreate(false);
       await loadData();
@@ -189,21 +183,6 @@ export default function ReceiverList() {
     } catch { /* silent */ }
   };
 
-  const handleRegenKey = async (id: string) => {
-    try {
-      const node = await regenerateReceiverKey(id);
-      setNewKey({ id: node.id, key: node.apiKey! });
-      setCopied(false);
-    } catch { /* silent */ }
-  };
-
-  const copyKey = async (key: string) => {
-    try {
-      await navigator.clipboard.writeText(key);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch { /* silent */ }
-  };
 
   if (loading) {
     return <div style={{ color: 'var(--text-secondary)', padding: 24 }}>Laden...</div>;
@@ -267,65 +246,6 @@ export default function ReceiverList() {
           color: 'var(--status-error)',
         }}>
           {error}
-        </div>
-      )}
-
-      {/* API Key display (shown once after create/regenerate) */}
-      {newKey && (
-        <div data-testid="api-key-banner" style={{
-          background: 'rgba(20,184,166,0.1)',
-          border: '1px solid #14b8a6',
-          borderRadius: 8,
-          padding: '14px 16px',
-          marginBottom: 16,
-        }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: '#14b8a6' }}>
-            API-Key (wird nur einmal angezeigt!)
-          </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <code data-testid="api-key-value" style={{
-              flex: 1,
-              background: 'var(--bg-tertiary)',
-              padding: '8px 12px',
-              borderRadius: 6,
-              fontSize: 12,
-              fontFamily: 'monospace',
-              wordBreak: 'break-all',
-            }}>
-              {newKey.key}
-            </code>
-            <button
-              data-testid="api-key-copy"
-              onClick={() => copyKey(newKey.key)}
-              style={{
-                padding: '6px 12px',
-                background: copied ? '#22c55e' : 'var(--bg-tertiary)',
-                border: '1px solid var(--border)',
-                borderRadius: 6,
-                color: copied ? '#fff' : 'var(--text-primary)',
-                cursor: 'pointer',
-                fontSize: 12,
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {copied ? 'Kopiert!' : 'Kopieren'}
-            </button>
-            <button
-              data-testid="api-key-dismiss"
-              onClick={() => setNewKey(null)}
-              style={{
-                padding: '6px 12px',
-                background: 'var(--bg-tertiary)',
-                border: '1px solid var(--border)',
-                borderRadius: 6,
-                color: 'var(--text-secondary)',
-                cursor: 'pointer',
-                fontSize: 12,
-              }}
-            >
-              Schliessen
-            </button>
-          </div>
         </div>
       )}
 
@@ -552,7 +472,7 @@ export default function ReceiverList() {
                       Geschätzte Gesamtkosten (Pflichtteile):
                     </span>
                     <span data-testid="shopping-list-total" style={{ fontWeight: 700, color: '#14b8a6' }}>
-                      {newType === 'esp32-s3' ? '~52 € (2 Boards)' : newType === 'esp32-c3' ? '~28 €' : '~37 €'}
+                      {newType === 'esp32-s3' ? '~49 € (mit Antenne)' : newType === 'esp32-c3' ? '~28 €' : '~37 €'}
                     </span>
                   </div>
                   <div style={{ marginTop: 6, fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>
@@ -576,8 +496,9 @@ export default function ReceiverList() {
                   }}>
                     {newType === 'esp32-s3' && (
                       <>
-                        <strong>★ Beste Wahl für dieses Projekt.</strong> Der ESP32-S3 bietet BLE + WiFi Remote ID Erkennung,
-                        HTTPS-Verschlüsselung und genug RAM für gleichzeitiges Scannen und Senden. Ideal als stationärer Empfänger.
+                        <strong>★ Beste Wahl für dieses Projekt.</strong> Das empfohlene Board kommt mit IPEX-Anschluss und externer 2,4 GHz Antenne
+                        für maximale Reichweite (~500-1000m). BLE + WiFi NAN (DJI u.a.), HTTPS, Dual-Core,
+                        WiFi-Hotspot für Konfiguration, automatische WLAN-Einwahl und Internet-Übermittlung an FlightArc.
                       </>
                     )}
                     {newType === 'esp32-c3' && (
@@ -729,10 +650,63 @@ export default function ReceiverList() {
                           <div><span style={{ color: 'var(--text-muted)' }}>Standort:</span> {node.lastLatitude != null ? `${node.lastLatitude.toFixed(5)}, ${node.lastLongitude?.toFixed(5)}` : '-'}</div>
                           <div><span style={{ color: 'var(--text-muted)' }}>Seit Boot:</span> {node.detectionsSinceBoot}</div>
                         </div>
-                        <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
+                        {/* Firmware build info */}
+                        {node.lastBuildAt && (
+                          <div style={{
+                            marginTop: 10, padding: '8px 10px',
+                            background: 'rgba(20,184,166,0.08)', border: '1px solid rgba(20,184,166,0.2)',
+                            borderRadius: 6, fontSize: 11, display: 'flex', gap: 12, alignItems: 'center',
+                            flexWrap: 'wrap',
+                          }}>
+                            <span style={{ color: '#14b8a6', fontWeight: 600 }}>Letzter Build:</span>
+                            <span style={{ color: 'var(--text-secondary)' }}>
+                              {new Date(node.lastBuildAt * 1000).toLocaleString('de-DE')}
+                            </span>
+                            {node.lastBuildSize && (
+                              <span style={{ color: 'var(--text-muted)' }}>
+                                {(node.lastBuildSize / 1024).toFixed(0)} KB
+                              </span>
+                            )}
+                            {node.lastBuildSha256 && (
+                              <code style={{ fontSize: 9, color: 'var(--text-muted)' }}>
+                                SHA: {node.lastBuildSha256.slice(0, 12)}...
+                              </code>
+                            )}
+                          </div>
+                        )}
+                        <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          {node.lastBuildAt && (
+                            <button
+                              data-testid={`receiver-download-${node.id}`}
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                try {
+                                  const blob = await downloadFirmware(node.id);
+                                  const url = URL.createObjectURL(blob);
+                                  const a = document.createElement('a');
+                                  a.href = url;
+                                  a.download = `flightarc-${node.hardwareType}-${node.id}.bin`;
+                                  a.click();
+                                  URL.revokeObjectURL(url);
+                                } catch { /* silent */ }
+                              }}
+                              style={{
+                                padding: '5px 12px',
+                                background: 'var(--bg-tertiary)',
+                                border: '1px solid #14b8a6',
+                                borderRadius: 6,
+                                color: '#14b8a6',
+                                cursor: 'pointer',
+                                fontSize: 11,
+                                fontWeight: 600,
+                              }}
+                            >
+                              Firmware herunterladen
+                            </button>
+                          )}
                           <button
                             data-testid={`receiver-flash-${node.id}`}
-                            onClick={() => setFlashNode(node)}
+                            onClick={() => { setFlashRegenKey(!!node.lastBuildAt); setFlashNode(node); }}
                             style={{
                               padding: '5px 12px',
                               background: '#14b8a6',
@@ -744,22 +718,7 @@ export default function ReceiverList() {
                               fontWeight: 600,
                             }}
                           >
-                            Firmware flashen
-                          </button>
-                          <button
-                            data-testid={`receiver-regen-key-${node.id}`}
-                            onClick={() => handleRegenKey(node.id)}
-                            style={{
-                              padding: '5px 12px',
-                              background: 'var(--bg-tertiary)',
-                              border: '1px solid var(--border)',
-                              borderRadius: 6,
-                              color: 'var(--text-secondary)',
-                              cursor: 'pointer',
-                              fontSize: 11,
-                            }}
-                          >
-                            API-Key regenerieren
+                            {node.lastBuildAt ? 'Neu bauen (neuer Key)' : 'Firmware bauen'}
                           </button>
                         </div>
                       </td>
@@ -776,7 +735,8 @@ export default function ReceiverList() {
       {flashNode && (
         <ReceiverFlashWizard
           node={flashNode}
-          onClose={() => { setFlashNode(null); loadData(); }}
+          regenerateKey={flashRegenKey}
+          onClose={() => { setFlashNode(null); setFlashRegenKey(false); loadData(); }}
         />
       )}
     </div>

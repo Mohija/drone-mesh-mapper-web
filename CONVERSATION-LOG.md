@@ -2,7 +2,7 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-13 (Multi-SSID Firmware Build)
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-14 (v1.5.0: Full ODID Scanner, Live Build Terminal, Firmware Management)
 - **Typ:** Projekt | **Status:** Development
 
 ## Offene Aufgaben
@@ -16,6 +16,73 @@
 - [x] Umfassende E2E-Tests für Receiver-System (60 Tests, alle bestanden)
 
 ## Änderungshistorie
+
+### 2026-03-14 - v1.5.0: Firmware Management, Live Build Terminal, Antennen-Empfehlung
+
+**Firmware Build & Download Management:**
+- Backend: Firmware-Binaries werden pro Receiver gespeichert (`backend/data/firmware/{node_id}.bin`)
+- Backend: Neuer Download-Endpoint (`GET /firmware/download/<node_id>`) für gespeicherte Firmware
+- Backend: Streaming-Build-Endpoint (`POST /firmware/build-stream`) mit Server-Sent Events
+- Backend: `regenerate_key` Option im Build — generiert neuen API-Key, alter wird ungültig
+- Backend: Build-Metadaten in DB (`last_build_at`, `last_build_size`, `last_build_sha256`)
+- Backend: Firmware-Datei wird beim Löschen eines Receivers automatisch aufgeräumt
+- Backend: Node-Name und WiFi-Credentials werden für Build-Flags sanitized (Sonderzeichen-Fix)
+- Frontend: **Live Build Terminal** im Flash-Wizard — zeigt Compiler-Output in Echtzeit mit Syntax-Highlighting
+- Frontend: Receiver-Detail zeigt letzten Build (Datum, Größe, SHA-256) mit Download-Button
+- Frontend: "Firmware herunterladen" (cached) vs. "Neu bauen (neuer Key)" Buttons
+- Frontend: Fehlerdetails als monospaced Pre-Block im Wizard
+- API-Key Banner und "Key regenerieren" Button entfernt — Key wird nur automatisch in Firmware eingebettet
+
+**Hardware-Empfehlung aktualisiert:**
+- ESP32-S3 Board gewechselt: diymore (ohne IPEX) → **Heemol mit IPEX + 2,4 GHz Antenne im Lieferumfang**
+- Boards ohne IPEX-Anschluss entfernt — nur noch Boards mit externer Antenne empfohlen
+- Neue Antennen-Verdrahtungsanleitung in HelpPage (3-Schritt: IPEX finden → aufstecken → positionieren)
+- Reichweiten-Tabelle: PCB 200-500m, 3dBi 500-1000m, 5dBi 1-2km
+- Credit zu colonelpanichacks/drone-mesh-mapper und OpenDroneID in HelpPage
+
+**Dateien:** `backend/routes/receiver_routes.py`, `backend/models.py`, `backend/app.py`, `frontend/src/api.ts`, `frontend/src/components/admin/ReceiverFlashWizard.tsx`, `frontend/src/components/admin/ReceiverList.tsx`, `frontend/src/components/HelpPage.tsx`, `firmware/platformio.ini`
+
+### 2026-03-14 - ODID Scanner komplett neu: opendroneid-Library, NAN, Dual-Core, alle Message-Typen
+
+**Firmware-Scanner komplett neu geschrieben basierend auf colonelpanichacks/drone-mesh-mapper:**
+- `opendroneid.c/.h` (48KB+31KB): Vollständige OpenDroneID Decode/Encode Library integriert
+- `odid_wifi.c` + `odid_wifi.h`: WiFi NAN Action Frame Parser + MessagePack Support
+- `odid_scanner.cpp/.h` komplett neu geschrieben:
+  - WiFi Beacon Frames: Beide OUIs (FA:0B:BC + 90:3A:E6)
+  - WiFi NAN Action Frames (DJI u.a.) via `odid_wifi_receive_message_pack_nan_action_frame()`
+  - BLE ODID via NimBLE mit MessagePack-Support
+  - Alle 7 ODID Message-Typen: BasicID, Location, System, OperatorID, Auth, SelfID, MessagePack
+  - Dual-Core FreeRTOS für ESP32-S3 (BLE Core 1, WiFi Core 0, Detection Queue)
+  - Detection-Merging: gleiche MAC/basic_id werden zusammengeführt statt dupliziert
+- `OdidDetection` struct erweitert: pilot_lat/lon, operator_id, self_id_desc, height_agl, id_type, source
+- `http_client.cpp`: Sendet neue Felder (pilot_lat/lon, operator_id, height_agl, source)
+- `odid_wifi.c`: ESP8266-Kompatibilität (byteswap.h Fallback)
+- `config.h`: ODID-Konstanten aus opendroneid.h, keine Duplikate
+- Alle 3 Builds erfolgreich: ESP32-S3 (33.7%), ESP32-C3 (89.6%), ESP8266 (32.4%)
+
+**Dateien (neu):** `firmware/src/opendroneid.c`, `firmware/src/opendroneid.h`, `firmware/src/odid_wifi.c`, `firmware/src/odid_wifi.h`
+**Dateien (geändert):** `firmware/src/odid_scanner.cpp`, `firmware/src/odid_scanner.h`, `firmware/src/http_client.cpp`, `firmware/src/config.h`, `firmware/platformio.ini`
+
+### 2026-03-14 - ESP32-S3 Flash-Fix: DIO-Modus, 8MB-Partition, Firmware-Verifizierungs-Checkliste
+
+**Problem:** ESP32-S3 Boot-Loop mit "SHA-256 comparison failed" durch falsche Flash-Konfiguration.
+
+**Firmware-Änderungen:**
+- `platformio.ini`: ESP32-S3 Flash-Modus auf `dio` gesetzt (statt QIO default), Partition auf `default_8MB.csv` (statt 4MB default)
+- Backend: Umfassende Firmware-Binary-Verifizierung nach Build mit 10-Punkt-Checkliste:
+  - Datei existiert, Binary-Größe (Partitionslimits), Header lesbar, Magic Byte (0xE9)
+  - Flash-Modus (DIO/QIO Match), Flash-Größe (4MB/8MB Match), Flash-Frequenz
+  - Segmente (1-16), SHA-256 Hash, Bootloader valid, Partitionstabelle valid
+- Backend: Checks als JSON-Header (`X-Firmware-Checks`) in Build-Response
+- Backend: Board-Info Endpoint (`/api/receivers/firmware/board-info`)
+- Frontend: Visuelle Firmware-Verifizierungs-Checkliste im Flash-Wizard (Schritt 4)
+  - Jeder Check mit Pass/Fail-Indikator, aufklappbare Details (Erwartet vs. Aktuell)
+  - Summary-Header mit Fortschrittsbalken (X/10 bestanden)
+  - Download gesperrt wenn Checks fehlschlagen
+- Frontend Flash-Wizard: Korrekte esptool-Befehle, Flash-Config Infobox, SHA-256 Troubleshooting
+- Frontend HelpPage: Erweiterte Flash-Anleitung, Hardware-Vergleich, SHA-256 Troubleshooting
+
+**Dateien:** `firmware/platformio.ini`, `backend/routes/receiver_routes.py`, `backend/app.py`, `frontend/src/api.ts`, `frontend/src/components/admin/ReceiverFlashWizard.tsx`, `frontend/src/components/admin/ReceiverList.tsx`, `frontend/src/components/HelpPage.tsx`
 
 ### 2026-03-13 - Multi-SSID Support: Bis zu 3 WiFi-Netzwerke im Firmware Build
 

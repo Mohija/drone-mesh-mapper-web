@@ -293,6 +293,11 @@ class ReceiverNode(db.Model):
     total_detections = db.Column(db.Integer, default=0, nullable=False)
     detections_since_boot = db.Column(db.Integer, default=0, nullable=False)
 
+    # Firmware build info (persisted after successful build)
+    last_build_at = db.Column(db.Float, nullable=True)       # epoch timestamp
+    last_build_size = db.Column(db.Integer, nullable=True)    # bytes
+    last_build_sha256 = db.Column(db.String(64), nullable=True)
+
     created_at = db.Column(db.Float, default=_now, nullable=False)
     updated_at = db.Column(db.Float, default=_now, onupdate=_now, nullable=False)
 
@@ -330,6 +335,9 @@ class ReceiverNode(db.Model):
             "status": self.status,
             "createdAt": self.created_at,
             "updatedAt": self.updated_at,
+            "lastBuildAt": self.last_build_at,
+            "lastBuildSize": self.last_build_size,
+            "lastBuildSha256": self.last_build_sha256,
         }
         if include_key:
             result["apiKey"] = self.api_key

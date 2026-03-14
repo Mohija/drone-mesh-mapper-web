@@ -45,10 +45,25 @@ bool FlightArcClient::sendIngest(OdidDetection* detections, int count,
         if (detections[i].heading >= 0) {
             det["heading"] = detections[i].heading;
         }
+        if (detections[i].height_agl != 0.0f) {
+            det["height_agl"] = detections[i].height_agl;
+        }
         det["rssi"] = detections[i].rssi;
         if (strlen(detections[i].mac) > 0) {
             det["mac"] = detections[i].mac;
         }
+        // Pilot/Operator position (from ODID System message)
+        if (detections[i].pilot_lat != 0.0f || detections[i].pilot_lon != 0.0f) {
+            det["pilot_lat"] = detections[i].pilot_lat;
+            det["pilot_lon"] = detections[i].pilot_lon;
+        }
+        // Operator ID (from ODID OperatorID message)
+        if (strlen(detections[i].operator_id) > 0) {
+            det["operator_id"] = detections[i].operator_id;
+        }
+        // Detection source
+        const char* src_names[] = {"wifi_beacon", "wifi_nan", "ble"};
+        det["source"] = src_names[detections[i].source];
     }
 
     String body;

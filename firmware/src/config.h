@@ -66,8 +66,5 @@
 #define WEB_SERVER_PORT         80
 #define LED_PIN                 2       // Built-in LED (GPIO2 on most boards)
 
-// ODID constants
-#define ODID_OUI_0              0xFA
-#define ODID_OUI_1              0x0B
-#define ODID_OUI_2              0xBC
+// ODID constants (ODID_ID_SIZE, ODID_STR_SIZE, ODID_MESSAGE_SIZE from opendroneid.h)
 #define ODID_BLE_UUID           0xFFFA

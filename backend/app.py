@@ -51,6 +51,10 @@ CORS(app, origins=[
     "http://localhost:*",
     "http://127.0.0.1:*",
     "https://*.dasilvafelix.de",
+], expose_headers=[
+    "X-Firmware-Size", "X-Firmware-Flash-Mode", "X-Firmware-SHA256",
+    "X-Firmware-Valid", "X-Board-Flash-Mode", "X-Board-Flash-Size", "X-Board-Chip",
+    "X-Firmware-Checks",
 ])
 
 # Initialize database

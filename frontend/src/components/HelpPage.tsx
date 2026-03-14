@@ -734,8 +734,7 @@ function SectionHardware() {
       <h4>Wizard: Konfiguration (Schritt 2)</h4>
       <ul>
         <li><strong>Backend-URL</strong> (Pflicht) — Die URL deines FlightArc-Servers (z.B. <code>https://mein-server.de:3020</code>). Ist vorausgefüllt mit der aktuellen URL.</li>
-        <li><strong>WiFi SSID</strong> (optional) — Wenn leer, konfigurierst du WiFi später über das Captive Portal.</li>
-        <li><strong>WiFi Passwort</strong> (optional) — Passwort für das oben angegebene WiFi-Netzwerk.</li>
+        <li><strong>WiFi-Netzwerke</strong> (optional, bis zu 3) — Der Empfänger verbindet sich automatisch mit dem stärksten verfügbaren Netzwerk. Wenn leer, konfigurierst du WiFi später über das Captive Portal.</li>
       </ul>
       <p>Klicke auf <strong>„Firmware bauen"</strong>. Der API-Key wird automatisch eingebettet.</p>
       <h4>Wizard: Firmware herunterladen (Schritt 3-4)</h4>
@@ -748,14 +747,28 @@ function SectionHardware() {
         (bei reinen Ladekabeln wird das Board nicht erkannt).
       </InfoBox>
       <h4>Option A: esptool (empfohlen)</h4>
+      <InfoBox type="warning">
+        <strong>Wichtig:</strong> Beim ersten Flashen oder bei SHA-256-Fehlern immer zuerst den Flash komplett löschen!
+      </InfoBox>
       <div style={codeBlockStyle}>
         <code>
-          # ESP32-S3:{'\n'}
-          esptool.py --chip esp32s3 --port /dev/ttyUSB0 write_flash 0x0 flightarc-esp32-s3-XXXX.bin{'\n\n'}
-          # ESP32-C3:{'\n'}
-          esptool.py --chip esp32c3 --port /dev/ttyUSB0 write_flash 0x0 flightarc-esp32-c3-XXXX.bin{'\n\n'}
-          # ESP8266:{'\n'}
-          esptool.py --chip esp8266 --port /dev/ttyUSB0 write_flash 0x0 flightarc-esp8266-XXXX.bin{'\n\n'}
+          # ═══ ESP32-S3 (Flash: DIO, 8MB) ═══{'\n'}
+          # Schritt 1: Flash löschen (einmalig / bei Problemen){'\n'}
+          esptool.py --chip esp32s3 erase_flash{'\n\n'}
+          # Schritt 2: Firmware flashen{'\n'}
+          esptool.py --chip esp32s3 --port /dev/ttyUSB0 \{'\n'}
+          {'  '}--baud 460800 write_flash \{'\n'}
+          {'  '}--flash_mode dio --flash_size 8MB \{'\n'}
+          {'  '}0x0 flightarc-esp32-s3-XXXX.bin{'\n\n'}
+          # ═══ ESP32-C3 (Flash: QIO, 4MB) ═══{'\n'}
+          esptool.py --chip esp32c3 erase_flash{'\n'}
+          esptool.py --chip esp32c3 --port /dev/ttyUSB0 \{'\n'}
+          {'  '}--baud 460800 write_flash \{'\n'}
+          {'  '}0x0 flightarc-esp32-c3-XXXX.bin{'\n\n'}
+          # ═══ ESP8266 ═══{'\n'}
+          esptool.py --chip esp8266 erase_flash{'\n'}
+          esptool.py --chip esp8266 --port /dev/ttyUSB0 \{'\n'}
+          {'  '}write_flash 0x0 flightarc-esp8266-XXXX.bin{'\n\n'}
           # Windows: --port COM3 (o.ä.) statt /dev/ttyUSB0
         </code>
       </div>
@@ -787,6 +800,32 @@ function SectionHardware() {
           Hotspot erneut. Sobald das Netzwerk wieder da ist, verbindet er sich automatisch und der Hotspot geht aus.</li>
         <li><strong>Online</strong> — LED leuchtet dauerhaft. Der Empfänger sendet nun Heartbeats (alle 30s) und Erkennungen (alle 2s).</li>
       </ol>
+      <h3>Antenne anschließen (ESP32-S3 mit IPEX)</h3>
+      <InfoBox type="info">
+        Das empfohlene Heemol-Board hat einen <strong>IPEX/U.FL-Anschluss</strong> und kommt mit einer
+        2,4 GHz Antenne im Lieferumfang. Kein Löten nötig — die Antenne wird einfach aufgesteckt.
+      </InfoBox>
+      <ol>
+        <li><strong>IPEX-Stecker finden</strong> — Der kleine goldene Anschluss sitzt neben dem WiFi-Modul auf der Platine (beschriftet mit "ANT" oder "IPEX").</li>
+        <li><strong>Antenne aufstecken</strong> — Den U.FL-Stecker der Antenne vorsichtig gerade auf den IPEX-Anschluss drücken bis er einrastet. Nur leichter Druck nötig — nicht verkanten!</li>
+        <li><strong>Antenne positionieren</strong> — Bei Gehäuse-Montage: Antenne durch eine Kabelverschraubung (M16) nach außen führen. Die Antenne muss außerhalb des Gehäuses sein für optimalen Empfang.</li>
+      </ol>
+      <InfoBox type="warning">
+        <strong>Wichtig:</strong> Nur Boards mit <strong>IPEX-Anschluss</strong> verwenden! Boards ohne IPEX haben nur
+        eine interne PCB-Antenne (~200-500m) — zu wenig für zuverlässige Outdoor-Erkennung. Das empfohlene
+        Heemol-Board kommt mit IPEX + externer 2,4 GHz Antenne im Lieferumfang.
+      </InfoBox>
+      <table style={tableStyle}>
+        <thead>
+          <tr><th style={thStyle}>Antennen-Typ</th><th style={thStyle}>Reichweite (Drohnen-ODID)</th><th style={thStyle}>Geeignet für</th></tr>
+        </thead>
+        <tbody>
+          <tr><td style={tdStyle}>PCB-Antenne (auf dem Board)</td><td style={tdStyle}>~200-500 m</td><td style={tdStyle}>Indoor, Demo, kurze Distanzen</td></tr>
+          <tr><td style={tdStyle}>Externe 2,4 GHz 3dBi</td><td style={tdStyle}>~500-1000 m</td><td style={tdStyle}>Outdoor, Gehäuse-Montage, stationär</td></tr>
+          <tr><td style={tdStyle}>Externe 5dBi Richtantenne</td><td style={tdStyle}>~1-2 km</td><td style={tdStyle}>Feldüberwachung, große Areale</td></tr>
+        </tbody>
+      </table>
+
       <h3>LED-Anzeige</h3>
       <table style={tableStyle}>
         <thead>
@@ -807,11 +846,12 @@ function SectionHardware() {
           <tr><th style={thStyle}>Problem</th><th style={thStyle}>Lösung</th></tr>
         </thead>
         <tbody>
-          <tr><td style={tdStyle}>ESP wird nicht erkannt</td><td style={tdStyle}>Anderes USB-Kabel versuchen (Datenkabel!). CP2102/CH340 Treiber installieren.</td></tr>
+          <tr><td style={tdStyle}>ESP wird nicht erkannt</td><td style={tdStyle}>Anderes USB-Kabel versuchen (Datenkabel!). ESP32-S3 hat native USB (kein Treiber nötig). ESP32-C3 und ESP8266 brauchen CH340 oder CP2102 Treiber. Unter Linux: <code>ls /dev/ttyUSB*</code> oder <code>ls /dev/ttyACM*</code> prüfen.</td></tr>
           <tr><td style={tdStyle}>Kein WiFi-Hotspot</td><td style={tdStyle}>30 Sekunden warten — der Hotspot startet erst nach dem STA-Timeout. Falls danach kein Hotspot: Board resetten (EN/RST-Taste).</td></tr>
           <tr><td style={tdStyle}>Empfänger bleibt „Offline"</td><td style={tdStyle}>Backend-URL prüfen. Firewall-Port 3020 offen? HTTP statt HTTPS bei ESP8266.</td></tr>
           <tr><td style={tdStyle}>Doppelblinken (Fehler)</td><td style={tdStyle}>WiFi-Zugangsdaten falsch? Captive Portal prüfen. Backend erreichbar?</td></tr>
-          <tr><td style={tdStyle}>Keine Drohnen erkannt</td><td style={tdStyle}>Nur Drohnen mit Remote ID / ODID-Beacon werden erkannt. ESP8266 kann kein BLE.</td></tr>
+          <tr><td style={tdStyle}>Keine Drohnen erkannt</td><td style={tdStyle}>Nur Drohnen mit aktivierter Remote ID (ODID) werden erkannt — EU-Pflicht seit 01.01.2024. DJI-Drohnen senden per WiFi NAN (ESP32 erforderlich). ESP8266 kann kein BLE und kein NAN. WiFi-Kanal prüfen: Empfänger lauscht auf dem Kanal des verbundenen WiFi-Netzwerks.</td></tr>
+          <tr><td style={tdStyle}>SHA-256 Boot-Loop</td><td style={tdStyle}>Flash komplett löschen: <code>esptool.py --chip esp32s3 erase_flash</code>, dann erneut flashen. Ursache: korrupter Flash oder falscher Flash-Modus (ESP32-S3 braucht DIO).</td></tr>
           <tr><td style={tdStyle}>API-Key verloren</td><td style={tdStyle}>Unter Empfänger → Details → „API-Key regenerieren". Firmware neu flashen mit neuem Key.</td></tr>
         </tbody>
       </table>
@@ -822,13 +862,29 @@ function SectionHardware() {
         </thead>
         <tbody>
           <tr><td style={tdStyle}>BLE-Scan (ODID)</td><td style={tdStyle}>Ja</td><td style={tdStyle}>Ja</td><td style={tdStyle}>Nein</td></tr>
-          <tr><td style={tdStyle}>WiFi-Beacon (ODID)</td><td style={tdStyle}>Ja</td><td style={tdStyle}>Ja</td><td style={tdStyle}>Ja</td></tr>
+          <tr><td style={tdStyle}>WiFi-Beacon (ODID)</td><td style={tdStyle}>Ja (2 OUIs)</td><td style={tdStyle}>Ja (2 OUIs)</td><td style={tdStyle}>Ja (2 OUIs)</td></tr>
+          <tr><td style={tdStyle}>WiFi NAN (DJI u.a.)</td><td style={tdStyle}>Ja</td><td style={tdStyle}>Ja</td><td style={tdStyle}>Nein</td></tr>
+          <tr><td style={tdStyle}>Pilot-Position</td><td style={tdStyle}>Ja</td><td style={tdStyle}>Ja</td><td style={tdStyle}>Ja (WiFi only)</td></tr>
+          <tr><td style={tdStyle}>Dual-Core</td><td style={tdStyle}>Ja (BLE+WiFi parallel)</td><td style={tdStyle}>Nein (Single Core)</td><td style={tdStyle}>Nein</td></tr>
           <tr><td style={tdStyle}>HTTPS</td><td style={tdStyle}>Ja</td><td style={tdStyle}>Ja</td><td style={tdStyle}>Nein</td></tr>
+          <tr><td style={tdStyle}>Flash-Modus</td><td style={tdStyle}>DIO</td><td style={tdStyle}>QIO</td><td style={tdStyle}>QIO</td></tr>
+          <tr><td style={tdStyle}>Flash-Größe</td><td style={tdStyle}>8 MB</td><td style={tdStyle}>4 MB</td><td style={tdStyle}>4 MB</td></tr>
+          <tr><td style={tdStyle}>Partition</td><td style={tdStyle}>8MB (2x 3.2MB OTA)</td><td style={tdStyle}>4MB (2x 1.3MB OTA)</td><td style={tdStyle}>Standard</td></tr>
           <tr><td style={tdStyle}>RAM</td><td style={tdStyle}>~320KB</td><td style={tdStyle}>~280KB</td><td style={tdStyle}>~80KB</td></tr>
+          <tr><td style={tdStyle}>USB-Treiber</td><td style={tdStyle}>Nativ (kein Treiber)</td><td style={tdStyle}>CH340/CP2102</td><td style={tdStyle}>CH340/CP2102</td></tr>
           <tr><td style={tdStyle}>Preis (ca.)</td><td style={tdStyle}>6–10€</td><td style={tdStyle}>4–7€</td><td style={tdStyle}>2–4€</td></tr>
           <tr><td style={tdStyle}>Empfehlung</td><td style={tdStyle}>Beste Wahl</td><td style={tdStyle}>Kompakt & günstig</td><td style={tdStyle}>Nur für WiFi-only</td></tr>
         </tbody>
       </table>
+
+      <InfoBox type="info">
+        <strong>ODID-Erkennung:</strong> Die Firmware nutzt die vollständige{' '}
+        <a href="https://github.com/opendroneid" target="_blank" rel="noopener" style={{ color: '#14b8a6' }}>OpenDroneID</a>-Library
+        und basiert auf dem Open-Source-Projekt{' '}
+        <a href="https://github.com/colonelpanichacks/drone-mesh-mapper" target="_blank" rel="noopener" style={{ color: '#14b8a6' }}>drone-mesh-mapper</a>{' '}
+        von colonelpanichacks. Unterstützt werden WiFi Beacon (2 OUIs), WiFi NAN Action Frames (DJI u.a.),
+        BLE ODID und MessagePack — alle 7 ODID Message-Typen inkl. Pilot-Position und Operator-ID.
+      </InfoBox>
 
       <h3>Einkaufslisten</h3>
       <p>
@@ -853,17 +909,16 @@ function SectionHardware() {
           </tr>
         </thead>
         <tbody>
-          <tr style={groupRowStyle}><td style={tdStyle}><strong>ESP32-S3-DevKitC-1 N16R8 (vorgelötet, 2er-Pack)</strong> <a href="https://www.amazon.de/Diymore-DevKitC-Entwicklungsboard-Bluetooth-gel%C3%B6teten-2PCS/dp/B0DFCQGW4C" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a> <span style={groupBadgeStyle}>&#x1F517; 2 Teile = 1 Set</span></td><td style={tdStyle}>16 MB Flash, 8 MB PSRAM, WiFi + BLE 5.0, USB-C, Dual-Core 240 MHz. Pin-Headers bereits aufgelötet — sofort einsatzbereit.</td><td style={tdStyle}>~18 € (2 Stk.)</td><td style={tdStyle}>Ja</td></tr>
+          <tr style={groupRowStyle}><td style={tdStyle}><strong>ESP32-S3-DevKitC-1 N16R8 mit IPEX + Antenne</strong> <a href="https://www.amazon.de/Heemol-DevKitC-1-Entwicklung-Bluetooth-Anschlie%C3%9Fbare/dp/B0FKFXC6F8" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Heemol Board: 16 MB Flash, 8 MB PSRAM, WiFi + BLE 5.0, USB-C, Dual-Core 240 MHz. <strong>Mit IPEX-Anschluss + 2,4 GHz Antenne im Lieferumfang.</strong> Pin-Headers vorgelötet. Antenne einfach auf den IPEX-Stecker klicken.</td><td style={tdStyle}>~15 €</td><td style={tdStyle}>Ja</td></tr>
           <tr style={groupRowStyle}><td style={tdStyle}><strong>GPIO Breakout Board für ESP32-S3</strong> <a href="https://www.amazon.de/Meshnology-Erweiterungsboard-Kunststoffdichtungen-Steckdosen-N40/dp/B0FLK4MDDW" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Steckboden mit Montagelöchern — ESP32 einstecken, im Gehäuse verschrauben. Kein Löten, kein Breadboard. 5V/3.3V Ausgänge, GPIO-Status-LEDs.</td><td style={tdStyle}>~12 €</td><td style={tdStyle}>Ja</td></tr>
           <tr><td style={tdStyle}>USB-A auf USB-C Kabel (1m) <a href="https://www.amazon.de/1-m-langes-usb-c-kabel-usb-a-auf-usb-c-von-amazon/dp/B07Q5JW4J3" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Datenkabel (nicht nur Lade!) für Flashen und Stromversorgung.</td><td style={tdStyle}>~7 €</td><td style={tdStyle}>Ja</td></tr>
           <tr><td style={tdStyle}>USB-Netzteil 5V/2A (USB-C) <a href="https://www.amazon.de/Bouge-Universal-Ladeger%C3%A4t-Kompatibilit%C3%A4t-Blackview/dp/B0C2Q5LK11" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Steckernetzteil für Dauerbetrieb. 5V, min. 1A (2A empfohlen).</td><td style={tdStyle}>~8 €</td><td style={tdStyle}>Ja</td></tr>
-          <tr><td style={tdStyle}><strong>ABS-Gehäuse IP65 (100×68×50 mm)</strong> <a href="https://www.amazon.de/Elektronische-Wasserdichte-Industriegeh%C3%A4use-Anschlussdose-Verteilerdose/dp/B0DDWR9LP3" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Wasserdichtes Elektronik-Gehäuse für Außenmontage. Board + Breakout passen zusammen hinein.</td><td style={tdStyle}>~7 €</td><td style={tdStyle}>Ja</td></tr>
-          <tr><td style={tdStyle}>2,4 GHz WiFi-Antenne 3dBi (IPEX/U.FL) <a href="https://www.amazon.de/Bluetooth-Antenne-2-4GHz-geeignet-ESP8266/dp/B0CTG8XJSN" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Externe Antenne mit U.FL-Stecker + RP-SMA Pigtail 17cm. Verbessert WiFi-Beacon-Reichweite.</td><td style={tdStyle}>~6 €</td><td style={tdStyle}>Optional</td></tr>
-          <tr><td style={tdStyle}>Kabelverschraubung M16 IP68 (5er-Pack) <a href="https://www.amazon.de/Kabelverschraubung-M16-Hanibos-Kabeldurchf%C3%BChrung-Kabelverschraubungen/dp/B0BXRVX368" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Wasserdichte Kabel-Durchführung für USB-Kabel ins Gehäuse. M16×1,5, 4–8 mm Kabeldurchmesser.</td><td style={tdStyle}>~7 €</td><td style={tdStyle}>Optional</td></tr>
+          <tr><td style={tdStyle}><strong>ABS-Gehäuse IP65 (100x68x50 mm)</strong> <a href="https://www.amazon.de/Elektronische-Wasserdichte-Industriegeh%C3%A4use-Anschlussdose-Verteilerdose/dp/B0DDWR9LP3" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Wasserdichtes Elektronik-Gehäuse für Außenmontage. Antenne durch Kabelverschraubung nach außen führen.</td><td style={tdStyle}>~7 €</td><td style={tdStyle}>Ja</td></tr>
+          <tr><td style={tdStyle}>Kabelverschraubung M16 IP68 (5er-Pack) <a href="https://www.amazon.de/Kabelverschraubung-M16-Hanibos-Kabeldurchf%C3%BChrung-Kabelverschraubungen/dp/B0BXRVX368" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Wasserdichte Kabel-Durchführung für USB-Kabel und Antennenkabel ins Gehäuse.</td><td style={tdStyle}>~7 €</td><td style={tdStyle}>Optional</td></tr>
           <tr><td style={tdStyle}>PoE-Splitter 5V USB-C (IEEE 802.3af) <a href="https://www.amazon.de/UCTRONICS-PoE-Splitter-USB-C-USB-C-Adapter-Sicherheitskameras/dp/B087F4QCTR" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Stromversorgung über Ethernet-Kabel. Spart extra Stromkabel bei Outdoor-Installation.</td><td style={tdStyle}>~15 €</td><td style={tdStyle}>Optional</td></tr>
         </tbody>
       </table>
-      <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Geschätzte Gesamtkosten (Pflichtteile): <strong>~52 € (inkl. 2 Boards)</strong></p>
+      <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Geschätzte Gesamtkosten (Pflichtteile): <strong>~49 € (Board mit IPEX-Antenne)</strong></p>
 
       {/* ESP32-C3 Shopping List */}
       <h4>ESP32-C3 (Kompakt)</h4>

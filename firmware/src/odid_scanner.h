@@ -4,17 +4,41 @@
 #include <ArduinoJson.h>
 #include "config.h"
 
+// ODID size constants (must match opendroneid.h)
+#define FLIGHTARC_ID_SIZE   20
+#define FLIGHTARC_STR_SIZE  23
+
 struct OdidDetection {
-    char basic_id[32];
+    // Basic ID
+    char basic_id[FLIGHTARC_ID_SIZE + 1];
+    uint8_t id_type;        // 0=None, 1=Serial, 2=CAA, 3=UTM, 4=SpecificSession
+
+    // Location
     float lat;
     float lon;
-    float alt;
+    float alt;              // Altitude MSL (geodetic)
+    float height_agl;       // Height above ground
     float speed;
     float heading;
+
+    // System (Operator/Pilot position)
+    float pilot_lat;
+    float pilot_lon;
+
+    // Operator ID
+    char operator_id[FLIGHTARC_ID_SIZE + 1];
+
+    // Self ID
+    char self_id_desc[FLIGHTARC_STR_SIZE + 1];
+
+    // Meta
     int rssi;
     char mac[18];
     unsigned long timestamp;
     bool valid;
+
+    // Source tracking
+    enum Source { SRC_WIFI_BEACON, SRC_WIFI_NAN, SRC_BLE } source;
 };
 
 class OdidScanner {
@@ -35,7 +59,7 @@ private:
     volatile int _count = 0;
 
     void _startPromiscuousMode();
-    void _addDetection(const OdidDetection& det);
+    void _addOrUpdateDetection(const OdidDetection& det);
 
 #if HAS_BLE
     void _startBleScan();

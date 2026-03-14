@@ -691,6 +691,9 @@ export interface ReceiverNode {
   status: 'online' | 'stale' | 'offline';
   createdAt: number;
   updatedAt: number;
+  lastBuildAt: number | null;
+  lastBuildSize: number | null;
+  lastBuildSha256: string | null;
 }
 
 export interface ReceiverStats {
@@ -751,19 +754,144 @@ export async function fetchReceiverStats(): Promise<ReceiverStats> {
   return res.json();
 }
 
+export interface FirmwareCheck {
+  name: string;
+  ok: boolean;
+  expected: string;
+  actual: string;
+  detail: string;
+}
+
+export interface FirmwareBuildResult {
+  blob: Blob;
+  meta: {
+    size: number;
+    flashMode: string;
+    sha256: string;
+    boardFlashMode: string;
+    boardFlashSize: string;
+    boardChip: string;
+    checks: FirmwareCheck[];
+  };
+}
+
 export async function buildFirmware(data: {
   node_id: string;
   hardware_type?: string;
   backend_url: string;
   wifi_networks?: { ssid: string; password: string }[];
-}): Promise<Blob> {
+  regenerate_key?: boolean;
+}): Promise<FirmwareBuildResult> {
   const res = await authFetch(`${API_BASE}/receivers/firmware/build`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'Build fehlgeschlagen' }));
+    let errMsg = `Build fehlgeschlagen (HTTP ${res.status})`;
+    try {
+      const err = await res.json();
+      errMsg = err.error || errMsg;
+      if (err.details) errMsg += '\n' + err.details;
+    } catch { /* not JSON */ }
+    throw new Error(errMsg);
+  }
+  const blob = await res.blob();
+  let checks: FirmwareCheck[] = [];
+  try {
+    const raw = res.headers.get('X-Firmware-Checks');
+    if (raw) checks = JSON.parse(atob(raw));
+  } catch (e) {
+    console.warn('[buildFirmware] Failed to parse checks header:', e);
+  }
+  return {
+    blob,
+    meta: {
+      size: parseInt(res.headers.get('X-Firmware-Size') || '0', 10),
+      flashMode: res.headers.get('X-Firmware-Flash-Mode') || '',
+      sha256: res.headers.get('X-Firmware-SHA256') || '',
+      boardFlashMode: res.headers.get('X-Board-Flash-Mode') || '',
+      boardFlashSize: res.headers.get('X-Board-Flash-Size') || '',
+      boardChip: res.headers.get('X-Board-Chip') || '',
+      checks,
+    },
+  };
+}
+
+export interface BuildStreamCallbacks {
+  onLog: (line: string) => void;
+  onDone: (result: { size: number; flash_mode: string; sha256: string; checks: FirmwareCheck[]; node_id: string }) => void;
+  onError: (error: string) => void;
+}
+
+export async function buildFirmwareStream(
+  data: {
+    node_id: string;
+    hardware_type?: string;
+    backend_url: string;
+    wifi_networks?: { ssid: string; password: string }[];
+    regenerate_key?: boolean;
+  },
+  callbacks: BuildStreamCallbacks,
+): Promise<void> {
+  const token = localStorage.getItem('access_token');
+  const res = await fetch(`${API_BASE}/receivers/firmware/build-stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    let msg = `Build fehlgeschlagen (HTTP ${res.status})`;
+    try {
+      const err = await res.json();
+      msg = err.error || msg;
+    } catch { /* not JSON */ }
+    callbacks.onError(msg);
+    return;
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) {
+    callbacks.onError('Stream nicht verfügbar');
+    return;
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    let currentEvent = '';
+    for (const line of lines) {
+      if (line.startsWith('event: ')) {
+        currentEvent = line.slice(7);
+      } else if (line.startsWith('data: ')) {
+        try {
+          const payload = JSON.parse(line.slice(6));
+          if (currentEvent === 'log') callbacks.onLog(payload.line || '');
+          else if (currentEvent === 'done') callbacks.onDone(payload);
+          else if (currentEvent === 'error') callbacks.onError(payload.error || 'Unbekannter Fehler');
+        } catch { /* skip malformed */ }
+        currentEvent = '';
+      }
+    }
+  }
+}
+
+export async function downloadFirmware(nodeId: string): Promise<Blob> {
+  const res = await authFetch(`${API_BASE}/receivers/firmware/download/${encodeURIComponent(nodeId)}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Download fehlgeschlagen' }));
     throw new Error(err.error || `API error: ${res.status}`);
   }
   return res.blob();

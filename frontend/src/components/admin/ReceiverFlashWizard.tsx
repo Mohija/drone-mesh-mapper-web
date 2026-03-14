@@ -1,10 +1,11 @@
-import { useState } from 'react';
-import { buildFirmware } from '../../api';
-import type { ReceiverNode } from '../../api';
+import { useState, useRef, useEffect } from 'react';
+import { buildFirmwareStream, downloadFirmware } from '../../api';
+import type { ReceiverNode, FirmwareCheck } from '../../api';
 
 interface Props {
   node: ReceiverNode;
   onClose: () => void;
+  regenerateKey?: boolean;
 }
 
 type Step = 'intro' | 'config' | 'build' | 'download' | 'done';
@@ -13,7 +14,7 @@ const STEP_LABELS: Record<Step, string> = {
   intro: '1. Vorbereitung',
   config: '2. Konfiguration',
   build: '3. Firmware bauen',
-  download: '4. Firmware herunterladen',
+  download: '4. Verifizierung & Download',
   done: '5. Fertig',
 };
 
@@ -22,15 +23,145 @@ interface WifiNetwork {
   password: string;
 }
 
-export default function ReceiverFlashWizard({ node, onClose }: Props) {
+const FLASH_INFO: Record<string, { mode: string; size: string; chip: string; erase: string; offset: string }> = {
+  'esp32-s3': { mode: 'dio', size: '8MB', chip: 'esp32s3', erase: 'esptool.py --chip esp32s3 erase_flash', offset: '0x0' },
+  'esp32-c3': { mode: 'qio', size: '4MB', chip: 'esp32c3', erase: 'esptool.py --chip esp32c3 erase_flash', offset: '0x0' },
+  'esp8266':  { mode: 'qio', size: '4MB', chip: 'esp8266', erase: 'esptool.py --chip esp8266 erase_flash', offset: '0x0' },
+};
+
+function ChecklistItem({ check }: { check: FirmwareCheck }) {
+  const [expanded, setExpanded] = useState(false);
+  const hasDetails = check.expected || check.actual || check.detail;
+
+  return (
+    <div
+      data-testid={`check-${check.name.replace(/\s+/g, '-').toLowerCase()}`}
+      style={{
+        display: 'flex', alignItems: 'flex-start', gap: 8, padding: '5px 0',
+        borderBottom: '1px solid rgba(255,255,255,0.04)',
+        cursor: hasDetails ? 'pointer' : 'default',
+      }}
+      onClick={() => hasDetails && setExpanded(!expanded)}
+    >
+      <span style={{
+        fontSize: 14, lineHeight: '18px', flexShrink: 0,
+        color: check.ok ? '#22c55e' : '#ef4444',
+      }}>
+        {check.ok ? '\u2713' : '\u2717'}
+      </span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{
+            fontSize: 12, fontWeight: 500,
+            color: check.ok ? 'var(--text-primary)' : '#ef4444',
+          }}>
+            {check.name}
+          </span>
+          {check.actual && (
+            <span style={{
+              fontSize: 10, color: 'var(--text-muted)',
+              padding: '0 5px', background: 'var(--bg-tertiary)',
+              borderRadius: 3, whiteSpace: 'nowrap', overflow: 'hidden',
+              textOverflow: 'ellipsis', maxWidth: 180,
+            }}>
+              {check.actual}
+            </span>
+          )}
+          {hasDetails && (
+            <span style={{ fontSize: 9, color: 'var(--text-muted)', marginLeft: 'auto' }}>
+              {expanded ? '\u25B2' : '\u25BC'}
+            </span>
+          )}
+        </div>
+        {expanded && hasDetails && (
+          <div style={{
+            marginTop: 4, padding: '4px 8px', fontSize: 10,
+            background: 'var(--bg-tertiary)', borderRadius: 4,
+            color: 'var(--text-secondary)', lineHeight: 1.5,
+          }}>
+            {check.expected && <div>Erwartet: <strong>{check.expected}</strong></div>}
+            {check.actual && <div>Aktuell: <strong>{check.actual}</strong></div>}
+            {check.detail && <div style={{ color: check.ok ? 'var(--text-secondary)' : '#ef4444' }}>{check.detail}</div>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ChecklistSummary({ checks }: { checks: FirmwareCheck[] }) {
+  const passed = checks.filter(c => c.ok).length;
+  const failed = checks.filter(c => !c.ok).length;
+  const total = checks.length;
+  const allOk = failed === 0;
+
+  return (
+    <div data-testid="firmware-checklist" style={{
+      background: 'var(--bg-primary)', border: `1px solid ${allOk ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
+      borderRadius: 8, padding: 14, marginBottom: 16,
+    }}>
+      {/* Header with summary */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10,
+        paddingBottom: 8, borderBottom: '1px solid var(--border)',
+      }}>
+        <span style={{
+          fontSize: 16,
+          color: allOk ? '#22c55e' : '#ef4444',
+        }}>
+          {allOk ? '\u2713' : '\u26A0'}
+        </span>
+        <div style={{ flex: 1 }}>
+          <div style={{
+            fontSize: 13, fontWeight: 600,
+            color: allOk ? '#22c55e' : '#ef4444',
+          }}>
+            {allOk ? 'Alle Checks bestanden' : `${failed} Check${failed > 1 ? 's' : ''} fehlgeschlagen`}
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+            {passed}/{total} bestanden
+          </div>
+        </div>
+        {/* Mini progress */}
+        <div style={{
+          width: 60, height: 6, background: 'var(--bg-tertiary)',
+          borderRadius: 3, overflow: 'hidden',
+        }}>
+          <div style={{
+            width: `${(passed / total) * 100}%`, height: '100%',
+            background: allOk ? '#22c55e' : '#ef4444',
+            borderRadius: 3, transition: 'width 0.3s',
+          }} />
+        </div>
+      </div>
+
+      {/* Individual checks */}
+      <div>
+        {checks.map((check, i) => (
+          <ChecklistItem key={i} check={check} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function ReceiverFlashWizard({ node, onClose, regenerateKey = false }: Props) {
   const [step, setStep] = useState<Step>('intro');
   const [backendUrl, setBackendUrl] = useState(window.location.origin);
   const [wifiNetworks, setWifiNetworks] = useState<WifiNetwork[]>([{ ssid: '', password: '' }]);
   const [building, setBuilding] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [firmwareBlob, setFirmwareBlob] = useState<Blob | null>(null);
+  const [buildLog, setBuildLog] = useState<string[]>([]);
+  const [buildResult, setBuildResult] = useState<{ size: number; checks: FirmwareCheck[]; sha256: string; flash_mode: string } | null>(null);
+  const logEndRef = useRef<HTMLDivElement>(null);
 
   const isEsp8266 = node.hardwareType === 'esp8266';
+  const flashInfo = FLASH_INFO[node.hardwareType] || FLASH_INFO['esp32-s3'];
+
+  // Auto-scroll log
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [buildLog]);
 
   const updateNetwork = (index: number, field: keyof WifiNetwork, value: string) => {
     setWifiNetworks(prev => prev.map((n, i) => i === index ? { ...n, [field]: value } : n));
@@ -45,31 +176,51 @@ export default function ReceiverFlashWizard({ node, onClose }: Props) {
   const handleBuild = async () => {
     setBuilding(true);
     setError(null);
-    try {
-      const networks = wifiNetworks.filter(n => n.ssid.trim());
-      const blob = await buildFirmware({
+    setBuildLog([]);
+    setBuildResult(null);
+    setStep('build');
+
+    const networks = wifiNetworks.filter(n => n.ssid.trim());
+    await buildFirmwareStream(
+      {
         node_id: node.id,
         backend_url: backendUrl,
         wifi_networks: networks.length > 0 ? networks : undefined,
-      });
-      setFirmwareBlob(blob);
-      setStep('download');
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Build fehlgeschlagen');
-    } finally {
-      setBuilding(false);
-    }
+        regenerate_key: regenerateKey,
+      },
+      {
+        onLog: (line) => setBuildLog(prev => [...prev, line]),
+        onDone: (result) => {
+          setBuildResult({
+            size: result.size,
+            checks: result.checks,
+            sha256: result.sha256,
+            flash_mode: result.flash_mode,
+          });
+          setBuilding(false);
+          setStep('download');
+        },
+        onError: (err) => {
+          setError(err);
+          setBuilding(false);
+        },
+      },
+    );
   };
 
-  const handleDownload = () => {
-    if (!firmwareBlob) return;
-    const url = URL.createObjectURL(firmwareBlob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `flightarc-${node.hardwareType}-${node.id}.bin`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setStep('done');
+  const handleDownload = async () => {
+    try {
+      const blob = await downloadFirmware(node.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `flightarc-${node.hardwareType}-${node.id}.bin`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setStep('done');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Download fehlgeschlagen');
+    }
   };
 
   const hasWebSerial = 'serial' in navigator;
@@ -88,8 +239,8 @@ export default function ReceiverFlashWizard({ node, onClose }: Props) {
         background: 'var(--bg-secondary)',
         border: '1px solid var(--border)',
         borderRadius: 12,
-        width: 520,
-        maxHeight: '80vh',
+        width: 580,
+        maxHeight: '90vh',
         overflow: 'auto',
         padding: 24,
       }}>
@@ -119,11 +270,17 @@ export default function ReceiverFlashWizard({ node, onClose }: Props) {
         </div>
 
         {error && (
-          <div style={{
+          <div data-testid="flash-wizard-error" style={{
             background: 'rgba(239,68,68,0.15)', border: '1px solid var(--status-error)',
-            borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13,
+            borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 12,
             color: 'var(--status-error)',
-          }}>{error}</div>
+          }}>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>Fehler:</div>
+            <pre style={{
+              margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+              fontFamily: 'monospace', fontSize: 11, maxHeight: 200, overflow: 'auto',
+            }}>{error}</pre>
+          </div>
         )}
 
         {/* Step: Intro */}
@@ -144,6 +301,23 @@ export default function ReceiverFlashWizard({ node, onClose }: Props) {
                   {!hasWebSerial && <li style={{ color: '#eab308' }}>Chrome oder Edge Browser (für Web Serial)</li>}
                 </ul>
               </div>
+
+              {/* Board-specific flash info */}
+              <div style={{
+                background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.3)',
+                borderRadius: 8, padding: 12, marginBottom: 12,
+              }}>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#3b82f6' }}>
+                  Flash-Konfiguration: {node.hardwareType.toUpperCase()}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, fontSize: 11, color: 'var(--text-secondary)' }}>
+                  <div>Flash-Modus: <strong style={{ color: 'var(--text-primary)' }}>{flashInfo.mode.toUpperCase()}</strong></div>
+                  <div>Flash-Größe: <strong style={{ color: 'var(--text-primary)' }}>{flashInfo.size}</strong></div>
+                  <div>Chip: <strong style={{ color: 'var(--text-primary)' }}>{flashInfo.chip}</strong></div>
+                  <div>Partition: <strong style={{ color: 'var(--text-primary)' }}>{node.hardwareType === 'esp32-s3' ? '8MB (OTA)' : '4MB (OTA)'}</strong></div>
+                </div>
+              </div>
+
               {isEsp8266 && (
                 <div style={{
                   padding: '10px 12px', background: 'rgba(234,179,8,0.1)',
@@ -240,7 +414,9 @@ export default function ReceiverFlashWizard({ node, onClose }: Props) {
               background: 'var(--bg-primary)', borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 12,
             }}>
               <div style={{ color: 'var(--text-muted)' }}>API-Key wird automatisch in die Firmware eingebettet.</div>
-              <div style={{ color: 'var(--text-muted)', marginTop: 4 }}>Hardware: {node.hardwareType.toUpperCase()}</div>
+              <div style={{ color: 'var(--text-muted)', marginTop: 4 }}>
+                Hardware: {node.hardwareType.toUpperCase()} | Flash: {flashInfo.mode.toUpperCase()} | {flashInfo.size}
+              </div>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => setStep('intro')} style={secondaryBtnStyle}>Zurück</button>
@@ -255,28 +431,60 @@ export default function ReceiverFlashWizard({ node, onClose }: Props) {
           </div>
         )}
 
-        {/* Step: Build */}
+        {/* Step: Build (Live Terminal) */}
         {step === 'build' && (
-          <div style={{ textAlign: 'center', padding: '20px 0' }}>
-            {building ? (
-              <>
-                <div style={{ fontSize: 14, marginBottom: 12 }}>Firmware wird kompiliert...</div>
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                  Dies kann 30-60 Sekunden dauern.
-                </div>
-                <div style={{
-                  width: '100%', height: 4, background: 'var(--bg-tertiary)',
-                  borderRadius: 2, marginTop: 16, overflow: 'hidden',
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: building ? '#14b8a6' : 'var(--text-primary)' }}>
+              {building ? 'Firmware wird kompiliert...' : error ? 'Build fehlgeschlagen' : 'Build abgeschlossen'}
+            </div>
+
+            {/* Live terminal */}
+            <div data-testid="build-terminal" style={{
+              background: '#0d1117', border: '1px solid #30363d',
+              borderRadius: 8, padding: 10, marginBottom: 12,
+              height: 220, overflow: 'auto', fontFamily: 'monospace',
+              fontSize: 10, lineHeight: 1.5, color: '#c9d1d9',
+            }}>
+              {buildLog.map((line, i) => (
+                <div key={i} style={{
+                  color: line.includes('error') || line.includes('Error') || line.includes('FAILED')
+                    ? '#f85149'
+                    : line.includes('SUCCESS') || line.includes('Verifizierung')
+                      ? '#3fb950'
+                      : line.includes('Compiling') || line.includes('Building')
+                        ? '#58a6ff'
+                        : line.includes('Linking') || line.includes('Creating')
+                          ? '#d2a8ff'
+                          : line.startsWith('[Build]')
+                            ? '#14b8a6'
+                            : '#8b949e',
+                  whiteSpace: 'pre-wrap', wordBreak: 'break-all',
                 }}>
-                  <div style={{
-                    height: '100%', background: '#14b8a6', borderRadius: 2,
-                    animation: 'progress 2s infinite',
-                    width: '40%',
-                  }} />
+                  {line}
                 </div>
-              </>
-            ) : (
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+              ))}
+              {building && (
+                <div style={{ color: '#14b8a6' }}>
+                  {'> _'}
+                </div>
+              )}
+              <div ref={logEndRef} />
+            </div>
+
+            {building && (
+              <div style={{
+                width: '100%', height: 3, background: 'var(--bg-tertiary)',
+                borderRadius: 2, overflow: 'hidden',
+              }}>
+                <div style={{
+                  height: '100%', background: '#14b8a6', borderRadius: 2,
+                  animation: 'progress 2s infinite', width: '40%',
+                }} />
+              </div>
+            )}
+
+            {!building && error && (
+              <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                 <button onClick={() => setStep('config')} style={secondaryBtnStyle}>Zurück</button>
                 <button onClick={handleBuild} style={primaryBtnStyle}>Erneut versuchen</button>
               </div>
@@ -284,21 +492,49 @@ export default function ReceiverFlashWizard({ node, onClose }: Props) {
           </div>
         )}
 
-        {/* Step: Download */}
+        {/* Step: Download (with verification checklist) */}
         {step === 'download' && (
           <div>
+            {/* Compile success banner */}
             <div style={{
               background: 'rgba(34,197,94,0.1)', border: '1px solid #22c55e',
               borderRadius: 8, padding: 14, marginBottom: 16, fontSize: 13, color: '#22c55e',
+              display: 'flex', alignItems: 'center', gap: 8,
             }}>
-              Firmware erfolgreich gebaut!
-              {firmwareBlob && ` (${(firmwareBlob.size / 1024).toFixed(0)} KB)`}
+              <span style={{ fontSize: 18 }}>{'\u2713'}</span>
+              <div>
+                <div style={{ fontWeight: 600 }}>Kompilierung erfolgreich</div>
+                <div style={{ fontSize: 11, opacity: 0.8 }}>
+                  {buildResult && `${(buildResult.size / 1024).toFixed(0)} KB`}
+                  {buildResult?.flash_mode && ` | ${buildResult.flash_mode.toUpperCase()}`}
+                  {` | ${flashInfo.chip}`}
+                </div>
+              </div>
             </div>
 
-            <button onClick={handleDownload} style={{ ...primaryBtnStyle, marginBottom: 16 }}>
-              Firmware herunterladen (.bin)
+            {/* Verification checklist */}
+            {buildResult && buildResult.checks.length > 0 && (
+              <ChecklistSummary checks={buildResult.checks} />
+            )}
+
+            {/* Download button */}
+            <button
+              data-testid="flash-download-btn"
+              onClick={handleDownload}
+              disabled={buildResult?.checks.some(c => !c.ok)}
+              style={{
+                ...primaryBtnStyle,
+                marginBottom: 16,
+                opacity: buildResult?.checks.some(c => !c.ok) ? 0.5 : 1,
+                cursor: buildResult?.checks.some(c => !c.ok) ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {buildResult?.checks.some(c => !c.ok)
+                ? 'Download gesperrt — Checks fehlgeschlagen'
+                : 'Firmware herunterladen (.bin)'}
             </button>
 
+            {/* Flash instructions */}
             <div style={{
               background: 'var(--bg-primary)', borderRadius: 8, padding: 14, fontSize: 12,
               lineHeight: 1.6, color: 'var(--text-secondary)',
@@ -309,10 +545,30 @@ export default function ReceiverFlashWizard({ node, onClose }: Props) {
               <code style={{
                 display: 'block', background: 'var(--bg-tertiary)',
                 padding: 10, borderRadius: 6, fontSize: 11, fontFamily: 'monospace',
-                wordBreak: 'break-all',
+                wordBreak: 'break-all', whiteSpace: 'pre-wrap',
               }}>
-                esptool.py --chip {node.hardwareType.replace('esp32-', 'esp32')} --port /dev/ttyUSB0 write_flash 0x0 flightarc-{node.hardwareType}-{node.id}.bin
+{`# 1. Flash komplett löschen (wichtig beim ersten Flashen!)
+${flashInfo.erase}
+
+# 2. Firmware flashen
+esptool.py --chip ${flashInfo.chip} --port /dev/ttyUSB0 \\
+  --baud 460800 write_flash \\
+  --flash_mode ${flashInfo.mode} --flash_size ${flashInfo.size} \\
+  ${flashInfo.offset} flightarc-${node.hardwareType}-${node.id}.bin
+
+# Windows: --port COM3 (o.ä.) statt /dev/ttyUSB0`}
               </code>
+
+              {/* SHA-256 troubleshooting hint */}
+              <div style={{
+                marginTop: 10, padding: '8px 10px',
+                background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.3)',
+                borderRadius: 6, fontSize: 11, color: '#eab308',
+              }}>
+                <strong>SHA-256 Boot-Loop?</strong> Falls der ESP nach dem Flashen in einer
+                Endlosschleife mit "SHA-256 comparison failed" startet: Flash zuerst komplett
+                löschen mit <code>erase_flash</code> (Schritt 1), dann erneut flashen.
+              </div>
             </div>
           </div>
         )}
@@ -320,7 +576,7 @@ export default function ReceiverFlashWizard({ node, onClose }: Props) {
         {/* Step: Done */}
         {step === 'done' && (
           <div style={{ textAlign: 'center', padding: '20px 0' }}>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>OK</div>
+            <div style={{ fontSize: 32, marginBottom: 12 }}>{'\u2713'}</div>
             <div style={{ fontSize: 14, marginBottom: 8 }}>
               Firmware heruntergeladen!
             </div>
