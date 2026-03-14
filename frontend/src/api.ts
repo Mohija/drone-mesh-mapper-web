@@ -818,74 +818,36 @@ export async function buildFirmware(data: {
   };
 }
 
-export interface BuildStreamCallbacks {
-  onLog: (line: string) => void;
-  onDone: (result: { size: number; flash_mode: string; sha256: string; checks: FirmwareCheck[]; node_id: string }) => void;
-  onError: (error: string) => void;
-}
-
-export async function buildFirmwareStream(
-  data: {
-    node_id: string;
-    hardware_type?: string;
-    backend_url: string;
-    wifi_networks?: { ssid: string; password: string }[];
-    regenerate_key?: boolean;
-  },
-  callbacks: BuildStreamCallbacks,
-): Promise<void> {
-  const token = localStorage.getItem('access_token');
-  const res = await fetch(`${API_BASE}/receivers/firmware/build-stream`, {
+export async function startBuildAsync(data: {
+  node_id: string;
+  hardware_type?: string;
+  backend_url: string;
+  wifi_networks?: { ssid: string; password: string }[];
+  regenerate_key?: boolean;
+}): Promise<void> {
+  const res = await authFetch(`${API_BASE}/receivers/firmware/build-async`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
-
   if (!res.ok) {
-    let msg = `Build fehlgeschlagen (HTTP ${res.status})`;
-    try {
-      const err = await res.json();
-      msg = err.error || msg;
-    } catch { /* not JSON */ }
-    callbacks.onError(msg);
-    return;
+    const err = await res.json().catch(() => ({ error: 'Build-Start fehlgeschlagen' }));
+    throw new Error(err.error || `API error: ${res.status}`);
   }
+}
 
-  const reader = res.body?.getReader();
-  if (!reader) {
-    callbacks.onError('Stream nicht verfügbar');
-    return;
-  }
+export interface BuildStatus {
+  status: 'idle' | 'building' | 'done' | 'error';
+  log: string[];
+  error: string | null;
+  checks: FirmwareCheck[] | null;
+  result: { size: number; flash_mode: string; sha256: string; node_id: string } | null;
+}
 
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-
-    let currentEvent = '';
-    for (const line of lines) {
-      if (line.startsWith('event: ')) {
-        currentEvent = line.slice(7);
-      } else if (line.startsWith('data: ')) {
-        try {
-          const payload = JSON.parse(line.slice(6));
-          if (currentEvent === 'log') callbacks.onLog(payload.line || '');
-          else if (currentEvent === 'done') callbacks.onDone(payload);
-          else if (currentEvent === 'error') callbacks.onError(payload.error || 'Unbekannter Fehler');
-        } catch { /* skip malformed */ }
-        currentEvent = '';
-      }
-    }
-  }
+export async function pollBuildStatus(nodeId: string): Promise<BuildStatus> {
+  const res = await authFetch(`${API_BASE}/receivers/firmware/build-status/${encodeURIComponent(nodeId)}`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
 }
 
 export async function downloadFirmware(nodeId: string): Promise<Blob> {

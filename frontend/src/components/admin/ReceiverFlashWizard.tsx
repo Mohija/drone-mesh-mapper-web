@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
-import { buildFirmwareStream, downloadFirmware } from '../../api';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { startBuildAsync, pollBuildStatus, downloadFirmware } from '../../api';
 import type { ReceiverNode, FirmwareCheck } from '../../api';
 
 interface Props {
@@ -154,6 +154,7 @@ export default function ReceiverFlashWizard({ node, onClose, regenerateKey = fal
   const [buildLog, setBuildLog] = useState<string[]>([]);
   const [buildResult, setBuildResult] = useState<{ size: number; checks: FirmwareCheck[]; sha256: string; flash_mode: string } | null>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const isEsp8266 = node.hardwareType === 'esp8266';
   const flashInfo = FLASH_INFO[node.hardwareType] || FLASH_INFO['esp32-s3'];
@@ -162,6 +163,11 @@ export default function ReceiverFlashWizard({ node, onClose, regenerateKey = fal
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [buildLog]);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, []);
 
   const updateNetwork = (index: number, field: keyof WifiNetwork, value: string) => {
     setWifiNetworks(prev => prev.map((n, i) => i === index ? { ...n, [field]: value } : n));
@@ -173,6 +179,32 @@ export default function ReceiverFlashWizard({ node, onClose, regenerateKey = fal
     if (wifiNetworks.length > 1) setWifiNetworks(prev => prev.filter((_, i) => i !== index));
   };
 
+  const startPolling = useCallback((nodeId: string) => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(async () => {
+      try {
+        const status = await pollBuildStatus(nodeId);
+        setBuildLog(status.log);
+
+        if (status.status === 'done' && status.result) {
+          if (pollRef.current) clearInterval(pollRef.current);
+          setBuildResult({
+            size: status.result.size,
+            checks: status.checks || [],
+            sha256: status.result.sha256,
+            flash_mode: status.result.flash_mode,
+          });
+          setBuilding(false);
+          setStep('download');
+        } else if (status.status === 'error') {
+          if (pollRef.current) clearInterval(pollRef.current);
+          setError(status.error || 'Build fehlgeschlagen');
+          setBuilding(false);
+        }
+      } catch { /* ignore poll errors */ }
+    }, 800);
+  }, []);
+
   const handleBuild = async () => {
     setBuilding(true);
     setError(null);
@@ -180,32 +212,20 @@ export default function ReceiverFlashWizard({ node, onClose, regenerateKey = fal
     setBuildResult(null);
     setStep('build');
 
-    const networks = wifiNetworks.filter(n => n.ssid.trim());
-    await buildFirmwareStream(
-      {
+    try {
+      const networks = wifiNetworks.filter(n => n.ssid.trim());
+      await startBuildAsync({
         node_id: node.id,
         backend_url: backendUrl,
         wifi_networks: networks.length > 0 ? networks : undefined,
         regenerate_key: regenerateKey,
-      },
-      {
-        onLog: (line) => setBuildLog(prev => [...prev, line]),
-        onDone: (result) => {
-          setBuildResult({
-            size: result.size,
-            checks: result.checks,
-            sha256: result.sha256,
-            flash_mode: result.flash_mode,
-          });
-          setBuilding(false);
-          setStep('download');
-        },
-        onError: (err) => {
-          setError(err);
-          setBuilding(false);
-        },
-      },
-    );
+      });
+      // Build started — poll for progress
+      startPolling(node.id);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Build-Start fehlgeschlagen');
+      setBuilding(false);
+    }
   };
 
   const handleDownload = async () => {

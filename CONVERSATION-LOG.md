@@ -2,7 +2,7 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-14 (v1.5.0: Full ODID Scanner, Live Build Terminal, Firmware Management)
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-14 (v1.5.1: Async Build mit Polling, Proxy-kompatibel)
 - **Typ:** Projekt | **Status:** Development
 
 ## Offene Aufgaben
@@ -16,6 +16,22 @@
 - [x] Umfassende E2E-Tests für Receiver-System (60 Tests, alle bestanden)
 
 ## Änderungshistorie
+
+### 2026-03-14 - v1.5.1: Async Firmware Build mit Polling (Proxy-kompatibel)
+
+**Problem:** SSE-Streaming für Live Build Output funktionierte nicht durch LabCore Hub Live View Proxy (responseInterceptor buffert gesamte Response) und Cloudflare Tunnel.
+
+**Lösung: Async Build + Polling statt SSE-Streaming:**
+- Backend: `POST /firmware/build-async` startet Build in Background-Thread, gibt sofort 202 zurück
+- Backend: `GET /firmware/build-status/<node_id>` gibt aktuellen Status, Log-Zeilen, Checks und Ergebnis als JSON
+- Backend: In-Memory `_build_jobs` Dict speichert Build-Status pro Receiver
+- Frontend: Nach Build-Start pollt der Wizard alle 800ms den Status
+- Frontend: Terminal zeigt Log-Zeilen progressiv an, jeder Poll bringt neue Zeilen
+- Funktioniert durch jeden Proxy (nginx, Cloudflare, LabCore Hub Live View) da nur normale JSON-Requests
+- nginx `/api/` Block: `proxy_buffering off` hinzugefügt (für zukünftige SSE-Nutzung)
+- DB-Migration: `last_build_at`, `last_build_size`, `last_build_sha256` Spalten zu receiver_nodes hinzugefügt
+
+**Dateien:** `backend/routes/receiver_routes.py`, `frontend/src/api.ts`, `frontend/src/components/admin/ReceiverFlashWizard.tsx`, `/etc/nginx/sites-available/labcore-hub`
 
 ### 2026-03-14 - v1.5.0: Firmware Management, Live Build Terminal, Antennen-Empfehlung
 

@@ -244,6 +244,10 @@ FIRMWARE_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "firmware")
 FIRMWARE_STORE = os.path.join(os.path.dirname(__file__), "..", "data", "firmware")
 VENV_BIN = os.path.join(os.path.dirname(__file__), "..", "venv", "bin")
 
+# In-memory build jobs: {node_id: {status, log, error, checks, ...}}
+import threading
+_build_jobs: dict = {}
+
 ENV_MAP = {
     "esp32-s3": "esp32-s3",
     "esp32-c3": "esp32-c3",
@@ -628,16 +632,26 @@ def build_firmware_stream():
     app_ctx = current_app._get_current_object()
 
     def generate():
+        # SSE with padding to force browser flush (2KB minimum for Chrome to start processing)
+        PADDING = ":" + " " * 2048 + "\n"
+
         def sse(event, data):
-            return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=True)}\n\n"
+            msg = f"event: {event}\ndata: {json.dumps(data, ensure_ascii=True)}\n\n"
+            return msg + PADDING
 
         yield sse("log", {"line": f"[Build] Starting {hw} firmware for {node.name}..."})
         if regenerate_key:
             yield sse("log", {"line": "[Build] API-Key regeneriert (alter Key ungültig)"})
 
         try:
+            # stdbuf -oL forces line-buffered stdout from PlatformIO
+            cmd = [pio_bin, "run", "-e", env_name]
+            stdbuf = "/usr/bin/stdbuf"
+            if os.path.isfile(stdbuf):
+                cmd = [stdbuf, "-oL"] + cmd
+
             proc = subprocess.Popen(
-                [pio_bin, "run", "-e", env_name],
+                cmd,
                 cwd=FIRMWARE_DIR,
                 env=build_env,
                 stdout=subprocess.PIPE,
@@ -646,7 +660,7 @@ def build_firmware_stream():
                 bufsize=1,
             )
 
-            for raw_line in proc.stdout:
+            for raw_line in iter(proc.stdout.readline, ''):
                 line = raw_line.rstrip()
                 if not line:
                     continue
@@ -731,6 +745,174 @@ def download_firmware(node_id):
         as_attachment=True,
         download_name=f"flightarc-{node.hardware_type}-{node.id}.bin",
     )
+
+
+@receiver_bp.route("/firmware/build-async", methods=["POST"])
+@login_required
+@role_required("tenant_admin")
+def build_firmware_async():
+    """Start firmware build in background thread. Poll status via /firmware/build-status."""
+    data = request.get_json(silent=True) or {}
+    node_id = data.get("node_id", "")
+    hardware_type = data.get("hardware_type", "")
+    backend_url = data.get("backend_url", "")
+    regenerate_key = data.get("regenerate_key", False)
+    wifi_networks = data.get("wifi_networks", [])
+    if not wifi_networks:
+        ssid = data.get("wifi_ssid", "")
+        pwd = data.get("wifi_password", "")
+        if ssid:
+            wifi_networks = [{"ssid": ssid, "password": pwd}]
+
+    if not node_id:
+        return jsonify({"error": "node_id erforderlich"}), 400
+    node = ReceiverNode.query.filter_by(id=node_id, tenant_id=g.tenant_id).first()
+    if not node:
+        return jsonify({"error": "Empfänger nicht gefunden"}), 404
+    hw = hardware_type or node.hardware_type
+    if hw not in ENV_MAP:
+        return jsonify({"error": f"Ungültiger Hardware-Typ: {hw}"}), 400
+    if not backend_url:
+        return jsonify({"error": "backend_url erforderlich"}), 400
+
+    # Check if build already running
+    if node_id in _build_jobs and _build_jobs[node_id].get("status") == "building":
+        return jsonify({"error": "Build läuft bereits"}), 409
+
+    if regenerate_key:
+        node.api_key = secrets.token_hex(32)
+        db.session.commit()
+
+    # Capture values for thread
+    api_key = node.api_key
+    node_name = node.name
+    tenant_id = g.tenant_id
+
+    import re as _re
+    def sanitize_build_str(s):
+        return _re.sub(r'["\\\$`\n\r]', '', s)
+    def sanitize_node_name(s):
+        return _re.sub(r'[^A-Za-z0-9_\-]', '_', s).strip('_') or "FlightArc"
+
+    env_name = ENV_MAP[hw]
+    pio_bin = os.path.join(VENV_BIN, "pio")
+    build_env = os.environ.copy()
+    build_env["BACKEND_URL"] = sanitize_build_str(backend_url)
+    build_env["API_KEY"] = sanitize_build_str(api_key)
+    suffixes = ["", "_2", "_3"]
+    for i, suffix in enumerate(suffixes):
+        if i < len(wifi_networks):
+            build_env[f"WIFI_SSID{suffix}"] = sanitize_build_str(wifi_networks[i].get("ssid", ""))
+            build_env[f"WIFI_PASS{suffix}"] = sanitize_build_str(wifi_networks[i].get("password", ""))
+        else:
+            build_env[f"WIFI_SSID{suffix}"] = ""
+            build_env[f"WIFI_PASS{suffix}"] = ""
+    build_env["NODE_NAME"] = sanitize_node_name(node_name[:20])
+
+    from flask import current_app
+    app_ctx = current_app._get_current_object()
+
+    # Initialize job
+    _build_jobs[node_id] = {"status": "building", "log": [], "error": None, "checks": None, "result": None}
+    job = _build_jobs[node_id]
+
+    def run_build():
+        job["log"].append(f"[Build] Starting {hw} firmware for {node_name}...")
+        if regenerate_key:
+            job["log"].append("[Build] API-Key regeneriert (alter Key ungültig)")
+
+        try:
+            cmd = [pio_bin, "run", "-e", env_name]
+            stdbuf = "/usr/bin/stdbuf"
+            if os.path.isfile(stdbuf):
+                cmd = [stdbuf, "-oL"] + cmd
+
+            proc = subprocess.Popen(
+                cmd, cwd=FIRMWARE_DIR, env=build_env,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, bufsize=1,
+            )
+            for raw_line in iter(proc.stdout.readline, ''):
+                line = raw_line.rstrip()
+                if line:
+                    job["log"].append(line)
+            proc.wait(timeout=120)
+
+            if proc.returncode != 0:
+                job["status"] = "error"
+                job["error"] = f"Build fehlgeschlagen (exit code {proc.returncode})"
+                return
+
+            firmware_path = os.path.join(FIRMWARE_DIR, ".pio", "build", env_name, "firmware.bin")
+            if not os.path.isfile(firmware_path):
+                job["status"] = "error"
+                job["error"] = "firmware.bin nicht gefunden"
+                return
+
+            fw_info = verify_firmware_binary(firmware_path, hw)
+            checks = fw_info.get("checks", [])
+            passed = sum(1 for c in checks if c["ok"])
+            total = len(checks)
+            job["checks"] = checks
+
+            if not fw_info["valid"]:
+                failed = [c for c in checks if not c["ok"]]
+                job["status"] = "error"
+                job["error"] = "; ".join(f'{c["name"]}: {c.get("detail") or c.get("actual")}' for c in failed)
+                return
+
+            os.makedirs(FIRMWARE_STORE, exist_ok=True)
+            stored_path = os.path.join(FIRMWARE_STORE, f"{node_id}.bin")
+            import shutil
+            shutil.copy2(firmware_path, stored_path)
+
+            with app_ctx.app_context():
+                n = ReceiverNode.query.get(node_id)
+                if n:
+                    n.last_build_at = time.time()
+                    n.last_build_size = fw_info["size"]
+                    n.last_build_sha256 = fw_info.get("sha256", "")
+                    db.session.commit()
+
+            job["log"].append(f"[Build] Verifizierung: {passed}/{total} Checks bestanden")
+            job["status"] = "done"
+            job["result"] = {
+                "size": fw_info["size"],
+                "flash_mode": fw_info.get("flash_mode", ""),
+                "sha256": fw_info.get("sha256", ""),
+                "node_id": node_id,
+            }
+
+        except subprocess.TimeoutExpired:
+            job["status"] = "error"
+            job["error"] = "Build-Timeout (120s)"
+        except Exception as exc:
+            logger.exception("Async build error")
+            job["status"] = "error"
+            job["error"] = str(exc)
+
+    thread = threading.Thread(target=run_build, daemon=True)
+    thread.start()
+    return jsonify({"ok": True, "node_id": node_id}), 202
+
+
+@receiver_bp.route("/firmware/build-status/<node_id>", methods=["GET"])
+@login_required
+@role_required("tenant_admin")
+def build_firmware_status(node_id):
+    """Poll build status. Returns log lines, status, checks."""
+    job = _build_jobs.get(node_id)
+    if not job:
+        return jsonify({"status": "idle", "log": [], "error": None, "checks": None, "result": None})
+
+    # Return current state (log is cumulative)
+    return jsonify({
+        "status": job["status"],
+        "log": job["log"],
+        "error": job["error"],
+        "checks": job.get("checks"),
+        "result": job.get("result"),
+    })
 
 
 @receiver_bp.route("/firmware/board-info", methods=["GET"])
