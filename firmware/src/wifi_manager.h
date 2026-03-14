@@ -25,6 +25,7 @@ public:
     String getApSsid() const { return _apSsid; }
     String getConnectedSsid() const;
     int getRssi() const;
+    int getChannel() const;
 
     // Runtime WiFi update (from captive portal)
     void setStaCredentials(const String& ssid, const String& pass);

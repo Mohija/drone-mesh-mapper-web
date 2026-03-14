@@ -177,6 +177,11 @@ int WiFiManager::getRssi() const {
     return 0;
 }
 
+int WiFiManager::getChannel() const {
+    if (isStaConnected()) return WiFi.channel();
+    return 0;
+}
+
 void WiFiManager::setStaCredentials(const String& ssid, const String& pass) {
     _activeSsid = ssid;
     _activePass = pass;

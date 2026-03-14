@@ -16,8 +16,9 @@ class ConnectionLogEntry:
     __slots__ = (
         "timestamp", "receiver_id", "receiver_name", "tenant_id",
         "endpoint", "method", "http_status", "error",
-        "detections_count", "ip", "firmware_version",
-        "wifi_ssid", "wifi_rssi", "free_heap", "uptime_seconds",
+        "detections_count", "ip", "firmware_version", "hardware_type",
+        "wifi_ssid", "wifi_rssi", "wifi_channel", "free_heap", "uptime_seconds",
+        "ap_active", "error_count", "last_http_code",
     )
 
     def __init__(self, **kwargs):

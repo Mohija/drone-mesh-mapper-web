@@ -863,10 +863,15 @@ export interface ConnectionLogEntry {
   detections_count: number | null;
   ip: string | null;
   firmware_version: string | null;
+  hardware_type: string | null;
   wifi_ssid: string | null;
   wifi_rssi: number | null;
+  wifi_channel: number | null;
   free_heap: number | null;
   uptime_seconds: number | null;
+  ap_active: boolean | null;
+  error_count: number | null;
+  last_http_code: number | null;
 }
 
 export interface ConnectionLogResponse {

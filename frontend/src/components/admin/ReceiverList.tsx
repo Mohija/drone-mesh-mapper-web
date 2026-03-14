@@ -204,11 +204,17 @@ function ConnectionLogViewer({ entries, receiverFilter, onClear, onClose, receiv
               {e.error && (
                 <span style={{ color: '#f85149' }}> {e.error}</span>
               )}
-              {isHeartbeat && e.wifi_ssid && (
+              {isHeartbeat && (
                 <span style={{ color: '#8b949e' }}>
-                  {' '}WiFi:{e.wifi_ssid} {e.wifi_rssi != null && `(${e.wifi_rssi}dBm)`}
+                  {e.wifi_ssid && ` WiFi:${e.wifi_ssid}`}
+                  {e.wifi_rssi != null && `(${e.wifi_rssi}dBm)`}
+                  {e.wifi_channel != null && ` Ch:${e.wifi_channel}`}
                   {e.free_heap != null && ` Heap:${(e.free_heap / 1024).toFixed(0)}KB`}
                   {e.firmware_version && ` FW:${e.firmware_version}`}
+                  {e.ap_active && <span style={{ color: '#eab308' }}> [AP aktiv]</span>}
+                  {e.error_count != null && e.error_count > 0 && (
+                    <span style={{ color: '#f85149' }}> Errors:{e.error_count} (HTTP {e.last_http_code})</span>
+                  )}
                 </span>
               )}
               {e.ip && <span style={{ color: '#484f58' }}> {e.ip}</span>}

@@ -120,10 +120,14 @@ void loop() {
 
         client.sendHeartbeat(
             FIRMWARE_VERSION,
+            HARDWARE_TYPE,
             wifiMgr.getConnectedSsid().c_str(),
             wifiMgr.getRssi(),
+            wifiMgr.getChannel(),
             ESP.getFreeHeap(),
             now / 1000,
+            detectionsSinceBoot,
+            wifiMgr.isApActive(),
             lat, lon, acc
         );
     }

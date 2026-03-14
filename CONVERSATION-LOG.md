@@ -17,6 +17,22 @@
 
 ## Änderungshistorie
 
+### 2026-03-14 - v1.5.2: Connection Log + erweiterte Firmware-Telemetrie
+
+**Firmware-Telemetrie erweitert (Heartbeat sendet jetzt zusätzlich):**
+- `hardware_type` — Welcher Chip-Typ (esp32-s3, esp32-c3, esp8266)
+- `wifi_channel` — Auf welchem WiFi-Kanal der ESP lauscht
+- `detections_since_boot` — Erkennungszähler seit Boot
+- `ap_active` — Ob der SoftAP-Hotspot gerade aktiv ist
+- `error_count` + `last_http_code` — HTTP-Fehlerstatistiken seit Boot
+
+**Firmware-Ingest erweitert (sendet jetzt zusätzlich pro Drohne):**
+- `id_type` — ID-Typ (serial, caa, utm, specific_session)
+- `self_id_desc` — Drohnen-Selbstbeschreibung (aus ODID SelfID Message)
+
+**Connection Log im Frontend zeigt neue Felder:**
+- WiFi-Kanal, AP-Status (gelb markiert), Error-Count + letzter HTTP-Code
+
 ### 2026-03-14 - v1.5.2: Connection Log für Empfänger-Kommunikation
 
 **Neues Feature: Echtzeit-Kommunikationslog für Hardware-Empfänger**

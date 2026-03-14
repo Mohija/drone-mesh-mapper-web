@@ -247,7 +247,12 @@ def heartbeat():
         endpoint="/heartbeat", method="POST", http_status=200,
         ip=request.remote_addr,
         firmware_version=data.get("firmware_version"),
+        hardware_type=data.get("hardware_type"),
         wifi_ssid=data.get("wifi_ssid"),
+        wifi_channel=data.get("wifi_channel"),
+        ap_active=data.get("ap_active"),
+        error_count=data.get("error_count"),
+        last_http_code=data.get("last_http_code"),
         wifi_rssi=data.get("wifi_rssi"),
         free_heap=data.get("free_heap"),
         uptime_seconds=data.get("uptime_seconds"))

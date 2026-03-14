@@ -61,6 +61,16 @@ bool FlightArcClient::sendIngest(OdidDetection* detections, int count,
         if (strlen(detections[i].operator_id) > 0) {
             det["operator_id"] = detections[i].operator_id;
         }
+        // ID type
+        if (detections[i].id_type > 0) {
+            const char* id_types[] = {"none", "serial", "caa", "utm", "specific_session"};
+            int idx = detections[i].id_type;
+            if (idx >= 0 && idx <= 4) det["id_type"] = id_types[idx];
+        }
+        // Self-ID description
+        if (strlen(detections[i].self_id_desc) > 0) {
+            det["self_id_desc"] = detections[i].self_id_desc;
+        }
         // Detection source
         const char* src_names[] = {"wifi_beacon", "wifi_nan", "ble"};
         det["source"] = src_names[detections[i].source];
@@ -76,15 +86,28 @@ bool FlightArcClient::sendIngest(OdidDetection* detections, int count,
     return ok;
 }
 
-bool FlightArcClient::sendHeartbeat(const char* fwVersion, const char* wifiSsid,
-                                     int wifiRssi, int freeHeap, int uptimeSeconds,
+bool FlightArcClient::sendHeartbeat(const char* fwVersion, const char* hwType,
+                                     const char* wifiSsid, int wifiRssi, int wifiChannel,
+                                     int freeHeap, int uptimeSeconds,
+                                     int detectionsSinceBoot, bool apActive,
                                      float lat, float lon, float accuracy) {
     JsonDocument doc;
     doc["firmware_version"] = fwVersion;
+    doc["hardware_type"] = hwType;
     doc["wifi_ssid"] = wifiSsid;
     doc["wifi_rssi"] = wifiRssi;
+    doc["wifi_channel"] = wifiChannel;
     doc["free_heap"] = freeHeap;
     doc["uptime_seconds"] = uptimeSeconds;
+    doc["detections_since_boot"] = detectionsSinceBoot;
+    doc["ap_active"] = apActive;
+
+    // Error stats
+    if (_retryCount > 0) {
+        doc["error_count"] = _retryCount;
+        doc["last_http_code"] = _lastHttpCode;
+    }
+
     if (lat != 0.0f || lon != 0.0f) {
         doc["latitude"] = lat;
         doc["longitude"] = lon;
@@ -116,6 +139,7 @@ bool FlightArcClient::_httpPost(const String& path, const String& body) {
 
         int code = http.POST(body);
         http.end();
+        _lastHttpCode = code;
         _lastSuccess = (code >= 200 && code < 300);
         return _lastSuccess;
     }
@@ -129,6 +153,7 @@ bool FlightArcClient::_httpPost(const String& path, const String& body) {
 
     int code = http.POST(body);
     http.end();
+    _lastHttpCode = code;
     _lastSuccess = (code >= 200 && code < 300);
     if (!_lastSuccess) {
         _retryCount++;
@@ -148,6 +173,7 @@ bool FlightArcClient::_httpPost(const String& path, const String& body) {
 
     int code = http.POST(body);
     http.end();
+    _lastHttpCode = code;
     _lastSuccess = (code >= 200 && code < 300);
     if (!_lastSuccess) {
         _retryCount++;
