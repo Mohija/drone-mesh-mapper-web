@@ -679,14 +679,56 @@ function SectionReceivers() {
         Die Tabelle zeigt alle Empfänger mit Status-Indikator, Name, Hardware-Typ, letztem Kontakt und Erkennungen.
       </p>
       <ul>
-        <li><strong>Klick auf Zeile</strong> — Erweitert die Detailansicht mit ID, Firmware, IP, WiFi (SSID + dBm), Heap, Uptime, Standort</li>
-        <li><strong>„Firmware flashen"</strong> — Öffnet den Flash-Wizard</li>
-        <li><strong>„API-Key regenerieren"</strong> — Erstellt einen neuen API-Key (alter wird ungültig)</li>
+        <li><strong>Klick auf Zeile</strong> — Erweitert die Detailansicht mit ID, Firmware, IP, WiFi (SSID + dBm + Kanal), Heap, Uptime, Standort, Boot-Erkennungen</li>
+        <li><strong>Firmware-Build Info</strong> — Zeigt Datum, Größe und SHA-256 des letzten Builds</li>
+        <li><strong>„Firmware herunterladen"</strong> — Lädt die gespeicherte Firmware erneut herunter (kein Rebuild nötig)</li>
+        <li><strong>„Neu bauen (neuer Key)"</strong> — Baut Firmware komplett neu mit frischem API-Key (alter Key wird ungültig, alter ESP muss neu geflasht werden)</li>
+        <li><strong>„Kommunikations-Log"</strong> — Zeigt Log-Einträge nur für diesen Empfänger (muss zuerst aktiviert werden)</li>
         <li><strong>„Deakt."</strong> — Deaktiviert den Empfänger (kann sich nicht mehr authentifizieren)</li>
-        <li><strong>„Löschen"</strong> — Entfernt den Empfänger dauerhaft</li>
+        <li><strong>„Löschen"</strong> — Entfernt den Empfänger dauerhaft inkl. gespeicherter Firmware</li>
       </ul>
+
+      <h3>Connection Log (Kommunikationsprotokoll)</h3>
+      <p>
+        Das Connection Log zeichnet alle Kommunikation zwischen den Hardware-Empfängern und dem Backend auf.
+        Es muss zuerst über den <strong>„Log aus"</strong>-Button aktiviert werden.
+      </p>
+      <table style={tableStyle}>
+        <thead>
+          <tr><th style={thStyle}>Eintrag</th><th style={thStyle}>Farbe</th><th style={thStyle}>Beschreibung</th></tr>
+        </thead>
+        <tbody>
+          <tr><td style={tdStyle}>Ingest</td><td style={tdStyle}>Grün</td><td style={tdStyle}>Drohnen-Erkennungen empfangen (Anzahl, Quell-IP)</td></tr>
+          <tr><td style={tdStyle}>Heartbeat</td><td style={tdStyle}>Blau</td><td style={tdStyle}>Status-Update mit WiFi (SSID, dBm, Kanal), Heap, Firmware, Uptime, Hotspot-Status, Fehlerstatistik</td></tr>
+          <tr><td style={tdStyle}>Auth-Fehler</td><td style={tdStyle}>Rot</td><td style={tdStyle}>Ungültiger API-Key, fehlender Header, deaktivierter Empfänger</td></tr>
+        </tbody>
+      </table>
+      <p>
+        <strong>Filter:</strong> Über das Dropdown kann das Log auf einen bestimmten Empfänger gefiltert werden.
+        Alternativ: In der Detail-Ansicht eines Empfängers auf <strong>„Kommunikations-Log"</strong> klicken.
+      </p>
+
+      <h3>Live Build Terminal</h3>
+      <p>
+        Beim Bauen einer Firmware zeigt der Flash-Wizard ein <strong>Live-Terminal</strong> mit dem
+        Compiler-Output in Echtzeit. Danach folgt eine <strong>11-Punkt Verifizierungs-Checkliste</strong> die
+        Magic Byte, Flash-Modus (DIO/QIO), Flash-Größe, Segmente, SHA-256, Bootloader und Partitionstabelle prüft.
+      </p>
+
+      <h3>Telemetrie-Daten</h3>
+      <p>Jeder Empfänger sendet regelmäßig folgende Daten ans Backend:</p>
+      <table style={tableStyle}>
+        <thead>
+          <tr><th style={thStyle}>Feld</th><th style={thStyle}>Intervall</th><th style={thStyle}>Beschreibung</th></tr>
+        </thead>
+        <tbody>
+          <tr><td style={tdStyle}>Heartbeat</td><td style={tdStyle}>30s</td><td style={tdStyle}>Firmware-Version, Hardware-Typ, WiFi (SSID/dBm/Kanal), Heap, Uptime, Erkennungen seit Boot, AP-Status, Fehlerstatistik, GPS</td></tr>
+          <tr><td style={tdStyle}>Ingest</td><td style={tdStyle}>2s</td><td style={tdStyle}>Drohnen-Erkennungen mit ID, Position, Höhe, Speed, Heading, Pilot-Position, Operator-ID, ID-Typ, Quelle (BLE/WiFi/NAN)</td></tr>
+        </tbody>
+      </table>
+
       <h3>Auto-Refresh</h3>
-      <p>Die Empfänger-Liste aktualisiert sich automatisch alle 30 Sekunden.</p>
+      <p>Die Empfänger-Liste aktualisiert sich automatisch alle 30 Sekunden. Das Connection Log pollt alle 3 Sekunden wenn aktiv und sichtbar.</p>
     </div>
   );
 }
