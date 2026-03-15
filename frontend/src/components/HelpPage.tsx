@@ -5,7 +5,7 @@ import { useTheme } from '../ThemeContext';
 type Section =
   | 'overview' | 'login' | 'map' | 'drones' | 'flightzones'
   | 'nfz' | 'violations' | 'reports' | 'settings' | 'admin'
-  | 'receivers' | 'simulation' | 'hardware' | 'tips';
+  | 'receivers' | 'simulation' | 'hardware' | 'ota' | 'tips';
 
 const SECTIONS: { id: Section; title: string; icon: string }[] = [
   { id: 'overview', title: 'Übersicht', icon: '📋' },
@@ -21,6 +21,7 @@ const SECTIONS: { id: Section; title: string; icon: string }[] = [
   { id: 'receivers', title: 'Empfänger-Verwaltung', icon: '📡' },
   { id: 'simulation', title: 'Simulation', icon: '🧪' },
   { id: 'hardware', title: 'Hardware-Inbetriebnahme', icon: '🔧' },
+  { id: 'ota', title: 'OTA-Updates & Merged Binary', icon: '📲' },
   { id: 'tips', title: 'Tipps & Tricks', icon: '💡' },
 ];
 
@@ -40,7 +41,7 @@ function AppLayoutDiagram() {
       {/* Header bar */}
       <rect x="10" y="10" width="680" height="44" rx="8" fill="url(#hdr)" stroke="#475569" />
       <text x="24" y="37" fill="#14b8a6" fontWeight="700" fontSize="15" fontFamily="monospace">FlightArc</text>
-      <text x="110" y="37" fill="#64748b" fontSize="11" fontFamily="sans-serif">v1.4</text>
+      <text x="110" y="37" fill="#64748b" fontSize="11" fontFamily="sans-serif">v1.5</text>
       <text x="150" y="37" fill="#94a3b8" fontSize="12" fontFamily="sans-serif">12 Drohnen</text>
       {/* Refresh rate */}
       <rect x="240" y="18" width="70" height="28" rx="6" fill="#1e293b" stroke="#475569" />
@@ -334,7 +335,7 @@ function SectionMap() {
           <tr><th style={thStyle}>Element</th><th style={thStyle}>Funktion</th></tr>
         </thead>
         <tbody>
-          <tr><td style={tdStyle}><strong>FlightArc v1.4</strong></td><td style={tdStyle}>App-Name mit Version. Daneben die aktuelle Drohnen-Anzahl.</td></tr>
+          <tr><td style={tdStyle}><strong>FlightArc v1.5</strong></td><td style={tdStyle}>App-Name mit Version. Daneben die aktuelle Drohnen-Anzahl und Empfänger-Status.</td></tr>
           <tr><td style={tdStyle}><strong>↻ Aktualisierungsrate</strong></td><td style={tdStyle}>Wie oft die Karte aktualisiert wird. Optionen: 1s, 2s (Standard), 5s, 10s, 30s. Wird im Browser gespeichert.</td></tr>
           <tr><td style={tdStyle}><strong>⊕ Radius-Filter</strong></td><td style={tdStyle}>Begrenzt die Anzeige auf einen Umkreis um das Kartenzentrum. Optionen: 5–500 km oder Aus. Schalte den Filter mit dem ⊕-Button an/aus.</td></tr>
           <tr><td style={tdStyle}><strong>↕ Höhenfilter</strong></td><td style={tdStyle}>Filtert Drohnen nach Höhenzone: Alle, 0–100m, 100–500m, 500–2000m, &gt;2000m.</td></tr>
@@ -680,9 +681,11 @@ function SectionReceivers() {
         Die Tabelle zeigt alle Empfänger mit Status-Indikator, Name, Hardware-Typ, letztem Kontakt und Erkennungen.
       </p>
       <ul>
-        <li><strong>Klick auf Zeile</strong> — Erweitert die Detailansicht mit ID, Firmware, IP, WiFi (SSID + dBm + Kanal), Heap, Uptime, Standort, Boot-Erkennungen</li>
-        <li><strong>Firmware-Build Info</strong> — Zeigt Datum, Größe und SHA-256 des letzten Builds</li>
-        <li><strong>„Firmware herunterladen"</strong> — Lädt die gespeicherte Firmware erneut herunter (kein Rebuild nötig)</li>
+        <li><strong>Klick auf Zeile</strong> — Erweitert die Detailansicht mit ID, Firmware-Version, IP, WiFi (SSID + dBm + Kanal), Heap, Uptime, Standort, Boot-Erkennungen</li>
+        <li><strong>Firmware-Build Info</strong> — Zeigt Datum, Größe, SHA-256 und Version (1.0.XXXXX) des letzten Builds</li>
+        <li><strong>„App-Firmware" herunterladen</strong> — Lädt die gespeicherte Firmware erneut herunter (kein Rebuild nötig)</li>
+        <li><strong>„Full-Flash (Merged)" herunterladen</strong> — Lädt das Merged Binary herunter (Bootloader + Partitions + Firmware in einer Datei, nur ESP32). Siehe Abschnitt <em>OTA-Updates & Merged Binary</em>.</li>
+        <li><strong>„OTA Update senden"</strong> — Sendet ein Over-the-Air Update an den Empfänger (nur ESP32-S3/C3, nicht ESP8266). Das Update wird beim nächsten Heartbeat übermittelt. Siehe Abschnitt <em>OTA-Updates & Merged Binary</em>.</li>
         <li><strong>„Neu bauen (neuer Key)"</strong> — Baut Firmware komplett neu mit frischem API-Key (alter Key wird ungültig, alter ESP muss neu geflasht werden)</li>
         <li><strong>„Kommunikations-Log"</strong> — Zeigt Log-Einträge nur für diesen Empfänger (muss zuerst aktiviert werden)</li>
         <li><strong>„Deakt."</strong> — Deaktiviert den Empfänger (kann sich nicht mehr authentifizieren)</li>
@@ -743,6 +746,13 @@ function SectionReceivers() {
           <tr><td style={tdStyle}>Ingest</td><td style={tdStyle}>2s</td><td style={tdStyle}>Drohnen-Erkennungen mit ID, Position, Höhe, Speed, Heading, Pilot-Position, Operator-ID, ID-Typ, Quelle (BLE/WiFi/NAN)</td></tr>
         </tbody>
       </table>
+
+      <h3>Firmware-Versionierung</h3>
+      <p>
+        Jeder Firmware-Build erhält eine eindeutige Version (<code>1.0.XXXXX</code>), die in der Empfänger-Detailansicht
+        unter „Firmware" sichtbar ist. Die Version wird vom ESP bei jedem Heartbeat an das Backend gemeldet und dient
+        der Erkennung erfolgreicher OTA-Updates. Details siehe Abschnitt <em>OTA-Updates & Merged Binary</em>.
+      </p>
 
       <h3>Auto-Refresh</h3>
       <p>Die Empfänger-Liste aktualisiert sich automatisch alle 30 Sekunden. Das Connection Log pollt alle 3 Sekunden wenn aktiv und sichtbar.</p>
@@ -925,17 +935,21 @@ function SectionHardware() {
       </p>
       <h3>Schritt 4: Erstinbetriebnahme</h3>
       <h4>LED-Signale</h4>
+      <InfoBox type="info">
+        <strong>ESP32-S3 DevKitC:</strong> RGB Neopixel auf GPIO48 — farbige Statusanzeige (blau, gelb, orange, grün, weiß, rot).{' '}
+        <strong>ESP32-C3 / ESP8266:</strong> Eingebaute LED auf GPIO2 — nur an/aus (keine Farben).
+      </InfoBox>
       <table style={tableStyle}>
         <thead>
-          <tr><th style={thStyle}>LED-Muster</th><th style={thStyle}>Bedeutung</th><th style={thStyle}>Was tun?</th></tr>
+          <tr><th style={thStyle}>LED-Muster</th><th style={thStyle}>Farbe (S3)</th><th style={thStyle}>Bedeutung</th><th style={thStyle}>Was tun?</th></tr>
         </thead>
         <tbody>
-          <tr><td style={tdStyle}><strong>Schnelles Blinken</strong> (100ms)</td><td style={tdStyle}>Boot / WLAN-Suche</td><td style={tdStyle}>Warten — ESP sucht nach konfiguriertem Netzwerk</td></tr>
-          <tr><td style={tdStyle}><strong>Langsames Pulsieren</strong> (kurz an, lang aus)</td><td style={tdStyle}>Kein WLAN — Hotspot offen</td><td style={tdStyle}>Mit Handy/Laptop mit <strong>„FlightArc-XXXX"</strong> verbinden und WLAN konfigurieren</td></tr>
-          <tr><td style={tdStyle}><strong>Doppelblinken</strong> (2x kurz, Pause)</td><td style={tdStyle}>WLAN ok, Backend nicht erreichbar</td><td style={tdStyle}>Backend-URL und Netzwerk prüfen (Server erreichbar? Firewall? Port?)</td></tr>
-          <tr><td style={tdStyle}><strong>Dauerhaft an</strong></td><td style={tdStyle}>Alles ok — Online</td><td style={tdStyle}>Empfänger funktioniert, sendet Heartbeats und Erkennungen</td></tr>
-          <tr><td style={tdStyle}><strong>Kurzes Aus-Blitzen</strong> (80ms)</td><td style={tdStyle}>Drohne erkannt</td><td style={tdStyle}>Normale Aktivität — LED blitzt bei jeder gesendeten Erkennung</td></tr>
-          <tr><td style={tdStyle}><strong>SOS-Muster</strong></td><td style={tdStyle}>Schwerer Fehler</td><td style={tdStyle}>ESP neustarten, ggf. Flash löschen und Firmware neu flashen</td></tr>
+          <tr><td style={tdStyle}><strong>Schnelles Blinken</strong> (100ms)</td><td style={tdStyle}>Blau</td><td style={tdStyle}>Boot / WLAN-Suche</td><td style={tdStyle}>Warten — ESP sucht nach konfiguriertem Netzwerk</td></tr>
+          <tr><td style={tdStyle}><strong>Langsames Pulsieren</strong> (300ms an, 1200ms aus)</td><td style={tdStyle}>Gelb</td><td style={tdStyle}>Kein WLAN — Hotspot offen</td><td style={tdStyle}>Mit Handy/Laptop mit <strong>„FlightArc-XXXX"</strong> verbinden und WLAN konfigurieren</td></tr>
+          <tr><td style={tdStyle}><strong>Doppelblinken</strong> (2x 200ms, Pause)</td><td style={tdStyle}>Orange</td><td style={tdStyle}>WLAN ok, Backend nicht erreichbar</td><td style={tdStyle}>Backend-URL und Netzwerk prüfen (Server erreichbar? Firewall? Port?)</td></tr>
+          <tr><td style={tdStyle}><strong>Dauerhaft an</strong></td><td style={tdStyle}>Grün</td><td style={tdStyle}>Alles ok — Online</td><td style={tdStyle}>Empfänger funktioniert, sendet Heartbeats und Erkennungen</td></tr>
+          <tr><td style={tdStyle}><strong>Kurzes Aufblitzen</strong> (80ms)</td><td style={tdStyle}>Weiß</td><td style={tdStyle}>Drohne erkannt</td><td style={tdStyle}>Normale Aktivität — LED blitzt weiß bei jeder gesendeten Erkennung</td></tr>
+          <tr><td style={tdStyle}><strong>SOS-Muster</strong></td><td style={tdStyle}>Rot</td><td style={tdStyle}>Schwerer Fehler</td><td style={tdStyle}>ESP neustarten, ggf. Flash löschen und Firmware neu flashen</td></tr>
         </tbody>
       </table>
 
@@ -960,7 +974,8 @@ function SectionHardware() {
           </ul>
         </li>
         <li><strong>Automatische Wiederherstellung</strong> — Falls das WiFi ausfällt, startet der ESP nach 3 gescheiterten Versuchen (~30s)
-          den Hotspot erneut (LED: langsames Pulsieren). Sobald das Netzwerk wieder da ist, verbindet er sich automatisch und der Hotspot geht aus.</li>
+          den Hotspot erneut (LED: langsames Pulsieren). Sobald das Netzwerk wieder da ist, verbindet er sich automatisch und der Hotspot geht aus.
+          <br /><em>Hinweis: Während der Hotspot aktiv ist, pausiert der WiFi-Scanner (ODID-Erkennung). Dies ist eine Hardware-Einschränkung — der ESP kann nicht gleichzeitig als Access Point und im Promiscuous Mode scannen.</em></li>
         <li><strong>Online</strong> — LED leuchtet dauerhaft. Der Empfänger sendet Heartbeats (alle 30s) und Erkennungen (alle 2s).</li>
       </ol>
       <h3>Antenne anschließen (ESP32-S3 mit IPEX)</h3>
@@ -992,15 +1007,15 @@ function SectionHardware() {
       <h3>LED-Anzeige</h3>
       <table style={tableStyle}>
         <thead>
-          <tr><th style={thStyle}>Muster</th><th style={thStyle}>Bedeutung</th></tr>
+          <tr><th style={thStyle}>Muster</th><th style={thStyle}>Farbe (S3)</th><th style={thStyle}>Bedeutung</th></tr>
         </thead>
         <tbody>
-          <tr><td style={tdStyle}>Schnelles Blinken (100ms)</td><td style={tdStyle}>Boot — versucht sich mit WiFi zu verbinden</td></tr>
-          <tr><td style={tdStyle}>Langsames Pulsieren (300ms an, 1200ms aus)</td><td style={tdStyle}>Kein WLAN — Hotspot aktiv, wartet auf WiFi-Konfiguration über Captive Portal</td></tr>
-          <tr><td style={tdStyle}>Doppelblinken (2x 200ms, Pause)</td><td style={tdStyle}>WiFi verbunden, Backend nicht erreichbar</td></tr>
-          <tr><td style={tdStyle}>Dauerhaft an</td><td style={tdStyle}>Online — verbunden mit FlightArc Backend</td></tr>
-          <tr><td style={tdStyle}>Kurzes Aufblitzen (80ms)</td><td style={tdStyle}>Drohne erkannt!</td></tr>
-          <tr><td style={tdStyle}>SOS-Muster</td><td style={tdStyle}>Schwerer Fehler — ESP neustarten, ggf. Firmware neu flashen</td></tr>
+          <tr><td style={tdStyle}>Schnelles Blinken (100ms)</td><td style={tdStyle}>Blau</td><td style={tdStyle}>Boot — versucht sich mit WiFi zu verbinden</td></tr>
+          <tr><td style={tdStyle}>Langsames Pulsieren (300ms an, 1200ms aus)</td><td style={tdStyle}>Gelb</td><td style={tdStyle}>Kein WLAN — Hotspot aktiv, wartet auf WiFi-Konfiguration über Captive Portal</td></tr>
+          <tr><td style={tdStyle}>Doppelblinken (2x 200ms, Pause)</td><td style={tdStyle}>Orange</td><td style={tdStyle}>WiFi verbunden, Backend nicht erreichbar</td></tr>
+          <tr><td style={tdStyle}>Dauerhaft an</td><td style={tdStyle}>Grün</td><td style={tdStyle}>Online — verbunden mit FlightArc Backend</td></tr>
+          <tr><td style={tdStyle}>Kurzes Aufblitzen (80ms)</td><td style={tdStyle}>Weiß</td><td style={tdStyle}>Drohne erkannt!</td></tr>
+          <tr><td style={tdStyle}>SOS-Muster</td><td style={tdStyle}>Rot</td><td style={tdStyle}>Schwerer Fehler — ESP neustarten, ggf. Firmware neu flashen</td></tr>
         </tbody>
       </table>
       <h3>Problembehandlung</h3>
@@ -1010,12 +1025,13 @@ function SectionHardware() {
         </thead>
         <tbody>
           <tr><td style={tdStyle}>ESP wird nicht erkannt</td><td style={tdStyle}>Anderes USB-Kabel versuchen (Datenkabel!). ESP32-S3 hat native USB (kein Treiber nötig). ESP32-C3 und ESP8266 brauchen CH340 oder CP2102 Treiber. Unter Linux: <code>ls /dev/ttyUSB*</code> oder <code>ls /dev/ttyACM*</code> prüfen.</td></tr>
-          <tr><td style={tdStyle}>Kein WiFi-Hotspot</td><td style={tdStyle}>30 Sekunden warten — der Hotspot startet erst nach dem STA-Timeout. Falls danach kein Hotspot: Board resetten (EN/RST-Taste).</td></tr>
+          <tr><td style={tdStyle}>Kein WiFi-Hotspot</td><td style={tdStyle}>15 Sekunden warten — der Hotspot startet erst nach dem STA-Timeout (15s). Falls danach kein Hotspot: Board resetten (EN/RST-Taste).</td></tr>
           <tr><td style={tdStyle}>Empfänger bleibt „Offline"</td><td style={tdStyle}>Backend-URL prüfen. Firewall-Port 3020 offen? HTTP statt HTTPS bei ESP8266.</td></tr>
-          <tr><td style={tdStyle}>Doppelblinken (Fehler)</td><td style={tdStyle}>WiFi-Zugangsdaten falsch? Captive Portal prüfen. Backend erreichbar?</td></tr>
+          <tr><td style={tdStyle}>Doppelblinken (orange)</td><td style={tdStyle}>WiFi ist verbunden, aber Backend nicht erreichbar. Backend-URL, Firewall-Port (3020) und Netzwerkverbindung prüfen. Bei HTTPS: ESP8266 unterstützt nur HTTP.</td></tr>
           <tr><td style={tdStyle}>Keine Drohnen erkannt</td><td style={tdStyle}>Nur Drohnen mit aktivierter Remote ID (ODID) werden erkannt — EU-Pflicht seit 01.01.2024. DJI-Drohnen senden per WiFi NAN (ESP32 erforderlich). ESP8266 kann kein BLE und kein NAN. WiFi-Kanal prüfen: Empfänger lauscht auf dem Kanal des verbundenen WiFi-Netzwerks.</td></tr>
-          <tr><td style={tdStyle}>SHA-256 Boot-Loop</td><td style={tdStyle}>Flash komplett löschen: <code>esptool.py --chip esp32s3 erase_flash</code>, dann erneut flashen. Ursache: korrupter Flash oder falscher Flash-Modus (ESP32-S3 braucht DIO).</td></tr>
+          <tr><td style={tdStyle}>SHA-256 Boot-Loop</td><td style={tdStyle}>Flash komplett löschen: <code>esptool.py --chip esp32s3 erase_flash</code>, dann erneut flashen. Alternativ: <strong>Merged Binary</strong> verwenden (Full-Flash enthält Bootloader + Partitionen). Ursache: korrupter Flash, falscher Flash-Modus (ESP32-S3 braucht DIO) oder Web-Flasher ohne Bootloader.</td></tr>
           <tr><td style={tdStyle}>API-Key verloren</td><td style={tdStyle}>Unter Empfänger → Details → „API-Key regenerieren". Firmware neu flashen mit neuem Key.</td></tr>
+          <tr><td style={tdStyle}>OTA-Update schlägt fehl</td><td style={tdStyle}>Empfänger muss online sein (grüne LED). Nur ESP32-S3/C3 (nicht ESP8266). Prüfen ob Firmware gebaut wurde. Bei Netzwerkproblemen: Empfänger startet nach fehlgeschlagenem OTA mit alter Firmware weiter.</td></tr>
         </tbody>
       </table>
       <h3>Vergleich der Hardware-Typen</h3>
@@ -1030,6 +1046,9 @@ function SectionHardware() {
           <tr><td style={tdStyle}>Pilot-Position</td><td style={tdStyle}>Ja</td><td style={tdStyle}>Ja</td><td style={tdStyle}>Ja (WiFi only)</td></tr>
           <tr><td style={tdStyle}>Dual-Core</td><td style={tdStyle}>Ja (BLE+WiFi parallel)</td><td style={tdStyle}>Nein (Single Core)</td><td style={tdStyle}>Nein</td></tr>
           <tr><td style={tdStyle}>HTTPS</td><td style={tdStyle}>Ja</td><td style={tdStyle}>Ja</td><td style={tdStyle}>Nein</td></tr>
+          <tr><td style={tdStyle}>OTA-Update</td><td style={tdStyle}>Ja (Dual-Slot)</td><td style={tdStyle}>Ja (Dual-Slot)</td><td style={tdStyle}>Nein</td></tr>
+          <tr><td style={tdStyle}>Merged Binary</td><td style={tdStyle}>Ja</td><td style={tdStyle}>Ja</td><td style={tdStyle}>Nein</td></tr>
+          <tr><td style={tdStyle}>LED-Farben</td><td style={tdStyle}>RGB Neopixel (GPIO48)</td><td style={tdStyle}>Nur An/Aus (GPIO2)</td><td style={tdStyle}>Nur An/Aus (GPIO2)</td></tr>
           <tr><td style={tdStyle}>Flash-Modus</td><td style={tdStyle}>DIO</td><td style={tdStyle}>QIO</td><td style={tdStyle}>QIO</td></tr>
           <tr><td style={tdStyle}>Flash-Größe</td><td style={tdStyle}>8 MB</td><td style={tdStyle}>4 MB</td><td style={tdStyle}>4 MB</td></tr>
           <tr><td style={tdStyle}>Partition</td><td style={tdStyle}>8MB (2x 3.2MB OTA)</td><td style={tdStyle}>4MB (2x 1.3MB OTA)</td><td style={tdStyle}>Standard</td></tr>
@@ -1141,6 +1160,121 @@ function SectionHardware() {
         Alle Links führen zu Amazon.de (Stand März 2026). Preise können variieren.
         Die Einkaufslisten mit direkten Links werden auch beim Erstellen eines Empfängers in der Admin-Oberfläche angezeigt.
       </p>
+    </div>
+  );
+}
+
+function SectionOta() {
+  return (
+    <div>
+      <h2>OTA-Updates & Merged Binary</h2>
+      <p>
+        Ab Firmware v1.5 unterstützt FlightArc <strong>Over-the-Air (OTA) Updates</strong> und
+        ein <strong>Merged Binary</strong> für problemloses Flashen mit Web-Flashern.
+      </p>
+
+      <h3>OTA-Updates (Over-the-Air)</h3>
+      <p>
+        Mit OTA kannst du die Firmware eines Empfängers drahtlos aktualisieren, ohne das Board
+        physisch per USB anschließen zu müssen. Nur das <strong>erste</strong> Flashen muss per USB erfolgen —
+        alle weiteren Updates können per OTA übertragen werden.
+      </p>
+      <h4>Voraussetzungen</h4>
+      <ul>
+        <li><strong>Nur ESP32-S3 und ESP32-C3</strong> — ESP8266 unterstützt kein OTA</li>
+        <li>Der Empfänger muss <strong>online</strong> sein (grüne LED, Heartbeat aktiv)</li>
+        <li>Eine aktuelle Firmware muss <strong>bereits gebaut</strong> sein (Build über Flash-Wizard)</li>
+      </ul>
+      <h4>OTA-Update auslösen</h4>
+      <ol>
+        <li>Gehe zu <strong>Administration → Empfänger</strong></li>
+        <li>Klappe den gewünschten Empfänger auf (Klick auf die Zeile)</li>
+        <li>Klicke auf <strong>„OTA Update senden"</strong></li>
+        <li>Der Status wechselt zu <strong>„OTA ausstehend..."</strong></li>
+        <li>Beim nächsten Heartbeat (alle 30 Sekunden) erhält der ESP das Update-Signal</li>
+        <li>Der ESP lädt die neue Firmware herunter, schreibt sie in den inaktiven OTA-Slot und startet neu</li>
+        <li>Nach dem Neustart sendet der ESP die neue Firmware-Version im Heartbeat — das Backend erkennt das Update als erfolgreich und setzt das OTA-Flag zurück</li>
+      </ol>
+      <InfoBox type="info">
+        <strong>Sicherheit:</strong> OTA nutzt eine Dual-Slot Partition (app0/app1). Die neue Firmware wird in den
+        inaktiven Slot geschrieben. Bei einem Fehler bleibt die alte Firmware im aktiven Slot erhalten — es gibt
+        kein Brick-Risiko. Falls das Update fehlschlägt, läuft der Empfänger einfach mit der alten Version weiter.
+      </InfoBox>
+      <h4>OTA abbrechen</h4>
+      <p>
+        Solange der Empfänger das Update noch nicht heruntergeladen hat, kannst du auf <strong>„OTA ausstehend... (Abbrechen)"</strong> klicken,
+        um das ausstehende Update zu widerrufen.
+      </p>
+      <h4>OTA-Status</h4>
+      <p>
+        Nach einem OTA-Versuch zeigt die Empfänger-Detailansicht den Ergebnis-Status:
+      </p>
+      <ul>
+        <li><span style={{ color: '#22c55e' }}>●</span> <strong>OTA: Erfolgreich</strong> — Firmware-Version stimmt mit Build-Version überein</li>
+        <li><span style={{ color: '#ef4444' }}>●</span> <strong>OTA: Fehler</strong> — Download oder Flash fehlgeschlagen, Empfänger läuft weiter mit alter Version</li>
+      </ul>
+
+      <h3>Build-Versionierung</h3>
+      <p>
+        Jeder Firmware-Build erhält eine eindeutige Version im Format <code>1.0.XXXXX</code> (mit Timestamp-Suffix).
+        Diese Version wird:
+      </p>
+      <ul>
+        <li>In der <strong>Empfänger-Detailansicht</strong> unter „Firmware" angezeigt</li>
+        <li>Im <strong>Heartbeat</strong> vom ESP an das Backend gemeldet</li>
+        <li>Für die <strong>OTA-Erkennung</strong> verwendet: Wenn die gemeldete Firmware-Version mit der Build-Version übereinstimmt, gilt das Update als erfolgreich</li>
+      </ul>
+
+      <h3>Merged Binary (Full-Flash)</h3>
+      <p>
+        Ein Merged Binary kombiniert <strong>Bootloader + Partitionstabelle + boot_app0 + Firmware</strong> in einer
+        einzigen Datei. Es wird nach jedem erfolgreichen Build automatisch erzeugt.
+      </p>
+      <h4>Wann verwenden?</h4>
+      <ul>
+        <li><strong>Web-Flasher</strong> (z.B. web.esphome.io) — diese flashen nur eine Datei an Offset 0x0. Ohne Merged Binary fehlen Bootloader und Partitionstabelle, was zu einem <strong>SHA-256 Boot-Loop</strong> führt.</li>
+        <li><strong>Erstmaliges Flashen</strong> eines neuen ESP — das Merged Binary stellt sicher, dass alle Partitionen korrekt beschrieben werden.</li>
+        <li><strong>Nach einem <code>erase_flash</code></strong> — wenn der gesamte Flash gelöscht wurde.</li>
+      </ul>
+      <h4>Download</h4>
+      <ol>
+        <li>Gehe zu <strong>Administration → Empfänger</strong></li>
+        <li>Klappe den Empfänger auf und klicke auf <strong>„Full-Flash (Merged)"</strong></li>
+        <li>Die Datei hat das Format <code>flightarc-esp32-s3-XXXX-merged.bin</code></li>
+      </ol>
+      <h4>Flashen mit esptool</h4>
+      <div style={codeBlockStyle}>
+        <code>
+          # Merged Binary flashen (alles in einer Datei, Offset 0x0){'\n'}
+          esptool.py --chip esp32s3 write_flash 0x0 flightarc-esp32-s3-XXXX-merged.bin
+        </code>
+      </div>
+      <h4>Flashen mit Web-Flasher</h4>
+      <p>
+        Öffne <a href="https://web.esphome.io" target="_blank" rel="noopener" style={{ color: '#14b8a6' }}>web.esphome.io</a> →
+        „Install" → Wähle die <strong>Merged</strong>-Datei → Flash. Da Bootloader und Partitionen enthalten sind,
+        funktioniert das Flashen fehlerfrei.
+      </p>
+      <InfoBox type="warning">
+        <strong>Nur für ESP32</strong> — Merged Binary wird nur für ESP32-S3 und ESP32-C3 erzeugt, nicht für ESP8266.
+      </InfoBox>
+      <InfoBox type="warning">
+        <strong>NVS wird gelöscht:</strong> Das Merged Binary überschreibt den gesamten Flash inklusive NVS (Non-Volatile Storage).
+        WiFi-Zugangsdaten, die über das Captive Portal gespeichert wurden, gehen verloren. WiFi-Daten, die beim Build eingebettet
+        wurden (über den Flash-Wizard), sind davon nicht betroffen.
+      </InfoBox>
+
+      <h3>Vergleich: App-Firmware vs. Merged Binary vs. OTA</h3>
+      <table style={tableStyle}>
+        <thead>
+          <tr><th style={thStyle}>Methode</th><th style={thStyle}>Wann</th><th style={thStyle}>Vorteile</th><th style={thStyle}>Einschränkungen</th></tr>
+        </thead>
+        <tbody>
+          <tr><td style={tdStyle}><strong>App-Firmware (.bin)</strong></td><td style={tdStyle}>Normales USB-Flashen mit esptool</td><td style={tdStyle}>Schnell, bewahrt NVS/WiFi-Einstellungen</td><td style={tdStyle}>Funktioniert nicht mit Web-Flashern</td></tr>
+          <tr><td style={tdStyle}><strong>Merged Binary</strong></td><td style={tdStyle}>Erstmaliges Flashen, Web-Flasher, nach erase_flash</td><td style={tdStyle}>Alles in einer Datei, kein SHA-256 Boot-Loop</td><td style={tdStyle}>Löscht NVS (WiFi-Einstellungen). Nur ESP32.</td></tr>
+          <tr><td style={tdStyle}><strong>OTA</strong></td><td style={tdStyle}>Folge-Updates ohne USB-Zugang</td><td style={tdStyle}>Drahtlos, kein physischer Zugang nötig, sicher (Dual-Slot)</td><td style={tdStyle}>Nur ESP32-S3/C3. Empfänger muss online sein.</td></tr>
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -1259,6 +1393,7 @@ const SECTION_CONTENT: Record<Section, () => JSX.Element> = {
   receivers: SectionReceivers,
   simulation: SectionSimulation,
   hardware: SectionHardware,
+  ota: SectionOta,
   tips: SectionTips,
 };
 
@@ -1337,7 +1472,7 @@ export default function HelpPage() {
           padding: 12, borderTop: '1px solid var(--border)',
           fontSize: 11, color: 'var(--text-muted)', textAlign: 'center',
         }}>
-          FlightArc v1.4 — Benutzerhandbuch
+          FlightArc v1.5 — Benutzerhandbuch
         </div>
       </nav>
 

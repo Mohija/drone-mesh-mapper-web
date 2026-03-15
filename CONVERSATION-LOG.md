@@ -17,6 +17,21 @@
 
 ## Änderungshistorie
 
+### 2026-03-15 - Benutzerhandbuch: OTA, Merged Binary, LED-Farben, Versionierung
+- **Neue Sektion "OTA-Updates & Merged Binary"** im Benutzerhandbuch (HelpPage.tsx):
+  - OTA-Updates: Voraussetzungen, Ablauf (Trigger → Heartbeat → Download → Reboot → Auto-Detect), Abbrechen, Status-Anzeige
+  - Merged Binary: Wann verwenden, Download, Flash-Befehl, NVS-Hinweis
+  - Build-Versionierung: Format 1.0.XXXXX, Heartbeat-Vergleich, OTA-Erkennung
+  - Vergleichstabelle: App-Firmware vs. Merged Binary vs. OTA
+- **Version v1.4 → v1.5** in allen Referenzen aktualisiert (SVG-Diagramme, Texte, Footer)
+- **LED-Tabellen** um Farbspalte erweitert (Blau, Gelb, Orange, Grün, Weiß, Rot für ESP32-S3 Neopixel)
+- **LED-Hinweisbox** ergänzt: ESP32-S3 = RGB Neopixel GPIO48, ESP32-C3/ESP8266 = GPIO2 an/aus
+- **Hardware-Vergleichstabelle** um OTA-Update, Merged Binary und LED-Farben erweitert
+- **Empfänger-Tabelle** um OTA-Update, Full-Flash (Merged) und Firmware-Versionierung ergänzt
+- **Troubleshooting** aktualisiert: SHA-256 Boot-Loop → Merged Binary Hinweis, neuer OTA-Fehler Eintrag, Hotspot-Timeout 15s (statt 30s), Doppelblinken-Beschreibung präzisiert
+- **WiFi-Scanner Pause**: Hinweis in Erstinbetriebnahme, dass ODID-Scanner während AP-Modus pausiert (Hardware-Limitation)
+- **Dateien:** `frontend/src/components/HelpPage.tsx`, `frontend/dist/`
+
 ### 2026-03-15 - v1.5.4: Merged Binary + OTA Updates
 
 **Merged Binary (Full-Flash)**
