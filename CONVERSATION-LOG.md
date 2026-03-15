@@ -17,6 +17,13 @@
 
 ## Änderungshistorie
 
+### 2026-03-15 - Benutzerhandbuch aktualisiert (Captive Portal, Standort setzen, Simulation, LED)
+- Hardware-Inbetriebnahme: Captive Portal zeigt nun gecachte Netzwerkliste (vor Hotspot-Start gescannt), manuelle SSID-Eingabe, Hinweis auf Standort-Setzen über Web-App statt GPS im Portal
+- Empfänger-Verwaltung: Neue Sektion "Standort setzen" dokumentiert (Browser Geolocation API, Handy-GPS)
+- Simulation: Alle 8 Flugmuster dokumentiert (linear, circular, waypoint, search_pattern, hover, figure_eight, spiral, random_walk)
+- LED-Anzeige: Zweite LED-Tabelle an tatsächliche Firmware-Zustände angepasst (langsames Pulsieren, Doppelblinken, SOS)
+- **Dateien:** `frontend/src/components/HelpPage.tsx`, `frontend/dist/`
+
 ### 2026-03-15 - v1.5.3: Firmware v1.0.8, Simulation-Tab, Standort über Web-App
 
 **Firmware v1.0.8: Vollständig getesteter Hardware-Betrieb (ESP32-S3 DevKitC)**

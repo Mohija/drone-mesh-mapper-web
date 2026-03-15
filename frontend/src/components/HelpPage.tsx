@@ -689,6 +689,22 @@ function SectionReceivers() {
         <li><strong>„Löschen"</strong> — Entfernt den Empfänger dauerhaft inkl. gespeicherter Firmware</li>
       </ul>
 
+      <h3>Standort setzen</h3>
+      <p>
+        In der Detail-Ansicht eines Empfängers findest du den Button <strong>„Standort setzen"</strong>.
+        Damit kannst du die GPS-Position des Empfängers direkt über dein Smartphone oder Laptop festlegen:
+      </p>
+      <ol>
+        <li>Klappe den gewünschten Empfänger in der Tabelle auf</li>
+        <li>Klicke auf <strong>„Standort setzen"</strong></li>
+        <li>Dein Browser fragt nach der Berechtigung für den Standortzugriff — erlaube den Zugriff</li>
+        <li>Die GPS-Koordinaten und die Genauigkeit werden vom Browser (Geolocation API) ermittelt und am Empfänger gespeichert</li>
+      </ol>
+      <InfoBox type="info">
+        Am besten setzt du den Standort direkt vor Ort am Aufstellungsort des Empfängers mit deinem Smartphone.
+        Die Genauigkeit hängt vom GPS deines Geräts ab und wird in Metern angezeigt.
+      </InfoBox>
+
       <h3>Connection Log (Kommunikationsprotokoll)</h3>
       <p>
         Das Connection Log zeichnet alle Kommunikation zwischen den Hardware-Empfängern und dem Backend auf.
@@ -755,7 +771,18 @@ function SectionSimulation() {
       <h3>Funktionsweise</h3>
       <ul>
         <li>Jeder Simulator erzeugt einen echten Empfänger-Eintrag (mit [SIM]-Prefix) in der Datenbank</li>
-        <li>Drohnen fliegen in realistischen Kreisbahnen mit variierender Höhe und Geschwindigkeit</li>
+        <li>Drohnen fliegen in realistischen Flugmustern mit variierender Höhe und Geschwindigkeit:
+          <ul>
+            <li><strong>Linear</strong> — Geradliniger Flug in eine Richtung</li>
+            <li><strong>Circular</strong> — Kreisbahn um einen Mittelpunkt</li>
+            <li><strong>Waypoint</strong> — Flug entlang vorgegebener Wegpunkte</li>
+            <li><strong>Search Pattern</strong> — Systematisches Rasterflugmuster</li>
+            <li><strong>Hover</strong> — Schwebeflug an einer festen Position</li>
+            <li><strong>Figure Eight</strong> — Flug in Form einer Acht</li>
+            <li><strong>Spiral</strong> — Spiralförmiger Flug</li>
+            <li><strong>Random Walk</strong> — Zufällige Richtungswechsel</li>
+          </ul>
+        </li>
         <li>Detections werden alle <strong>2 Sekunden</strong> gesendet (wie bei echten Empfängern)</li>
         <li>Heartbeats alle <strong>30 Sekunden</strong> mit simulierten Systemwerten (WiFi, Heap, Uptime)</li>
         <li>Verschiedene Drohnenmodelle (DJI, Autel, Skydio, etc.) mit unterschiedlichen Quellen (WiFi/BLE)</li>
@@ -969,11 +996,11 @@ function SectionHardware() {
         </thead>
         <tbody>
           <tr><td style={tdStyle}>Schnelles Blinken (100ms)</td><td style={tdStyle}>Boot — versucht sich mit WiFi zu verbinden</td></tr>
-          <tr><td style={tdStyle}>Dreifach-Blinken (alle 2s)</td><td style={tdStyle}>Hotspot aktiv — wartet auf WiFi-Konfiguration über Captive Portal</td></tr>
-          <tr><td style={tdStyle}>Langsames Blinken (500ms)</td><td style={tdStyle}>WiFi verbunden, warte auf Backend</td></tr>
+          <tr><td style={tdStyle}>Langsames Pulsieren (300ms an, 1200ms aus)</td><td style={tdStyle}>Kein WLAN — Hotspot aktiv, wartet auf WiFi-Konfiguration über Captive Portal</td></tr>
+          <tr><td style={tdStyle}>Doppelblinken (2x 200ms, Pause)</td><td style={tdStyle}>WiFi verbunden, Backend nicht erreichbar</td></tr>
           <tr><td style={tdStyle}>Dauerhaft an</td><td style={tdStyle}>Online — verbunden mit FlightArc Backend</td></tr>
-          <tr><td style={tdStyle}>Kurzes Aufblitzen</td><td style={tdStyle}>Drohne erkannt!</td></tr>
-          <tr><td style={tdStyle}>Doppelblinken</td><td style={tdStyle}>Fehler (kein WiFi oder Backend nicht erreichbar)</td></tr>
+          <tr><td style={tdStyle}>Kurzes Aufblitzen (80ms)</td><td style={tdStyle}>Drohne erkannt!</td></tr>
+          <tr><td style={tdStyle}>SOS-Muster</td><td style={tdStyle}>Schwerer Fehler — ESP neustarten, ggf. Firmware neu flashen</td></tr>
         </tbody>
       </table>
       <h3>Problembehandlung</h3>
