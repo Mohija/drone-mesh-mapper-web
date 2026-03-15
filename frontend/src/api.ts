@@ -505,6 +505,34 @@ export async function updateViolationComments(recordId: string, comments: string
   if (!res.ok) throw new Error(`API error: ${res.status}`);
 }
 
+// ─── Mission Zone Defaults API ────────────────────────────
+
+export interface MissionZoneDefaults {
+  radius: number;
+  color: string;
+  min_alt_agl: number | null;
+  max_alt_agl: number | null;
+}
+
+export async function fetchMissionZoneDefaults(): Promise<MissionZoneDefaults> {
+  const res = await authFetch(`${API_BASE}/settings/mission-zone-defaults`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function updateMissionZoneDefaults(data: Partial<MissionZoneDefaults>): Promise<MissionZoneDefaults> {
+  const res = await authFetch(`${API_BASE}/settings/mission-zone-defaults`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Fehler' }));
+    throw new Error(err.error || `API error: ${res.status}`);
+  }
+  return res.json();
+}
+
 // ─── Reverse Geocoding (Nominatim) ────────────────────────
 
 const _geocodeCache = new Map<string, string>();

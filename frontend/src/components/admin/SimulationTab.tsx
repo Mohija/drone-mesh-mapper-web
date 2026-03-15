@@ -4,6 +4,7 @@ import {
   startSimulator, stopSimulator, stopAllSimulators,
   type SimulatorInstance,
 } from '../../api';
+import AdminTooltip from './AdminTooltip';
 
 const HARDWARE_TYPES = [
   { value: 'esp32-s3', label: 'ESP32-S3 (empfohlen)', badge: 'WiFi + BLE' },
@@ -129,29 +130,39 @@ export default function SimulationTab() {
         <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Simulation</h1>
         <div style={{ flex: 1 }} />
         {runningCount > 0 && (
+          <AdminTooltip
+            brief="Alle laufenden Simulatoren stoppen"
+            detail={"Stoppt alle derzeit aktiven Simulatoren auf einmal.\nDie simulierten Empfänger und Drohnen verschwinden nach kurzer Zeit von der Karte (sobald der Status auf \"offline\" wechselt).\nDie Simulator-Einträge bleiben erhalten und können jederzeit wieder gestartet werden."}
+          >
+            <button
+              onClick={handleStopAll}
+              data-testid="stop-all-btn"
+              style={{
+                padding: '8px 14px', borderRadius: 8, border: '1px solid #ef4444',
+                background: 'rgba(239,68,68,0.15)', color: '#ef4444',
+                cursor: 'pointer', fontSize: 13, fontWeight: 600,
+              }}
+            >
+              Alle stoppen ({runningCount})
+            </button>
+          </AdminTooltip>
+        )}
+        <AdminTooltip
+          brief="Neuen Drohnen-Simulator erstellen"
+          detail={"Erstellt einen virtuellen Empfänger der simulierte Drohnen-Erkennungen generiert.\nPerfekt zum Testen der Karte, Zonen und Alarme ohne echte Hardware.\n\nKonfigurierbar:\n- Name: Frei wählbar\n- Drohnenanzahl: 1-50 simulierte Drohnen\n- Position: Breitengrad/Längengrad (Zentrum der Simulation)\n- Hardware-Typ: Simuliert ESP32-S3, C3 oder ESP8266\n\nDer Simulator wird automatisch gestartet und die Drohnen erscheinen auf der Karte wenn die Quelle \"Empfänger\" aktiv ist."}
+        >
           <button
-            onClick={handleStopAll}
-            data-testid="stop-all-btn"
+            onClick={() => setShowCreate(!showCreate)}
+            data-testid="create-sim-btn"
             style={{
-              padding: '8px 14px', borderRadius: 8, border: '1px solid #ef4444',
-              background: 'rgba(239,68,68,0.15)', color: '#ef4444',
+              padding: '8px 14px', borderRadius: 8, border: 'none',
+              background: 'var(--accent)', color: '#fff',
               cursor: 'pointer', fontSize: 13, fontWeight: 600,
             }}
           >
-            Alle stoppen ({runningCount})
+            + Neuer Simulator
           </button>
-        )}
-        <button
-          onClick={() => setShowCreate(!showCreate)}
-          data-testid="create-sim-btn"
-          style={{
-            padding: '8px 14px', borderRadius: 8, border: 'none',
-            background: 'var(--accent)', color: '#fff',
-            cursor: 'pointer', fontSize: 13, fontWeight: 600,
-          }}
-        >
-          + Neuer Simulator
-        </button>
+        </AdminTooltip>
       </div>
 
       {/* Stats */}
@@ -384,41 +395,56 @@ function SimulatorCard({ sim, onStart, onStop, onDelete }: {
       {/* Actions */}
       <div style={{ display: 'flex', gap: 8 }}>
         {isRunning ? (
-          <button
-            onClick={() => onStop(sim.id)}
-            data-testid={`sim-stop-${sim.id}`}
-            style={{
-              ...actionBtnStyle,
-              background: 'rgba(239,68,68,0.1)', color: '#ef4444',
-              border: '1px solid rgba(239,68,68,0.3)',
-            }}
+          <AdminTooltip
+            brief="Simulator stoppen"
+            detail={"Stoppt diesen Simulator. Die simulierten Drohnen verschwinden nach kurzer Zeit von der Karte.\nDer Simulator-Eintrag und sein zugehöriger Empfänger bleiben in der Datenbank erhalten.\nKann jederzeit wieder gestartet werden."}
           >
-            Stoppen
-          </button>
+            <button
+              onClick={() => onStop(sim.id)}
+              data-testid={`sim-stop-${sim.id}`}
+              style={{
+                ...actionBtnStyle,
+                background: 'rgba(239,68,68,0.1)', color: '#ef4444',
+                border: '1px solid rgba(239,68,68,0.3)',
+              }}
+            >
+              Stoppen
+            </button>
+          </AdminTooltip>
         ) : (
+          <AdminTooltip
+            brief="Simulator starten"
+            detail={"Startet diesen Simulator. Er beginnt sofort, simulierte Drohnen-Erkennungen an den Server zu senden.\nDie Drohnen erscheinen auf der Karte und bewegen sich realistisch im konfigurierten Bereich.\nDer simulierte Empfänger verhält sich exakt wie echte Hardware (Heartbeats, Ingest-Meldungen)."}
+          >
+            <button
+              onClick={() => onStart(sim.id)}
+              data-testid={`sim-start-${sim.id}`}
+              style={{
+                ...actionBtnStyle,
+                background: 'rgba(34,197,94,0.1)', color: '#22c55e',
+                border: '1px solid rgba(34,197,94,0.3)',
+              }}
+            >
+              Starten
+            </button>
+          </AdminTooltip>
+        )}
+        <AdminTooltip
+          brief="Simulator und Empfänger löschen"
+          detail={"Löscht diesen Simulator und den zugehörigen Empfänger-Eintrag ([SIM]) aus der Datenbank.\nLaufende Simulatoren werden vorher automatisch gestoppt.\nDiese Aktion kann nicht rückgängig gemacht werden."}
+        >
           <button
-            onClick={() => onStart(sim.id)}
-            data-testid={`sim-start-${sim.id}`}
+            onClick={() => onDelete(sim.id)}
+            data-testid={`sim-delete-${sim.id}`}
             style={{
               ...actionBtnStyle,
-              background: 'rgba(34,197,94,0.1)', color: '#22c55e',
-              border: '1px solid rgba(34,197,94,0.3)',
+              background: 'var(--bg-tertiary)', color: 'var(--text-muted)',
+              border: '1px solid var(--border)',
             }}
           >
-            Starten
+            Löschen
           </button>
-        )}
-        <button
-          onClick={() => onDelete(sim.id)}
-          data-testid={`sim-delete-${sim.id}`}
-          style={{
-            ...actionBtnStyle,
-            background: 'var(--bg-tertiary)', color: 'var(--text-muted)',
-            border: '1px solid var(--border)',
-          }}
-        >
-          Löschen
-        </button>
+        </AdminTooltip>
       </div>
     </div>
   );

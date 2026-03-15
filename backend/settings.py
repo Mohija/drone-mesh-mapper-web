@@ -11,6 +11,13 @@ from flask import has_app_context
 
 logger = logging.getLogger("settings")
 
+MISSION_ZONE_DEFAULTS = {
+    "radius": 100,
+    "color": "#f97316",
+    "minAltitudeAGL": None,
+    "maxAltitudeAGL": None,
+}
+
 DEFAULT_SOURCES = {
     "simulator": {
         "enabled": True,
@@ -98,6 +105,10 @@ class SettingsManager:
                 "center_lat": ts.center_lat,
                 "center_lon": ts.center_lon,
                 "radius": ts.radius,
+                "mission_zone_radius": ts.mission_zone_radius,
+                "mission_zone_color": ts.mission_zone_color,
+                "mission_zone_min_alt_agl": ts.mission_zone_min_alt_agl,
+                "mission_zone_max_alt_agl": ts.mission_zone_max_alt_agl,
             }
         return {"sources": _deep_copy(DEFAULT_SOURCES)}
 
@@ -182,4 +193,22 @@ class SettingsManager:
                 ts.center_lon = updates["center_lon"]
             if "radius" in updates:
                 ts.radius = updates["radius"]
+            if "mission_zone_radius" in updates:
+                ts.mission_zone_radius = updates["mission_zone_radius"]
+            if "mission_zone_color" in updates:
+                ts.mission_zone_color = updates["mission_zone_color"]
+            if "mission_zone_min_alt_agl" in updates:
+                ts.mission_zone_min_alt_agl = updates["mission_zone_min_alt_agl"]
+            if "mission_zone_max_alt_agl" in updates:
+                ts.mission_zone_max_alt_agl = updates["mission_zone_max_alt_agl"]
             db.session.commit()
+
+    def get_mission_zone_defaults(self, tenant_id=None) -> dict:
+        """Return mission zone defaults for a tenant, falling back to global defaults."""
+        all_settings = self.get_all(tenant_id=tenant_id)
+        return {
+            "radius": all_settings.get("mission_zone_radius") or MISSION_ZONE_DEFAULTS["radius"],
+            "color": all_settings.get("mission_zone_color") or MISSION_ZONE_DEFAULTS["color"],
+            "minAltitudeAGL": all_settings.get("mission_zone_min_alt_agl") if all_settings.get("mission_zone_min_alt_agl") is not None else MISSION_ZONE_DEFAULTS["minAltitudeAGL"],
+            "maxAltitudeAGL": all_settings.get("mission_zone_max_alt_agl") if all_settings.get("mission_zone_max_alt_agl") is not None else MISSION_ZONE_DEFAULTS["maxAltitudeAGL"],
+        }

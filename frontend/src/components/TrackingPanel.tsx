@@ -36,7 +36,7 @@ export default function TrackingPanel({
   const hasContent = flights.length > 0 || archives.length > 0;
 
   return (
-    <div style={{
+    <div data-testid="tracking-panel" style={{
       position: 'absolute',
       top: '100%',
       right: 0,

@@ -365,9 +365,11 @@ export default function ReceiverFlashWizard({ node, onClose, regenerateKey = fal
         background: 'var(--bg-secondary)',
         border: '1px solid var(--border)',
         borderRadius: 12,
-        width: 580,
+        width: '100%',
+        maxWidth: 580,
         maxHeight: '90vh',
         overflow: 'auto',
+        margin: '0 12px',
         padding: 24,
       }}>
         {/* Header */}

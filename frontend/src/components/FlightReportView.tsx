@@ -12,6 +12,7 @@ import {
   getLayersByCategory,
   type NoFlyCategory,
 } from '../config/noFlyZones';
+import { useIsMobile } from '../useIsMobile';
 
 const TILE_URLS: Record<string, string> = {
   dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
@@ -50,6 +51,7 @@ export default function FlightReportView() {
   const { recordId } = useParams<{ recordId: string }>();
   const navigate = useNavigate();
   const { theme } = useTheme();
+  const isMobile = useIsMobile();
   const [data, setData] = useState<ViolationDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [comments, setComments] = useState('');
@@ -520,20 +522,22 @@ ${comments.trim() ? `<h2>Kommentare</h2><div class="comments">${comments.replace
       {/* Top bar */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '10px 20px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)',
-        flexShrink: 0,
+        padding: isMobile ? '8px 12px' : '10px 20px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)',
+        flexShrink: 0, flexWrap: 'wrap', gap: isMobile ? 6 : 0,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 12, flexWrap: 'wrap' }}>
           <button onClick={() => navigate(-1)} style={{
             background: 'none', border: '1px solid var(--border)', color: 'var(--text-secondary)',
-            padding: '4px 12px', borderRadius: 4, cursor: 'pointer', fontSize: 13,
+            padding: '4px 12px', borderRadius: 4, cursor: 'pointer', fontSize: 13, minHeight: isMobile ? 44 : undefined,
           }}>&#8592; Zurück</button>
           <span style={{ fontWeight: 600, fontSize: 15 }}>Flugbericht</span>
           {data && (
             <>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                {data.droneName} | {data.zoneName} | {formatDate(data.startTime)}
-              </span>
+              {!isMobile && (
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  {data.droneName} | {data.zoneName} | {formatDate(data.startTime)}
+                </span>
+              )}
               <span style={{
                 fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
                 background: data.endTime ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
@@ -548,6 +552,7 @@ ${comments.trim() ? `<h2>Kommentare</h2><div class="comments">${comments.replace
           <button onClick={generateReport} style={{
             background: 'var(--accent)', color: '#fff', border: 'none',
             padding: '6px 16px', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600,
+            minHeight: isMobile ? 44 : undefined,
           }}>
             &#128196; Bericht erstellen
           </button>
@@ -555,9 +560,9 @@ ${comments.trim() ? `<h2>Kommentare</h2><div class="comments">${comments.replace
       </div>
 
       {/* Main area: Map + Right panel */}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
+      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', flex: 1, overflow: isMobile ? 'auto' : 'hidden', position: 'relative' }}>
         {/* Map area */}
-        <div style={{ flex: 1, position: 'relative' }}>
+        <div style={{ flex: isMobile ? 'none' : 1, height: isMobile ? '50vh' : undefined, position: 'relative' }}>
           <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }} />
 
           {/* Loading overlay */}
@@ -574,10 +579,11 @@ ${comments.trim() ? `<h2>Kommentare</h2><div class="comments">${comments.replace
           {/* Stats overlay — offset right to avoid zoom controls */}
           {showStats && stats && data && (
             <div style={{
-              position: 'absolute', top: 12, left: 60, zIndex: 1000,
+              position: 'absolute', top: 12, left: isMobile ? 12 : 60, zIndex: 1000,
               background: 'var(--bg-secondary)', border: '1px solid var(--border)',
-              borderRadius: 8, padding: '10px 14px', fontSize: 12,
-              display: 'flex', gap: 16, opacity: 0.95,
+              borderRadius: 8, padding: isMobile ? '8px 10px' : '10px 14px', fontSize: isMobile ? 11 : 12,
+              display: 'flex', gap: isMobile ? 8 : 16, opacity: 0.95,
+              flexWrap: 'wrap', maxWidth: isMobile ? 'calc(100% - 24px)' : undefined,
             }}>
               <div><span style={{ color: 'var(--text-muted)' }}>Höhe:</span> {stats.minAlt.toFixed(0)}-{stats.maxAlt.toFixed(0)}m</div>
               <div><span style={{ color: 'var(--text-muted)' }}>Speed:</span> avg {stats.avgSpeed.toFixed(1)} m/s</div>
@@ -587,7 +593,7 @@ ${comments.trim() ? `<h2>Kommentare</h2><div class="comments">${comments.replace
           )}
 
           {/* Drone + Pilot info overlay (bottom left) */}
-          {data && currentPoint && (
+          {data && currentPoint && !isMobile && (
             <div style={{
               position: 'absolute', bottom: 12, left: 12, zIndex: 1000,
               background: 'var(--bg-secondary)', border: '1px solid var(--border)',
@@ -763,8 +769,10 @@ ${comments.trim() ? `<h2>Kommentare</h2><div class="comments">${comments.replace
 
         {/* Right panel: Current point + Measurements + Comments */}
         <div style={{
-          width: 380, flexShrink: 0, display: 'flex', flexDirection: 'column',
-          borderLeft: '1px solid var(--border)', background: 'var(--bg-secondary)',
+          width: isMobile ? '100%' : 380, flexShrink: 0, display: 'flex', flexDirection: 'column',
+          borderLeft: isMobile ? 'none' : '1px solid var(--border)',
+          borderTop: isMobile ? '1px solid var(--border)' : 'none',
+          background: 'var(--bg-secondary)',
         }}>
           {/* Current point info */}
           {currentPoint && (
@@ -784,7 +792,7 @@ ${comments.trim() ? `<h2>Kommentare</h2><div class="comments">${comments.replace
           )}
 
           {/* Measurement list */}
-          <div style={{ flex: 1, overflow: 'auto' }}>
+          <div style={{ flex: isMobile ? 'none' : 1, overflow: 'auto', overflowX: 'auto', maxHeight: isMobile ? 300 : undefined }}>
             {!data ? (
               <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>
                 Lade Daten...
@@ -855,8 +863,8 @@ ${comments.trim() ? `<h2>Kommentare</h2><div class="comments">${comments.replace
 
       {/* Timeline bar */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 12,
-        padding: '10px 20px', background: 'var(--bg-secondary)',
+        display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 12,
+        padding: isMobile ? '10px 12px' : '10px 20px', background: 'var(--bg-secondary)',
         borderTop: '1px solid var(--border)', flexShrink: 0,
       }}>
         {/* Play/Pause */}
@@ -868,18 +876,20 @@ ${comments.trim() ? `<h2>Kommentare</h2><div class="comments">${comments.replace
           disabled={totalPoints < 2}
           style={{
             background: 'var(--accent)', color: '#fff', border: 'none',
-            width: 36, height: 36, borderRadius: '50%', cursor: totalPoints < 2 ? 'default' : 'pointer',
+            width: isMobile ? 44 : 36, height: isMobile ? 44 : 36, borderRadius: '50%', cursor: totalPoints < 2 ? 'default' : 'pointer',
             fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            opacity: totalPoints < 2 ? 0.4 : 1,
+            opacity: totalPoints < 2 ? 0.4 : 1, flexShrink: 0,
           }}
         >
           {playing ? '\u23F8' : '\u25B6'}
         </button>
 
         {/* Time labels */}
-        <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-muted)', minWidth: 60 }}>
-          {currentPoint ? formatTime(currentPoint.ts) : '--:--:--'}
-        </span>
+        {!isMobile && (
+          <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-muted)', minWidth: 60 }}>
+            {currentPoint ? formatTime(currentPoint.ts) : '--:--:--'}
+          </span>
+        )}
 
         {/* Slider */}
         <input
@@ -891,9 +901,11 @@ ${comments.trim() ? `<h2>Kommentare</h2><div class="comments">${comments.replace
           style={{ flex: 1, cursor: 'pointer' }}
         />
 
-        <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-muted)', minWidth: 60 }}>
-          {endTime ? formatTime(endTime) : '--:--:--'}
-        </span>
+        {!isMobile && (
+          <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-muted)', minWidth: 60 }}>
+            {endTime ? formatTime(endTime) : '--:--:--'}
+          </span>
+        )}
 
         {/* Speed control */}
         <select
@@ -902,7 +914,8 @@ ${comments.trim() ? `<h2>Kommentare</h2><div class="comments">${comments.replace
           style={{
             background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
             border: '1px solid var(--border)', borderRadius: 4,
-            padding: '4px 8px', fontSize: 11, cursor: 'pointer',
+            padding: isMobile ? '8px 10px' : '4px 8px', fontSize: 11, cursor: 'pointer',
+            minHeight: isMobile ? 44 : undefined, flexShrink: 0,
           }}
         >
           <option value={0.5}>0.5x</option>

@@ -112,13 +112,17 @@ export default function LoginPage() {
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       height: '100vh', background: 'var(--bg-primary)',
+      padding: '0 16px',
+      boxSizing: 'border-box',
     }}>
       <form onSubmit={handleSubmit} style={{
         background: 'var(--bg-secondary)',
         border: '1px solid var(--border)',
         borderRadius: 12,
         padding: 32,
-        width: 360,
+        width: '100%',
+        maxWidth: 360,
+        boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',
         gap: 16,

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import type { Drone, UserLocation } from '../types/drone';
-import { fetchDrones, setFleetCenter } from '../api';
+import { fetchDrones, setFleetCenter, fetchMissionZoneDefaults, type MissionZoneDefaults } from '../api';
 import { useAuth } from '../AuthContext';
 import { buildGrid } from '../elevationGrid';
 import MapComponent from './MapComponent';
@@ -24,6 +24,7 @@ import {
   getLayersByCategory,
 } from '../config/noFlyZones';
 import { getUserItem, setUserItem } from '../userStorage';
+import { useIsMobile } from '../useIsMobile';
 
 const DEFAULT_RADIUS = 50000; // 50km
 const DEFAULT_CENTER = { lat: 52.0302, lon: 8.5325 }; // Bielefeld
@@ -60,6 +61,19 @@ export default function MapPage() {
   const [radius, setRadius] = useState(DEFAULT_RADIUS);
   const [noFlyEnabled, setNoFlyEnabled] = useState(false);
   const [noFlyPanelOpen, setNoFlyPanelOpen] = useState(false);
+  const isMobile = useIsMobile();
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const [mobileZoneConfirm, setMobileZoneConfirm] = useState(false);
+  const [mobileZoneName, setMobileZoneName] = useState('');
+  const [mobileZoneColor, setMobileZoneColor] = useState('#3b82f6');
+  const [mzDefaults, setMzDefaults] = useState<MissionZoneDefaults | undefined>();
+
+  // Fetch mission zone defaults on mount
+  useEffect(() => {
+    fetchMissionZoneDefaults().then(setMzDefaults).catch(() => {});
+  }, []);
+  const [mobileZoneMinAGL, setMobileZoneMinAGL] = useState('');
+  const [mobileZoneMaxAGL, setMobileZoneMaxAGL] = useState('');
   const [nfzRadiusEnabled, setNfzRadiusEnabled] = useState(false);
   const [nfzRadius, setNfzRadius] = useState(50000); // 50km default
   const [altitudeZone, setAltitudeZone] = useState('all');
@@ -313,8 +327,169 @@ export default function MapPage() {
         focusPosition={focusPosition}
       />
 
-      {/* Top bar */}
-      <div style={{
+      {/* ═══ Mobile: Compact top bar ═══ */}
+      {isMobile && (
+        <div style={{
+          position: 'absolute', top: 8, left: 8, right: 8, zIndex: 1000,
+          display: 'flex', alignItems: 'center', gap: 6,
+        }}>
+          {/* Hamburger - opens controls drawer */}
+          <button onClick={() => setMobileDrawerOpen(true)} style={{
+            background: 'var(--bg-secondary)', border: '1px solid var(--border)',
+            borderRadius: 8, width: 44, height: 44, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 20, color: 'var(--text-secondary)', flexShrink: 0,
+          }}>&#9776;</button>
+
+          {/* Logo + drone count */}
+          <div style={{
+            background: 'var(--bg-secondary)', border: '1px solid var(--border)',
+            borderRadius: 8, padding: '8px 12px', flex: 1, minWidth: 0,
+            display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            <span style={{ fontWeight: 600, fontSize: 13 }}>FlightArc</span>
+            <span style={{
+              background: 'var(--bg-tertiary)', padding: '2px 8px',
+              borderRadius: 4, fontSize: 12, color: 'var(--text-secondary)',
+            }}>
+              {droneCount} Drohne{droneCount !== 1 ? 'n' : ''}
+            </span>
+          </div>
+
+          {/* Admin button (separated from logout!) */}
+          {canManage && (
+            <button onClick={() => navigate('/admin')} data-testid="admin-button" style={{
+              background: 'var(--bg-secondary)', border: '1px solid var(--accent)',
+              borderRadius: 8, width: 44, height: 44, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 16, color: 'var(--accent)', flexShrink: 0,
+            }}>&#9881;&#65039;</button>
+          )}
+        </div>
+      )}
+
+      {/* ═══ Mobile: Controls drawer ═══ */}
+      {isMobile && mobileDrawerOpen && (
+        <>
+          <div onClick={() => setMobileDrawerOpen(false)} style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 3000,
+          }} />
+          <div style={{
+            position: 'fixed', top: 0, left: 0, width: 300, height: '100vh',
+            zIndex: 3001, background: 'var(--bg-secondary)',
+            borderRight: '1px solid var(--border)',
+            overflow: 'auto', padding: '16px',
+            display: 'flex', flexDirection: 'column', gap: 12,
+          }}>
+            {/* Drawer header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <span style={{ fontSize: 18 }}>&#128681;</span>
+              <span style={{ fontWeight: 700, fontSize: 16, flex: 1 }}>FlightArc</span>
+              <button onClick={() => setMobileDrawerOpen(false)} style={{
+                background: 'none', border: 'none', color: 'var(--text-muted)',
+                cursor: 'pointer', fontSize: 22, padding: 0,
+              }}>&times;</button>
+            </div>
+
+            {/* User info */}
+            {user && (
+              <div style={{
+                background: 'var(--bg-tertiary)', borderRadius: 8, padding: '10px 12px',
+                fontSize: 12, color: 'var(--text-secondary)',
+              }}>
+                {user.display_name}
+                {user.tenant_name && <span style={{ color: 'var(--text-muted)' }}> ({user.tenant_name})</span>}
+              </div>
+            )}
+
+            <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px' }}>Filter</div>
+
+            {/* Refresh rate */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 13, flex: 1 }}>&#8635; Aktualisierung</span>
+              <select value={refreshRate} onChange={e => setRefreshRate(Number(e.target.value))} data-testid="refresh-rate-select" style={mobileSelectStyle}>
+                {REFRESH_RATES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+              </select>
+            </div>
+
+            {/* Radius */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 13, flex: 1 }}>Radius</span>
+              <button onClick={() => setRadiusEnabled(p => !p)} style={{
+                ...mobileToggleStyle, background: radiusEnabled ? 'var(--accent)' : 'var(--bg-tertiary)',
+              }}><div style={{ ...mobileToggleKnob, left: radiusEnabled ? 20 : 2 }} /></button>
+              {radiusEnabled && (
+                <select value={radius} onChange={e => setRadius(Number(e.target.value))} style={mobileSelectStyle}>
+                  <option value={5000}>5 km</option><option value={10000}>10 km</option>
+                  <option value={25000}>25 km</option><option value={50000}>50 km</option>
+                  <option value={100000}>100 km</option><option value={250000}>250 km</option>
+                </select>
+              )}
+            </div>
+
+            {/* Altitude */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 13, flex: 1 }}>&#9650; Höhenfilter</span>
+              <select value={altitudeZone} onChange={e => setAltitudeZone(e.target.value)} data-testid="altitude-zone-select" style={mobileSelectStyle}>
+                {ALTITUDE_ZONES.map(z => <option key={z.id} value={z.id}>{z.label}</option>)}
+              </select>
+            </div>
+
+            <div style={{ height: 1, background: 'var(--border)' }} />
+            <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px' }}>Panels</div>
+
+            {/* NFZ */}
+            <button onClick={() => { setNoFlyEnabled(true); setNoFlyPanelOpen(true); setMobileDrawerOpen(false); }} style={mobileNavBtnStyle}>
+              <span style={{ fontSize: 16 }}>&#9888;</span>
+              <span style={{ flex: 1 }}>Flugverbotszonen (NFZ)</span>
+              {noFlyEnabled && enabledNoFlyLayers.length > 0 && <span style={mobileBadge}>{enabledNoFlyLayers.length}</span>}
+            </button>
+
+            {/* Tracking */}
+            <button onClick={() => { setTrackingPanelOpen(true); setMobileDrawerOpen(false); }} style={mobileNavBtnStyle}>
+              <span style={{ fontSize: 16 }}>&#9678;</span>
+              <span style={{ flex: 1 }}>Tracking</span>
+              {(tracking.trackedFlights.size + tracking.archives.length) > 0 && <span style={{ ...mobileBadge, background: '#f97316' }}>{tracking.trackedFlights.size + tracking.archives.length}</span>}
+            </button>
+
+            {/* Zones */}
+            <button onClick={() => { setZonesPanelOpen(true); setMobileDrawerOpen(false); }} data-testid="zones-toggle" style={mobileNavBtnStyle}>
+              <span style={{ fontSize: 16 }}>&#9634;</span>
+              <span style={{ flex: 1 }}>Flugzonen</span>
+              {flightZones.zones.length > 0 && <span style={{ ...mobileBadge, background: 'var(--accent)' }}>{flightZones.zones.length}</span>}
+            </button>
+
+            <div style={{ height: 1, background: 'var(--border)' }} />
+
+            {/* Nav links */}
+            <button onClick={() => { navigate('/settings'); setMobileDrawerOpen(false); }} style={mobileNavBtnStyle}>
+              <span style={{ fontSize: 16 }}>&#9881;</span><span>Einstellungen</span>
+            </button>
+            <button onClick={() => { navigate('/help'); setMobileDrawerOpen(false); }} style={mobileNavBtnStyle}>
+              <span style={{ fontSize: 16 }}>&#10067;</span><span>Hilfe</span>
+            </button>
+            {canManage && (
+              <button onClick={() => { navigate('/admin'); setMobileDrawerOpen(false); }} style={mobileNavBtnStyle}>
+                <span style={{ fontSize: 16 }}>&#9881;&#65039;</span><span>Administration</span>
+              </button>
+            )}
+
+            <div style={{ flex: 1 }} />
+
+            {/* Logout - at bottom, clearly separated */}
+            <button onClick={logout} data-testid="logout-button" style={{
+              padding: '12px', borderRadius: 8, cursor: 'pointer', fontSize: 13,
+              background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)',
+              color: '#ef4444', fontWeight: 600, textAlign: 'center',
+            }}>
+              Abmelden
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* ═══ Desktop: Full top bar ═══ */}
+      {!isMobile && <div style={{
         position: 'absolute',
         top: 12,
         left: 60,
@@ -791,6 +966,7 @@ export default function MapPage() {
               onAssignZone={(zoneId) => setAssignZoneId(zoneId)}
               onClose={() => setZonesPanelOpen(false)}
               readOnly={!canManage}
+              missionZoneDefaults={mzDefaults ? { radius: mzDefaults.radius, color: mzDefaults.color } : undefined}
             />
           )}
         </div>
@@ -893,7 +1069,239 @@ export default function MapPage() {
             {error}
           </div>
         )}
-      </div>
+      </div>}
+
+      {/* ═══ Mobile: Zone drawing - Step 1: Place points ═══ */}
+      {isMobile && flightZones.drawingMode && !mobileZoneConfirm && (
+        <div style={{
+          position: 'fixed', bottom: 16, left: 16, right: 16, zIndex: 2700,
+          background: 'var(--bg-secondary)', border: '1px solid var(--accent)',
+          borderRadius: 12, padding: 12,
+          display: 'flex', flexDirection: 'column', gap: 8,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+        }}>
+          <div style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 600, textAlign: 'center' }}>
+            Tippe auf die Karte um Punkte zu setzen
+          </div>
+          <div style={{ fontSize: 20, fontWeight: 700, textAlign: 'center', color: 'var(--text-primary)' }}>
+            {flightZones.pendingPoints.length} Punkte
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={flightZones.undoLastPoint} disabled={flightZones.pendingPoints.length === 0} style={{
+              flex: 1, padding: '12px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600,
+              background: 'var(--bg-tertiary)', border: '1px solid var(--border)', color: 'var(--text-secondary)',
+              opacity: flightZones.pendingPoints.length === 0 ? 0.4 : 1, minHeight: 48,
+            }}>Rückgängig</button>
+            <button onClick={() => { flightZones.cancelDrawing(); setMobileZoneConfirm(false); }} style={{
+              flex: 1, padding: '12px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600,
+              background: 'rgba(239,68,68,0.1)', border: '1px solid #ef4444', color: '#ef4444', minHeight: 48,
+            }}>Abbrechen</button>
+            <button onClick={() => { setMobileZoneName(`Zone ${flightZones.zones.length + 1}`); setMobileZoneConfirm(true); }} disabled={flightZones.pendingPoints.length < 3} style={{
+              flex: 1, padding: '12px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600,
+              background: flightZones.pendingPoints.length >= 3 ? 'var(--accent)' : 'var(--bg-tertiary)',
+              border: flightZones.pendingPoints.length >= 3 ? '1px solid var(--accent)' : '1px solid var(--border)',
+              color: flightZones.pendingPoints.length >= 3 ? '#fff' : 'var(--text-muted)', minHeight: 48,
+            }}>Weiter</button>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ Mobile: Zone drawing - Step 2: Name & Save ═══ */}
+      {isMobile && flightZones.drawingMode && mobileZoneConfirm && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 2700, display: 'flex', flexDirection: 'column' }}>
+          <div onClick={() => setMobileZoneConfirm(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)' }} />
+          <div style={{
+            position: 'relative', marginTop: 'auto', zIndex: 1,
+            background: 'var(--bg-secondary)', borderTop: '1px solid var(--border)',
+            borderRadius: '12px 12px 0 0', padding: 16,
+            display: 'flex', flexDirection: 'column', gap: 12,
+          }}>
+            <div style={{ fontSize: 15, fontWeight: 600, textAlign: 'center' }}>
+              Zone speichern ({flightZones.pendingPoints.length} Punkte)
+            </div>
+
+            {/* Name + Color */}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                type="text"
+                value={mobileZoneName}
+                onChange={e => setMobileZoneName(e.target.value)}
+                placeholder="Zonenname..."
+                style={{
+                  flex: 1, padding: '10px 12px', borderRadius: 8,
+                  background: 'var(--bg-primary)', border: '1px solid var(--border)',
+                  color: 'var(--text-primary)', fontSize: 14, outline: 'none',
+                }}
+              />
+              <input
+                type="color"
+                value={mobileZoneColor}
+                onChange={e => setMobileZoneColor(e.target.value)}
+                style={{
+                  width: 48, height: 44, padding: 2, borderRadius: 8,
+                  border: '1px solid var(--border)', cursor: 'pointer', background: 'none',
+                }}
+              />
+            </div>
+
+            {/* Altitude AGL range */}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Höhe (AGL):</span>
+              <input
+                type="number"
+                value={mobileZoneMinAGL}
+                onChange={e => setMobileZoneMinAGL(e.target.value)}
+                placeholder="Min m"
+                min={0} step={10}
+                style={{
+                  flex: 1, padding: '10px 12px', borderRadius: 8,
+                  background: 'var(--bg-primary)', border: '1px solid var(--border)',
+                  color: 'var(--text-primary)', fontSize: 14, outline: 'none', width: 0,
+                }}
+              />
+              <span style={{ color: 'var(--text-muted)' }}>–</span>
+              <input
+                type="number"
+                value={mobileZoneMaxAGL}
+                onChange={e => setMobileZoneMaxAGL(e.target.value)}
+                placeholder="Max m"
+                min={0} step={10}
+                style={{
+                  flex: 1, padding: '10px 12px', borderRadius: 8,
+                  background: 'var(--bg-primary)', border: '1px solid var(--border)',
+                  color: 'var(--text-primary)', fontSize: 14, outline: 'none', width: 0,
+                }}
+              />
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              Leer lassen = alle Höhen. Nach dem Speichern kannst du Drohnen der Zone zuweisen.
+            </div>
+
+            {/* Action buttons */}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setMobileZoneConfirm(false)} style={{
+                flex: 1, padding: '12px', borderRadius: 8, cursor: 'pointer', fontSize: 14,
+                background: 'var(--bg-tertiary)', border: '1px solid var(--border)',
+                color: 'var(--text-secondary)', minHeight: 48,
+              }}>Zurück</button>
+              <button
+                onClick={async () => {
+                  const minVal = mobileZoneMinAGL.trim() ? parseFloat(mobileZoneMinAGL) : null;
+                  const maxVal = mobileZoneMaxAGL.trim() ? parseFloat(mobileZoneMaxAGL) : null;
+                  const result = await flightZones.finishDrawing(
+                    mobileZoneName.trim() || `Zone ${flightZones.zones.length + 1}`,
+                    mobileZoneColor, minVal, maxVal
+                  );
+                  setMobileZoneConfirm(false);
+                  setMobileZoneName('');
+                  setMobileZoneMinAGL('');
+                  setMobileZoneMaxAGL('');
+                  // Open drone assignment panel for the new zone
+                  if (result?.id) setAssignZoneId(result.id);
+                }}
+                style={{
+                  flex: 2, padding: '12px', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600,
+                  background: '#22c55e', border: '1px solid #22c55e', color: '#fff', minHeight: 48,
+                }}
+              >Zone speichern</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ Mobile: Panels as full-screen overlays ═══ */}
+      {isMobile && noFlyPanelOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 2600, display: 'flex', flexDirection: 'column' }}>
+          <div onClick={() => setNoFlyPanelOpen(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)' }} />
+          <div style={{ position: 'relative', marginTop: 'auto', maxHeight: '70vh', background: 'var(--bg-secondary)', borderTop: '1px solid var(--border)', borderRadius: '12px 12px 0 0', overflow: 'auto', zIndex: 1 }}>
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center' }}>
+              <span style={{ fontWeight: 600, fontSize: 14, flex: 1 }}>Flugverbotszonen (NFZ)</span>
+              <button onClick={() => setNoFlyPanelOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 20, padding: '4px' }}>&times;</button>
+            </div>
+            {/* NFZ Radius control - mobile */}
+            <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 13, flex: 1 }}>NFZ Radius</span>
+              <button onClick={() => setNfzRadiusEnabled(p => !p)} style={{
+                ...mobileToggleStyle, background: nfzRadiusEnabled ? 'var(--status-error)' : 'var(--bg-tertiary)',
+              }}><div style={{ ...mobileToggleKnob, left: nfzRadiusEnabled ? 20 : 2 }} /></button>
+              {nfzRadiusEnabled && (
+                <select value={nfzRadius} onChange={e => setNfzRadius(Number(e.target.value))} style={mobileSelectStyle}>
+                  <option value={10000}>10 km</option><option value={25000}>25 km</option>
+                  <option value={50000}>50 km</option><option value={100000}>100 km</option>
+                  <option value={250000}>250 km</option>
+                </select>
+              )}
+            </div>
+            <NoFlyZonesPanel
+              enabledLayers={enabledNoFlyLayers}
+              onToggleLayer={handleToggleNoFlyLayer}
+              onToggleCategory={handleToggleNoFlyCategory}
+              onToggleAll={handleToggleAllNoFly}
+              onClose={() => setNoFlyPanelOpen(false)}
+            />
+          </div>
+        </div>
+      )}
+
+      {isMobile && trackingPanelOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 2600, display: 'flex', flexDirection: 'column' }}>
+          <div onClick={() => setTrackingPanelOpen(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)' }} />
+          <div style={{ position: 'relative', marginTop: 'auto', maxHeight: '70vh', background: 'var(--bg-secondary)', borderTop: '1px solid var(--border)', borderRadius: '12px 12px 0 0', overflow: 'auto', zIndex: 1 }}>
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center' }}>
+              <span style={{ fontWeight: 600, fontSize: 14, flex: 1 }}>Tracking</span>
+              <button onClick={() => setTrackingPanelOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 20, padding: '4px' }}>&times;</button>
+            </div>
+            <TrackingPanel
+              trackedFlights={tracking.trackedFlights}
+              archives={tracking.archives}
+              onUntrack={tracking.untrackDrone}
+              onArchive={tracking.archiveFlight}
+              onDeleteArchive={tracking.removeArchive}
+              onTrack={(droneId) => { const drone = drones.find(d => d.id === droneId); if (drone) tracking.trackDrone(drone); }}
+              onClose={() => setTrackingPanelOpen(false)}
+            />
+          </div>
+        </div>
+      )}
+
+      {isMobile && zonesPanelOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 2600, display: 'flex', flexDirection: 'column' }}>
+          <div onClick={() => setZonesPanelOpen(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)' }} />
+          <div style={{ position: 'relative', marginTop: 'auto', maxHeight: '80vh', background: 'var(--bg-secondary)', borderTop: '1px solid var(--border)', borderRadius: '12px 12px 0 0', overflow: 'auto', zIndex: 1 }}>
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center' }}>
+              <span style={{ fontWeight: 600, fontSize: 14, flex: 1 }}>Flugzonen</span>
+              <button onClick={() => setZonesPanelOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 20, padding: '4px' }}>&times;</button>
+            </div>
+            <FlightZonesPanel
+              zones={flightZones.zones}
+              drawingMode={flightZones.drawingMode}
+              pendingPoints={flightZones.pendingPoints}
+              snappable={flightZones.snappable}
+              mapCenter={currentCenter}
+              onStartDrawing={() => { flightZones.startDrawing(); setZonesPanelOpen(false); }}
+              onCancelDrawing={flightZones.cancelDrawing}
+              onUndoPoint={flightZones.undoLastPoint}
+              onFinishDrawing={flightZones.finishDrawing}
+              onCreateMissionZone={async (...args: Parameters<typeof flightZones.createMissionZone>) => { const r = await flightZones.createMissionZone(...args); setZonesPanelOpen(false); return r; }}
+              onCreateMissionZoneByAddress={async (...args: Parameters<typeof flightZones.createMissionZoneByAddress>) => { const r = await flightZones.createMissionZoneByAddress(...args); setZonesPanelOpen(false); return r; }}
+              onDeleteZone={flightZones.deleteZone}
+              onSelectZone={(zoneId) => {
+                const zone = flightZones.zones.find(z => z.id === zoneId);
+                if (zone && zone.polygon.length > 0) {
+                  const latSum = zone.polygon.reduce((s, p) => s + p[0], 0);
+                  const lonSum = zone.polygon.reduce((s, p) => s + p[1], 0);
+                  setFocusPosition({ lat: latSum / zone.polygon.length, lon: lonSum / zone.polygon.length });
+                }
+                setZonesPanelOpen(false);
+              }}
+              onAssignZone={(zoneId) => { setAssignZoneId(zoneId); setZonesPanelOpen(false); }}
+              onClose={() => setZonesPanelOpen(false)}
+              readOnly={!canManage}
+              missionZoneDefaults={mzDefaults ? { radius: mzDefaults.radius, color: mzDefaults.color } : undefined}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Geolocation button */}
       <GeolocationButton onLocationFound={handleLocationFound} />
@@ -974,3 +1382,34 @@ export default function MapPage() {
     </div>
   );
 }
+
+// ─── Mobile Styles ──────────────────────────────────────
+
+const mobileSelectStyle: React.CSSProperties = {
+  background: 'var(--bg-tertiary)', border: '1px solid var(--border)',
+  borderRadius: 6, padding: '6px 10px', color: 'var(--text-primary)',
+  fontSize: 13, cursor: 'pointer', minHeight: 36,
+};
+
+const mobileToggleStyle: React.CSSProperties = {
+  width: 40, height: 22, borderRadius: 11, border: 'none',
+  cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0,
+};
+
+const mobileToggleKnob: React.CSSProperties = {
+  width: 18, height: 18, borderRadius: '50%', background: '#fff',
+  position: 'absolute', top: 2, transition: 'left 0.2s',
+};
+
+const mobileNavBtnStyle: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 10,
+  padding: '12px', borderRadius: 8, cursor: 'pointer',
+  background: 'var(--bg-tertiary)', border: '1px solid var(--border)',
+  color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500,
+  textAlign: 'left', minHeight: 48,
+};
+
+const mobileBadge: React.CSSProperties = {
+  background: 'var(--status-error)', color: '#fff', borderRadius: 8,
+  padding: '0 6px', fontSize: 10, fontWeight: 700, minWidth: 18, textAlign: 'center',
+};

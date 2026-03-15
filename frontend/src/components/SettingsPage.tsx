@@ -113,7 +113,8 @@ export default function SettingsPage() {
             background: 'var(--bg-tertiary)',
             border: '1px solid var(--border)',
             color: 'var(--text-primary)',
-            padding: '6px 12px',
+            padding: '8px 14px',
+            minHeight: 40,
             borderRadius: 6,
             cursor: 'pointer',
             fontSize: 14,
@@ -125,7 +126,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Content */}
-      <div style={{ maxWidth: 600, margin: '0 auto', padding: 24 }}>
+      <div style={{ maxWidth: 600, margin: '0 auto', padding: '12px 16px' }}>
         <p style={{
           color: 'var(--text-secondary)',
           fontSize: 13,
@@ -249,9 +250,9 @@ export default function SettingsPage() {
               setUserItem('violation-sound', next ? 'on' : 'off');
             }}
             style={{
-              width: 44,
-              height: 24,
-              borderRadius: 12,
+              width: 48,
+              height: 28,
+              borderRadius: 14,
               border: 'none',
               background: violationSound ? '#ef4444' : 'var(--bg-tertiary)',
               cursor: 'pointer',
@@ -261,8 +262,8 @@ export default function SettingsPage() {
             }}
           >
             <div style={{
-              width: 18,
-              height: 18,
+              width: 22,
+              height: 22,
               borderRadius: '50%',
               background: '#fff',
               position: 'absolute',
@@ -325,7 +326,8 @@ export default function SettingsPage() {
                   title="Simulation neu starten"
                   data-testid="restart-simulation"
                   style={{
-                    padding: '4px 10px',
+                    padding: '6px 10px',
+                    minHeight: 40,
                     background: restarted ? 'var(--status-active)' : 'var(--bg-tertiary)',
                     border: '1px solid var(--border)',
                     color: restarted ? '#fff' : 'var(--text-secondary)',
@@ -336,6 +338,8 @@ export default function SettingsPage() {
                     transition: 'background 0.2s, color 0.2s',
                     whiteSpace: 'nowrap',
                     flexShrink: 0,
+                    display: 'flex',
+                    alignItems: 'center',
                   }}
                 >
                   {restarting ? 'Neustart...' : restarted ? 'Neugestartet!' : 'Neustart'}
@@ -348,9 +352,9 @@ export default function SettingsPage() {
                 disabled={!canManage}
                 title={!canManage ? 'Nur Mandanten-Admins dürfen Datenquellen ändern' : undefined}
                 style={{
-                  width: 44,
-                  height: 24,
-                  borderRadius: 12,
+                  width: 48,
+                  height: 28,
+                  borderRadius: 14,
                   border: 'none',
                   background: cfg.enabled ? 'var(--accent)' : 'var(--bg-tertiary)',
                   cursor: canManage ? 'pointer' : 'not-allowed',
@@ -361,8 +365,8 @@ export default function SettingsPage() {
                 }}
               >
                 <div style={{
-                  width: 18,
-                  height: 18,
+                  width: 22,
+                  height: 22,
                   borderRadius: '50%',
                   background: '#fff',
                   position: 'absolute',

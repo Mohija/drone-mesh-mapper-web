@@ -145,6 +145,10 @@ class TenantSettings(db.Model):
     center_lat = db.Column(db.Float, nullable=True)
     center_lon = db.Column(db.Float, nullable=True)
     radius = db.Column(db.Float, nullable=True)
+    mission_zone_radius = db.Column(db.Float, nullable=True)
+    mission_zone_color = db.Column(db.String(20), nullable=True)
+    mission_zone_min_alt_agl = db.Column(db.Float, nullable=True)
+    mission_zone_max_alt_agl = db.Column(db.Float, nullable=True)
     created_at = db.Column(db.Float, default=_now, nullable=False)
     updated_at = db.Column(db.Float, default=_now, onupdate=_now, nullable=False)
 
@@ -156,6 +160,10 @@ class TenantSettings(db.Model):
             "center_lat": self.center_lat,
             "center_lon": self.center_lon,
             "radius": self.radius,
+            "mission_zone_radius": self.mission_zone_radius,
+            "mission_zone_color": self.mission_zone_color,
+            "mission_zone_min_alt_agl": self.mission_zone_min_alt_agl,
+            "mission_zone_max_alt_agl": self.mission_zone_max_alt_agl,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { fetchTenants, createTenant, deleteTenant } from '../../api';
 import type { Tenant } from '../../api';
 import { useAuth } from '../../AuthContext';
+import AdminTooltip from './AdminTooltip';
 
 export default function TenantList() {
   const { refreshUser } = useAuth();
@@ -46,15 +47,20 @@ export default function TenantList() {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
         <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, flex: 1 }}>Mandanten</h1>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          style={{
-            background: 'var(--accent)', color: '#fff', border: 'none',
-            borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-          }}
+        <AdminTooltip
+          brief="Neuen Mandanten erstellen"
+          detail={"Erstellt einen neuen Mandanten (Tenant) im System.\nJeder Mandant hat eigene Benutzer, Empfänger, Zonen und Einstellungen — komplett getrennt voneinander.\n\nFelder:\n- Technischer Name: Kleinbuchstaben, Bindestriche erlaubt (z.B. \"firma-gmbh\")\n- Anzeigename: Frei wählbar (z.B. \"Firma GmbH\")\n\nNach dem Erstellen kannst du Benutzer dem Mandanten zuweisen."}
         >
-          {showForm ? 'Abbrechen' : 'Neuer Mandant'}
-        </button>
+          <button
+            onClick={() => setShowForm(!showForm)}
+            style={{
+              background: 'var(--accent)', color: '#fff', border: 'none',
+              borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            {showForm ? 'Abbrechen' : 'Neuer Mandant'}
+          </button>
+        </AdminTooltip>
       </div>
 
       {showForm && (
@@ -127,15 +133,20 @@ export default function TenantList() {
                 </td>
                 <td style={{ padding: '10px 16px', textAlign: 'right' }}>
                   {t.name !== 'default' && (
-                    <button
-                      onClick={() => handleDelete(t.id, t.display_name)}
-                      style={{
-                        background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)',
-                        borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer',
-                      }}
+                    <AdminTooltip
+                      brief="Mandant und alle Daten löschen"
+                      detail={"Löscht diesen Mandanten und ALLE zugehörigen Daten:\n- Alle Benutzer des Mandanten\n- Alle Empfänger und deren Firmware\n- Alle Zonen und Einstellungen\n\nDiese Aktion kann nicht rückgängig gemacht werden!\nDer Standard-Mandant (\"default\") kann nicht gelöscht werden."}
                     >
-                      Löschen
-                    </button>
+                      <button
+                        onClick={() => handleDelete(t.id, t.display_name)}
+                        style={{
+                          background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)',
+                          borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer',
+                        }}
+                      >
+                        Löschen
+                      </button>
+                    </AdminTooltip>
                   )}
                 </td>
               </tr>

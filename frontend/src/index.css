@@ -187,6 +187,42 @@ body,
   50% { box-shadow: 0 8px 48px rgba(239, 68, 68, 0.7); }
 }
 
+@keyframes adminTooltipIn {
+  from { opacity: 0; transform: translate(-50%, calc(-100% + 4px)); }
+  to { opacity: 1; transform: translate(-50%, -100%); }
+}
+
+/* Help page: collapsible subsections */
+details.help-sub > summary { list-style: none; }
+details.help-sub > summary::-webkit-details-marker { display: none; }
+details.help-sub > summary .help-caret {
+  display: inline-block; transition: transform 0.2s; font-size: 10px; color: var(--text-muted);
+}
+details.help-sub[open] > summary .help-caret { transform: rotate(90deg); }
+
+/* Help page: search modal animation */
+@keyframes helpSearchIn {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Mobile responsive overrides */
+@media (max-width: 768px) {
+  .leaflet-control-zoom { display: none !important; }
+  .leaflet-control-attribution { display: none !important; }
+  /* Panels inside mobile bottom-sheet overlays: reset absolute positioning */
+  [data-testid="nofly-panel"],
+  [data-testid="flight-zones-panel"],
+  [data-testid="tracking-panel"] {
+    position: static !important;
+    margin-top: 0 !important;
+    max-height: none !important;
+    border-radius: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+}
+
 /* Zone name labels on map */
 .zone-label {
   background: rgba(0, 0, 0, 0.55) !important;

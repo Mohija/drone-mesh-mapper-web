@@ -329,10 +329,15 @@ export default function MapComponent({ drones, selectedDrone, userLocation, onDr
     const map = L.map(mapContainerRef.current, {
       center: savedCenter,
       zoom: savedZoom,
-      zoomControl: true,
+      zoomControl: false,
       attributionControl: true,
       preferCanvas: true,
     });
+
+    // Only show zoom controls on desktop
+    if (window.innerWidth >= 768) {
+      L.control.zoom({ position: 'topleft' }).addTo(map);
+    }
 
     // Map tiles (theme-aware, initial)
     const initialTheme = document.documentElement.getAttribute('data-theme') || 'dark';

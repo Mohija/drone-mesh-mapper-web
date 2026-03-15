@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { ViolationRecord } from '../types/drone';
+import { useIsMobile } from '../useIsMobile';
 
 interface Props {
   records: ViolationRecord[];
@@ -58,6 +59,8 @@ export default function ViolationTable({
   onHeightChange,
   readOnly = false,
 }: Props) {
+  const isMobile = useIsMobile();
+
   // Force re-render every second for live duration updates
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -119,6 +122,7 @@ export default function ViolationTable({
           borderBottom: collapsed ? 'none' : '1px solid var(--border)',
           background: activeCount > 0 ? 'rgba(239, 68, 68, 0.08)' : 'transparent',
           userSelect: 'none',
+          minHeight: isMobile ? 44 : undefined,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -152,8 +156,8 @@ export default function ViolationTable({
                 background: 'none',
                 border: '1px solid var(--border)',
                 color: 'var(--text-muted)',
-                fontSize: 10,
-                padding: '2px 8px',
+                fontSize: isMobile ? 12 : 10,
+                padding: isMobile ? '6px 12px' : '2px 8px',
                 borderRadius: 4,
                 cursor: 'pointer',
               }}
@@ -169,14 +173,15 @@ export default function ViolationTable({
 
       {/* Table body - collapsible */}
       {!collapsed && (
-        <div data-testid="violation-table-body" style={{ maxHeight: 250, overflow: 'auto' }}>
+        <div data-testid="violation-table-body" style={{ maxHeight: isMobile ? 180 : 250, overflow: 'auto' }}>
+          <div style={isMobile ? { overflowX: 'auto' } : undefined}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: 'var(--bg-tertiary)', position: 'sticky', top: 0, zIndex: 1 }}>
                 <th style={thStyle}></th>
                 <th style={thStyle}>Drohne</th>
                 <th style={thStyle}>Zone</th>
-                <th style={thStyle}>Beginn</th>
+                {!isMobile && <th style={thStyle}>Beginn</th>}
                 <th style={thStyle}>Dauer</th>
                 <th style={{ ...thStyle, textAlign: 'center' }}>Trail</th>
                 <th style={{ ...thStyle, textAlign: 'center' }}>Bericht</th>
@@ -229,9 +234,11 @@ export default function ViolationTable({
                         {record.zoneName}
                       </span>
                     </td>
-                    <td style={tdStyle}>
-                      {formatTime(record.startTime)}
-                    </td>
+                    {!isMobile && (
+                      <td style={tdStyle}>
+                        {formatTime(record.startTime)}
+                      </td>
+                    )}
                     <td style={tdStyle}>
                       <span style={{ fontFamily: 'monospace' }}>
                         {formatDuration(duration)}
@@ -253,7 +260,7 @@ export default function ViolationTable({
                           fontSize: 14,
                           cursor: 'pointer',
                           color: record.trackingVisible ? 'var(--accent)' : 'var(--text-muted)',
-                          padding: '2px 6px',
+                          padding: isMobile ? '8px 12px' : '2px 6px',
                           opacity: record.trackingVisible ? 1 : 0.5,
                         }}
                       >
@@ -268,9 +275,9 @@ export default function ViolationTable({
                           background: 'none',
                           border: '1px solid var(--border)',
                           color: 'var(--text-secondary)',
-                          fontSize: 10,
+                          fontSize: isMobile ? 12 : 10,
                           cursor: 'pointer',
-                          padding: '2px 6px',
+                          padding: isMobile ? '8px 12px' : '2px 6px',
                           borderRadius: 3,
                         }}
                       >
@@ -287,9 +294,9 @@ export default function ViolationTable({
                             background: 'none',
                             border: 'none',
                             color: 'var(--status-error)',
-                            fontSize: 13,
+                            fontSize: isMobile ? 15 : 13,
                             cursor: 'pointer',
-                            padding: '2px 6px',
+                            padding: isMobile ? '8px 12px' : '2px 6px',
                           }}
                         >
                           &#10005;
@@ -301,6 +308,7 @@ export default function ViolationTable({
               })}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

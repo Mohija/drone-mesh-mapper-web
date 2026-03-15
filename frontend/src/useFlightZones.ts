@@ -48,7 +48,7 @@ export interface UseFlightZonesReturn {
   addPoint: (lat: number, lon: number) => boolean; // returns true if snapped (polygon closed)
   undoLastPoint: () => void;
   cancelDrawing: () => void;
-  finishDrawing: (name: string, color: string, minAGL: number | null, maxAGL: number | null) => Promise<void>;
+  finishDrawing: (name: string, color: string, minAGL: number | null, maxAGL: number | null) => Promise<FlightZone | undefined>;
   createMissionZone: (name: string, lat: number, lon: number) => Promise<FlightZone>;
   createMissionZoneByAddress: (name: string, address: string) => Promise<FlightZone & { resolved_address?: string }>;
   deleteZone: (zoneId: string) => Promise<void>;
@@ -113,7 +113,7 @@ export function useFlightZones(zoneVersion?: number): UseFlightZonesReturn {
   }, []);
 
   const finishDrawing = useCallback(async (name: string, color: string, minAGL: number | null, maxAGL: number | null) => {
-    if (pendingPoints.length < 3) return;
+    if (pendingPoints.length < 3) return undefined;
     try {
       const zone = await createFlightZone({
         name,
@@ -123,6 +123,7 @@ export function useFlightZones(zoneVersion?: number): UseFlightZonesReturn {
         maxAltitudeAGL: maxAGL,
       });
       setZones(prev => [...prev, zone]);
+      return zone;
     } finally {
       setDrawingMode(false);
       setPendingPoints([]);

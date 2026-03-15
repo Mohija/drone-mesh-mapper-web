@@ -297,10 +297,11 @@ export default function DroneDetailPage() {
       <div style={{
         background: 'var(--bg-secondary)',
         borderBottom: '1px solid var(--border)',
-        padding: '16px 24px',
+        padding: '12px 16px',
         display: 'flex',
         alignItems: 'center',
-        gap: 16,
+        gap: 12,
+        flexWrap: 'wrap',
       }}>
         <button
           onClick={() => navigate('/')}
@@ -308,7 +309,8 @@ export default function DroneDetailPage() {
             background: 'var(--bg-tertiary)',
             border: '1px solid var(--border)',
             color: 'var(--text-primary)',
-            padding: '6px 12px',
+            padding: '8px 14px',
+            minHeight: 40,
             borderRadius: 6,
             cursor: 'pointer',
             fontSize: 14,
@@ -435,9 +437,9 @@ export default function DroneDetailPage() {
       {/* Content grid */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(300px, 100%), 1fr))',
         gap: 16,
-        padding: 24,
+        padding: 16,
         maxWidth: 1200,
       }}>
         {/* Live Stats */}

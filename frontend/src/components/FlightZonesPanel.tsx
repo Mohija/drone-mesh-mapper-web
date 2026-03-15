@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { FlightZone } from '../types/drone';
 import { ZONE_COLORS } from '../useFlightZones';
+import { forwardGeocode } from '../api';
 
 interface Props {
   zones: FlightZone[];
@@ -11,7 +12,7 @@ interface Props {
   onStartDrawing: () => void;
   onCancelDrawing: () => void;
   onUndoPoint: () => void;
-  onFinishDrawing: (name: string, color: string, minAGL: number | null, maxAGL: number | null) => Promise<void>;
+  onFinishDrawing: (name: string, color: string, minAGL: number | null, maxAGL: number | null) => Promise<FlightZone | undefined>;
   onCreateMissionZone: (name: string, lat: number, lon: number) => Promise<{ id: string }>;
   onCreateMissionZoneByAddress: (name: string, address: string) => Promise<{ id: string; resolved_address?: string }>;
   onDeleteZone: (zoneId: string) => Promise<void>;
@@ -20,6 +21,8 @@ interface Props {
   onClose: () => void;
   /** If true, hide zone management controls (create, delete, assign) */
   readOnly?: boolean;
+  /** Per-tenant mission zone defaults (radius & color) */
+  missionZoneDefaults?: { radius: number; color: string };
 }
 
 export default function FlightZonesPanel({
@@ -39,6 +42,7 @@ export default function FlightZonesPanel({
   onAssignZone,
   onClose,
   readOnly = false,
+  missionZoneDefaults,
 }: Props) {
   const [newName, setNewName] = useState('');
   const [newColor, setNewColor] = useState(ZONE_COLORS[zones.length % ZONE_COLORS.length]);
@@ -47,9 +51,11 @@ export default function FlightZonesPanel({
   const [saving, setSaving] = useState(false);
   const [missionName, setMissionName] = useState('');
   const [missionAddress, setMissionAddress] = useState('');
-  const [missionMode, setMissionMode] = useState<'map' | 'address'>('map');
+  const [missionMode, setMissionMode] = useState<'map' | 'address' | 'coords'>('address');
   const [creatingMission, setCreatingMission] = useState(false);
   const [missionError, setMissionError] = useState('');
+  const [resolvedAddress, setResolvedAddress] = useState<{ display: string; lat: number; lon: number } | null>(null);
+  const [resolving, setResolving] = useState(false);
 
   const handleFinish = async () => {
     if (!newName.trim() || pendingPoints.length < 3) return;
@@ -57,10 +63,12 @@ export default function FlightZonesPanel({
     try {
       const minVal = minAGL.trim() ? parseFloat(minAGL) : null;
       const maxVal = maxAGL.trim() ? parseFloat(maxAGL) : null;
-      await onFinishDrawing(newName.trim(), newColor, minVal, maxVal);
+      const zone = await onFinishDrawing(newName.trim(), newColor, minVal, maxVal);
       setNewName('');
       setMinAGL('');
       setMaxAGL('');
+      // Auto-open drone assignment for the new zone
+      if (zone?.id) onAssignZone(zone.id);
     } finally {
       setSaving(false);
     }
@@ -125,13 +133,13 @@ export default function FlightZonesPanel({
             style={{
               marginBottom: 12,
               padding: '10px 12px',
-              background: 'rgba(249, 115, 22, 0.08)',
-              border: '1px solid rgba(249, 115, 22, 0.3)',
+              background: `${missionZoneDefaults?.color ?? '#f97316'}14`,
+              border: `1px solid ${missionZoneDefaults?.color ?? '#f97316'}4d`,
               borderRadius: 8,
             }}
           >
-            <div style={{ fontSize: 12, fontWeight: 600, color: '#f97316', marginBottom: 6 }}>
-              Einsatz-Zone (100m Radius)
+            <div style={{ fontSize: 12, fontWeight: 600, color: missionZoneDefaults?.color ?? '#f97316', marginBottom: 6 }}>
+              {`Einsatz-Zone (${missionZoneDefaults?.radius ?? 100}m Radius)`}
             </div>
             <input
               type="text"
@@ -152,24 +160,8 @@ export default function FlightZonesPanel({
                 boxSizing: 'border-box',
               }}
             />
-            {/* Mode toggle: Kartenmitte / Adresse */}
+            {/* Mode toggle: Adresse / Koordinaten */}
             <div style={{ display: 'flex', gap: 0, marginBottom: 6, borderRadius: 4, overflow: 'hidden', border: '1px solid var(--border)' }}>
-              <button
-                onClick={() => { setMissionMode('map'); setMissionError(''); }}
-                data-testid="mission-mode-map"
-                style={{
-                  flex: 1,
-                  padding: '4px 8px',
-                  fontSize: 11,
-                  fontWeight: 600,
-                  border: 'none',
-                  cursor: 'pointer',
-                  background: missionMode === 'map' ? '#f97316' : 'var(--bg-tertiary)',
-                  color: missionMode === 'map' ? '#fff' : 'var(--text-secondary)',
-                }}
-              >
-                Kartenmitte
-              </button>
               <button
                 onClick={() => { setMissionMode('address'); setMissionError(''); }}
                 data-testid="mission-mode-address"
@@ -179,20 +171,36 @@ export default function FlightZonesPanel({
                   fontSize: 11,
                   fontWeight: 600,
                   border: 'none',
-                  borderLeft: '1px solid var(--border)',
                   cursor: 'pointer',
-                  background: missionMode === 'address' ? '#f97316' : 'var(--bg-tertiary)',
+                  background: missionMode === 'address' ? (missionZoneDefaults?.color ?? '#f97316') : 'var(--bg-tertiary)',
                   color: missionMode === 'address' ? '#fff' : 'var(--text-secondary)',
                 }}
               >
                 Adresse
+              </button>
+              <button
+                onClick={() => { setMissionMode('coords'); setMissionError(''); }}
+                data-testid="mission-mode-coords"
+                style={{
+                  flex: 1,
+                  padding: '4px 8px',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  border: 'none',
+                  borderLeft: '1px solid var(--border)',
+                  cursor: 'pointer',
+                  background: missionMode === 'coords' ? (missionZoneDefaults?.color ?? '#f97316') : 'var(--bg-tertiary)',
+                  color: missionMode === 'coords' ? '#fff' : 'var(--text-secondary)',
+                }}
+              >
+                Koordinaten
               </button>
             </div>
             {missionMode === 'address' && (
               <input
                 type="text"
                 value={missionAddress}
-                onChange={(e) => { setMissionAddress(e.target.value); setMissionError(''); }}
+                onChange={(e) => { setMissionAddress(e.target.value); setMissionError(''); setResolvedAddress(null); }}
                 placeholder="Straße Nr, Stadt..."
                 data-testid="mission-zone-address"
                 style={{
@@ -209,60 +217,176 @@ export default function FlightZonesPanel({
                 }}
               />
             )}
+            {missionMode === 'coords' && (
+              <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                <input
+                  type="number"
+                  step="0.0001"
+                  value={missionAddress.split(',')[0]?.trim() || ''}
+                  onChange={(e) => {
+                    const lon = missionAddress.split(',')[1]?.trim() || '';
+                    setMissionAddress(`${e.target.value}, ${lon}`);
+                    setMissionError(''); setResolvedAddress(null);
+                  }}
+                  placeholder="Lat"
+                  title="Breitengrad (-90 bis 90)"
+                  style={{
+                    flex: 1, width: 0, minWidth: 0, padding: '6px 8px',
+                    background: 'var(--bg-tertiary)', border: '1px solid var(--border)',
+                    borderRadius: 4, color: 'var(--text-primary)', fontSize: 12, outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
+                <input
+                  type="number"
+                  step="0.0001"
+                  value={missionAddress.split(',')[1]?.trim() || ''}
+                  onChange={(e) => {
+                    const lat = missionAddress.split(',')[0]?.trim() || '';
+                    setMissionAddress(`${lat}, ${e.target.value}`);
+                    setMissionError(''); setResolvedAddress(null);
+                  }}
+                  placeholder="Lon"
+                  title="Längengrad (-180 bis 180)"
+                  style={{
+                    flex: 1, width: 0, minWidth: 0, padding: '6px 8px',
+                    background: 'var(--bg-tertiary)', border: '1px solid var(--border)',
+                    borderRadius: 4, color: 'var(--text-primary)', fontSize: 12, outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+            )}
+            {/* Resolved address confirmation */}
+            {resolvedAddress && (
+              <div data-testid="mission-resolved-address" style={{
+                padding: '6px 10px', marginBottom: 6, borderRadius: 4,
+                background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)',
+                fontSize: 11, color: '#22c55e', lineHeight: 1.5,
+              }}>
+                <div style={{ fontWeight: 600, marginBottom: 2 }}>Gefunden:</div>
+                <div>{resolvedAddress.display}</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: 10 }}>
+                  {resolvedAddress.lat.toFixed(5)}, {resolvedAddress.lon.toFixed(5)}
+                </div>
+              </div>
+            )}
             {missionError && (
               <div data-testid="mission-zone-error" style={{ fontSize: 11, color: 'var(--status-error)', marginBottom: 4 }}>
                 {missionError}
               </div>
             )}
             <div style={{ display: 'flex', gap: 6 }}>
-              <button
-                onClick={async () => {
-                  if (!missionName.trim()) return;
-                  setMissionError('');
-                  setCreatingMission(true);
-                  try {
-                    let zone: { id: string };
-                    if (missionMode === 'address') {
-                      if (!missionAddress.trim()) {
-                        setMissionError('Adresse ist erforderlich');
-                        return;
+              {/* Step 1: Verify address/coords (if not yet resolved) */}
+              {!resolvedAddress && (
+                <button
+                  onClick={async () => {
+                    setMissionError('');
+                    setResolving(true);
+                    try {
+                      if (missionMode === 'address') {
+                        if (!missionAddress.trim()) { setMissionError('Adresse eingeben'); return; }
+                        const result = await forwardGeocode(missionAddress.trim());
+                        if (!result) {
+                          setMissionError(`Adresse nicht gefunden: "${missionAddress.trim()}". Bitte prüfe Schreibweise, PLZ oder Ort.`);
+                          return;
+                        }
+                        setResolvedAddress({ display: result.display_name, lat: result.lat, lon: result.lon });
+                      } else if (missionMode === 'coords') {
+                        const parts = missionAddress.split(',').map(s => parseFloat(s.trim()));
+                        if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) {
+                          setMissionError('Breitengrad und Längengrad eingeben (z.B. 52.0302, 8.5325)');
+                          return;
+                        }
+                        const [lat, lon] = parts;
+                        if (lat < -90 || lat > 90) { setMissionError(`Breitengrad ${lat} ungültig — muss zwischen -90 und 90 liegen`); return; }
+                        if (lon < -180 || lon > 180) { setMissionError(`Längengrad ${lon} ungültig — muss zwischen -180 und 180 liegen`); return; }
+                        // Reverse geocode to verify coords point to a real location
+                        const result = await forwardGeocode(`${lat}, ${lon}`);
+                        setResolvedAddress({
+                          display: result?.display_name || `${lat.toFixed(5)}, ${lon.toFixed(5)}`,
+                          lat, lon,
+                        });
                       }
-                      zone = await onCreateMissionZoneByAddress(missionName.trim(), missionAddress.trim());
-                      setMissionAddress('');
-                    } else {
-                      zone = await onCreateMissionZone(missionName.trim(), mapCenter.lat, mapCenter.lon);
+                    } catch (err: unknown) {
+                      setMissionError(err instanceof Error ? err.message : 'Prüfung fehlgeschlagen');
+                    } finally {
+                      setResolving(false);
                     }
-                    setMissionName('');
-                    onSelectZone(zone.id);
-                  } catch (err: unknown) {
-                    const msg = err instanceof Error ? err.message : 'Fehler beim Erstellen';
-                    setMissionError(msg);
-                  } finally {
-                    setCreatingMission(false);
-                  }
-                }}
-                disabled={!missionName.trim() || creatingMission || (missionMode === 'address' && !missionAddress.trim())}
-                data-testid="mission-zone-create"
-                style={{
-                  flex: 1,
-                  padding: '6px 12px',
-                  background: missionName.trim() ? '#f97316' : 'var(--bg-tertiary)',
-                  color: missionName.trim() ? '#fff' : 'var(--text-muted)',
-                  border: 'none',
-                  borderRadius: 4,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: missionName.trim() && !creatingMission ? 'pointer' : 'default',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {creatingMission ? 'Erstellen...' : 'Erstellen'}
-              </button>
+                  }}
+                  disabled={!missionAddress.trim() || resolving}
+                  style={{
+                    flex: 1,
+                    padding: '6px 12px',
+                    background: missionAddress.trim() ? 'var(--accent)' : 'var(--bg-tertiary)',
+                    color: missionAddress.trim() ? '#fff' : 'var(--text-muted)',
+                    border: 'none',
+                    borderRadius: 4,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: missionAddress.trim() && !resolving ? 'pointer' : 'default',
+                  }}
+                >
+                  {resolving ? 'Prüfe...' : 'Adresse prüfen'}
+                </button>
+              )}
+              {/* Step 2: Create zone (only after verification) */}
+              {resolvedAddress && (
+                <button
+                  onClick={async () => {
+                    if (!missionName.trim()) { setMissionError('Name eingeben'); return; }
+                    setMissionError('');
+                    setCreatingMission(true);
+                    try {
+                      const zone = await onCreateMissionZone(missionName.trim(), resolvedAddress.lat, resolvedAddress.lon);
+                      setMissionName('');
+                      setMissionAddress('');
+                      setResolvedAddress(null);
+                      onSelectZone(zone.id);
+                    } catch (err: unknown) {
+                      setMissionError(err instanceof Error ? err.message : 'Fehler beim Erstellen');
+                    } finally {
+                      setCreatingMission(false);
+                    }
+                  }}
+                  disabled={!missionName.trim() || creatingMission}
+                  data-testid="mission-zone-create"
+                  style={{
+                    flex: 1,
+                    padding: '6px 12px',
+                    background: missionName.trim() ? (missionZoneDefaults?.color ?? '#f97316') : 'var(--bg-tertiary)',
+                    color: missionName.trim() ? '#fff' : 'var(--text-muted)',
+                    border: 'none',
+                    borderRadius: 4,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: missionName.trim() && !creatingMission ? 'pointer' : 'default',
+                  }}
+                >
+                  {creatingMission ? 'Erstellen...' : 'Zone erstellen'}
+                </button>
+              )}
+              {resolvedAddress && (
+                <button
+                  onClick={() => { setResolvedAddress(null); setMissionError(''); }}
+                  style={{
+                    padding: '6px 10px',
+                    background: 'var(--bg-tertiary)',
+                    color: 'var(--text-secondary)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 4,
+                    fontSize: 12,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Ändern
+                </button>
+              )}
             </div>
             <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
-              {missionMode === 'map'
-                ? 'Erstellt eine kreisförmige Zone am aktuellen Kartenmittelpunkt'
-                : 'Adresse wird automatisch in Koordinaten umgewandelt'}
+              {missionMode === 'address'
+                ? 'Adresse wird geprüft und in Koordinaten aufgelöst'
+                : 'Koordinaten werden auf Gültigkeit geprüft (Lat: -90 bis 90, Lon: -180 bis 180)'}
             </div>
           </div>
         )}

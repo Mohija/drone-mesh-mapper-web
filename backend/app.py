@@ -121,6 +121,19 @@ with app.app_context():
             pass  # Column already exists
     db.session.commit()
 
+    # Migration: add mission zone default columns to tenant_settings
+    for col_stmt in [
+        "ALTER TABLE tenant_settings ADD COLUMN mission_zone_radius REAL",
+        "ALTER TABLE tenant_settings ADD COLUMN mission_zone_color VARCHAR(20)",
+        "ALTER TABLE tenant_settings ADD COLUMN mission_zone_min_alt_agl REAL",
+        "ALTER TABLE tenant_settings ADD COLUMN mission_zone_max_alt_agl REAL",
+    ]:
+        try:
+            db.session.execute(db.text(col_stmt))
+        except Exception:
+            pass  # Column already exists
+    db.session.commit()
+
 # Register blueprints (auth, admin)
 register_blueprints(app)
 
@@ -267,6 +280,69 @@ def update_settings():
     tid = g.tenant_id or DEFAULT_TENANT_ID
     settings.update(data, tenant_id=tid)
     return jsonify(settings.get_all(tenant_id=tid))
+
+
+@app.route("/api/settings/mission-zone-defaults", methods=["GET"])
+@login_required
+def get_mission_zone_defaults():
+    """Get mission zone defaults for the authenticated tenant."""
+    tid = g.tenant_id or DEFAULT_TENANT_ID
+    return jsonify(settings.get_mission_zone_defaults(tenant_id=tid))
+
+
+@app.route("/api/settings/mission-zone-defaults", methods=["POST"])
+@login_required
+@role_required("tenant_admin")
+def update_mission_zone_defaults():
+    """Update mission zone defaults for the authenticated tenant.
+    Body: { "radius": 100, "color": "#f97316", "minAltitudeAGL": null, "maxAltitudeAGL": null }
+    Validates: radius 50-5000, color starts with #.
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Request body required"}), 400
+
+    updates = {}
+
+    if "radius" in data:
+        try:
+            radius = float(data["radius"])
+        except (TypeError, ValueError):
+            return jsonify({"error": "radius muss eine Zahl sein"}), 400
+        if radius < 50 or radius > 5000:
+            return jsonify({"error": "radius muss zwischen 50 und 5000 liegen"}), 400
+        updates["mission_zone_radius"] = radius
+
+    if "color" in data:
+        color = data["color"]
+        if not isinstance(color, str) or not color.startswith("#"):
+            return jsonify({"error": "color muss mit # beginnen"}), 400
+        updates["mission_zone_color"] = color
+
+    if "minAltitudeAGL" in data:
+        val = data["minAltitudeAGL"]
+        if val is not None:
+            try:
+                val = float(val)
+            except (TypeError, ValueError):
+                return jsonify({"error": "minAltitudeAGL muss eine Zahl oder null sein"}), 400
+        updates["mission_zone_min_alt_agl"] = val
+
+    if "maxAltitudeAGL" in data:
+        val = data["maxAltitudeAGL"]
+        if val is not None:
+            try:
+                val = float(val)
+            except (TypeError, ValueError):
+                return jsonify({"error": "maxAltitudeAGL muss eine Zahl oder null sein"}), 400
+        updates["mission_zone_max_alt_agl"] = val
+
+    if not updates:
+        return jsonify({"error": "Keine gültigen Felder zum Aktualisieren"}), 400
+
+    tid = g.tenant_id or DEFAULT_TENANT_ID
+    settings.update(updates, tenant_id=tid)
+    return jsonify(settings.get_mission_zone_defaults(tenant_id=tid))
 
 
 @app.route("/api/status", methods=["GET"])
@@ -804,13 +880,16 @@ def create_mission_zone():
         return jsonify({"error": "lat+lon oder address ist erforderlich"}), 400
 
     from flight_zones import circle_polygon
-    polygon = circle_polygon(lat, lon, radius_m=100, num_points=36)
+    mz_defaults = settings.get_mission_zone_defaults(tenant_id=g.tenant_id)
+    polygon = circle_polygon(lat, lon, radius_m=mz_defaults["radius"], num_points=36)
 
     try:
         zone = zones.create_zone({
             "name": name,
-            "color": "#f97316",
+            "color": mz_defaults["color"],
             "polygon": polygon,
+            "minAltitudeAGL": mz_defaults["minAltitudeAGL"],
+            "maxAltitudeAGL": mz_defaults["maxAltitudeAGL"],
         }, tenant_id=g.tenant_id)
         zone_logger.info("POST /api/zones/mission - created %s: %s at (%.6f, %.6f)", zone["id"], name, lat, lon)
         result = zone

@@ -2,7 +2,7 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-15 (v1.5.4: Merged Binary + OTA Updates)
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-16 (v1.6.0: Mobile UX, Admin Tooltips, HelpPage, Einsatz-Zonen Einstellungen)
 - **Typ:** Projekt | **Status:** Development
 
 ## Offene Aufgaben
@@ -14,8 +14,86 @@
 - [x] ESP Hardware-Empfänger Phase 4: Flash-Wizard
 - [x] ESP Hardware-Empfänger Phase 6: Tests
 - [x] Umfassende E2E-Tests für Receiver-System (60 Tests, alle bestanden)
+- [ ] Empfänger-Datenübertragung prüfen: Ziel ist es, dass Empfänger Drohnen-Daten sofort bei Erkennung senden (nicht im Batch alle 2s), damit die Karte Live-Informationen in Echtzeit darstellen kann. Aktuelles Ingest-Intervall analysieren, ggf. auf Event-basierte Übermittlung umstellen.
 
 ## Änderungshistorie
+
+### 2026-03-16 - v1.6.0: Mobile UX, Admin Tooltips, HelpPage UX, Einsatz-Zonen Einstellungen
+- **Admin Tooltips**: Zweistufiges Tooltip-System (0,3s Kurz-Info + 2s Detail-Tooltip) für alle Admin-Buttons
+- **HelpPage UX-Refactoring**: Ctrl+K Suche, Deep-Linking, Collapsible Sections (nur Hardware/Empfänger/OTA), Mini-TOC, CodeBlock mit Copy, Scroll-Progress, Back-to-Top, Mobile Drawer
+- **Mobile Kartenansicht**: Kompakte Top-Bar + Controls-Drawer, Panels als Bottom-Sheets, Floating Zone-Drawing-Toolbar
+- **Mobile Admin**: Hamburger-Sidebar, Empfänger als Karten mit prominentem GPS-Button, UserList Karten-Layout, Touch-freundliche Buttons (44px+)
+- **Mobile App-weit**: Login/Settings/DroneDetail/FlightReport responsive, ViolationTable Touch-Buttons, Leaflet Zoom ausgeblendet
+- **Tablet-Erkennung**: Zentraler `useIsMobile` Hook mit iPad/Android/Samsung Tablet-Detection (5 Signale)
+- **Einsatz-Zonen**: 2-Schritt-Adressprüfung (Geocoding → Bestätigung → Erstellen), Koordinaten-Eingabe statt Kartenmitte
+- **Einsatz-Zonen Einstellungen (pro Mandant)**: Neuer Admin-Tab für Radius, Farbe, Höhengrenzen. Backend-API + DB-Migration.
+- **Berechtigungen**: Audit bestätigt korrekte Umsetzung aller Rollen (User/Admin/Super-Admin)
+
+### 2026-03-15 - App-weite Mobile-Optimierung (Runde 2)
+- **MapComponent.tsx**: Leaflet Zoom-Controls auf Mobile ausgeblendet (pinch-to-zoom)
+- **LoginPage.tsx**: Responsive Formularbreite (100% mit maxWidth 360)
+- **SettingsPage.tsx**: Größere Toggle-Switches (48x28), Touch-freundliche Buttons (minHeight 40)
+- **DroneDetailPage.tsx**: Grid-Karten schrumpfen unter 300px, kompaktere Paddings
+- **FlightReportView.tsx**: Stacked Layout (Karte 50vh oben, Panel volle Breite unten), Touch-Controls
+- **AdminLayout.tsx**: Sidebar öffnet automatisch auf Mobile beim ersten Laden
+- **index.css**: Mobile Media-Query `@media (max-width: 768px)` für Leaflet-Controls
+- **Dateien:** MapComponent.tsx, LoginPage.tsx, SettingsPage.tsx, DroneDetailPage.tsx, FlightReportView.tsx, AdminLayout.tsx, index.css
+
+### 2026-03-15 - Mobile-Optimierung ViolationTable
+- **ViolationTable.tsx**: Mobile-responsive Anpassungen
+  - `useIsMobile` Hook hinzugefügt (768px Breakpoint)
+  - "Beginn"-Spalte auf Mobile ausgeblendet (Platzersparnis)
+  - Tabelle horizontal scrollbar auf Mobile (`overflowX: auto` Wrapper)
+  - Trail/Bericht/Löschen-Buttons: größeres Padding auf Mobile (8px 12px statt 2px 6px)
+  - "Alle löschen"-Button: größeres Padding auf Mobile (6px 12px)
+  - Header-Bar: minHeight 44px auf Mobile (Touch-freundlich)
+  - maxHeight reduziert auf Mobile (180px statt 250px) für mehr Kartenfläche
+- **Dateien:** ViolationTable.tsx
+
+### 2026-03-15 - Mobile-Optimierung Kartenansicht: Kompakte Toolbar, Controls-Drawer, Status-Panel
+- **MapPage.tsx**: Mobile Kartenansicht komplett überarbeitet
+  - Kompakte Top-Bar: Hamburger + Logo/Drohnen-Count + Admin-Button (klar getrennt von Logout)
+  - Controls-Drawer: Alle Filter (Refresh, Radius, Höhe) + Panel-Buttons (NFZ, Tracking, Zonen) + Navigation (Settings, Hilfe, Admin) + Abmelden (rot, unten, klar getrennt)
+  - Touch-freundliche Buttons: 44px Hamburger, 48px Nav-Buttons, 36px Selects
+  - Desktop-Toolbar bleibt unverändert
+- **StatusPanel.tsx**: Volle Breite auf Mobile (<768px) statt feste 350px
+- **Dateien:** MapPage.tsx, StatusPanel.tsx
+
+### 2026-03-15 - Mobile-Optimierung Admin-Bereich: Responsive Sidebar, Empfänger-Karten, GPS-Standort
+- **AdminLayout.tsx**: Mobile Hamburger-Sidebar (Drawer mit Backdrop auf <768px), Touch-freundliche Navigation
+- **ReceiverList.tsx**: Mobile Karten-Layout statt Tabelle mit prominentem "Standort setzen"-Button (48px hoch, volle Breite, Teal-Farbe)
+  - Touch-freundliche Buttons (min 40px Höhe) statt 8px-Minibuttons
+  - Empfänger als Karten mit Status-Border, Kurzinfo, GPS-Feedback
+  - Sekundäre Aktionen (Deakt., Firmware, OTA, Löschen) als Flex-Row
+- **ReceiverFlashWizard.tsx**: Responsive Modal (maxWidth statt fixed width, margin für Mobile)
+- **Dateien:** AdminLayout.tsx, ReceiverList.tsx, ReceiverFlashWizard.tsx
+
+### 2026-03-15 - HelpPage UX-Refactoring: Mobile, Suche, Collapsible Sections, Mini-TOC
+- **Mobile Responsive Sidebar**: Hamburger-Button auf <768px, Sidebar als Overlay-Drawer
+- **Ctrl+K Suchmodul**: SearchModal mit Section+Subsection-Suche, Pfeiltasten-Navigation, Enter/Escape
+- **Deep Linking**: URL-Hash (#section--subsection), Direktlinks auf Subsektionen teilbar
+- **62 Collapsible Subsections**: Alle H3-Headings als <details>/<summary> mit Caret-Animation, erste Sektion offen
+- **"Alle aufklappen/zuklappen"**: Buttons für Sektionen mit >3 Subsections
+- **Mini-TOC (rechte Sidebar)**: "Auf dieser Seite"-Navigation mit IntersectionObserver Scroll-Spy, ab 1100px Breite
+- **CodeBlock mit Copy-Button**: 2 Code-Blöcke konvertiert (esptool, merged binary), "Kopieren"/"Kopiert"-Feedback
+- **Scroll-Fortschrittsbalken**: 3px Teal-Bar am oberen Rand des Content-Bereichs
+- **Back-to-Top Button**: Floating-Button nach 300px Scroll
+- **InfoBox erweitert**: Neue Typen "tip" (grün) und "danger" (rot) neben info/warning
+- **SECTION_SUBS Metadaten**: 15 Sektionen, 62 Subsection-IDs für Suche und Mini-TOC
+- **CSS**: help-sub Details/Summary-Styles, helpSearchIn Animation
+- **Dateien:** HelpPage.tsx (komplett überarbeitet), index.css
+
+### 2026-03-15 - Erweiterte zweistufige Tooltips im Admin-Bereich
+- **Neue Komponente `AdminTooltip.tsx`**: Zweistufiges Tooltip-System mit Portal-Rendering
+  - Stufe 1 (nach 0,3s): Kurzbeschreibung + Hinweis "Hover halten für Details..."
+  - Stufe 2 (nach 2s): Ausführliche Erklärung mit Voraussetzungen, Ablauf und Tipps
+  - CSS-Animation `adminTooltipIn` in index.css
+- **ReceiverList.tsx**: Tooltips für alle 12 Buttons (+ Neuer Empfänger, Log-Toggle, Log anzeigen, Einkaufsliste, Deakt./Akt., Löschen, OTA Update, OTA Abbrechen, App-Firmware, Full-Flash Merged, Firmware bauen, Kommunikations-Log, Standort setzen)
+- **SimulationTab.tsx**: Tooltips für 5 Buttons (Alle stoppen, + Neuer Simulator, Starten, Stoppen, Löschen)
+- **UserList.tsx**: Tooltips für 4 Buttons (Neuer Benutzer, Bearbeiten, PW Reset, Löschen)
+- **TenantList.tsx**: Tooltips für 2 Buttons (Neuer Mandant, Löschen)
+- **HelpPage.tsx**: Neue Sektion "Erweiterte Tooltips" im Admin-Kapitel
+- **Dateien:** AdminTooltip.tsx (neu), ReceiverList.tsx, SimulationTab.tsx, UserList.tsx, TenantList.tsx, HelpPage.tsx, index.css
 
 ### 2026-03-15 - Benutzerhandbuch: OTA, Merged Binary, LED-Farben, Versionierung
 - **Neue Sektion "OTA-Updates & Merged Binary"** im Benutzerhandbuch (HelpPage.tsx):

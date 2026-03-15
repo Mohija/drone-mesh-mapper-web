@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   fetchReceivers,
   createReceiver,
@@ -15,6 +15,8 @@ import {
 } from '../../api';
 import type { ReceiverNode, ReceiverStats, ConnectionLogEntry } from '../../api';
 import ReceiverFlashWizard from './ReceiverFlashWizard';
+import AdminTooltip from './AdminTooltip';
+import { useIsMobile } from '../../useIsMobile';
 
 const HARDWARE_TYPES = [
   { value: 'esp32-s3', label: 'ESP32-S3', desc: 'BLE + WiFi ODID, HTTPS | DIO 8MB', recommended: true },
@@ -259,6 +261,7 @@ export default function ReceiverList() {
   const [logEnabled, setLogEnabled] = useState(false);
   const [logEntries, setLogEntries] = useState<ConnectionLogEntry[]>([]);
   const [logReceiverId, setLogReceiverId] = useState<string | null>(null); // null = all
+  const isMobile = useIsMobile();
   const [showLog, setShowLog] = useState(false);
 
   const loadData = useCallback(async () => {
@@ -353,53 +356,68 @@ export default function ReceiverList() {
     <div data-testid="receiver-list">
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
         <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, flex: 1 }}>Empfänger</h1>
-        <button
-          data-testid="receiver-create-btn"
-          onClick={() => setShowCreate(!showCreate)}
-          style={{
-            padding: '8px 16px',
-            background: 'var(--accent)',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 8,
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
+        <AdminTooltip
+          brief="Neuen Hardware-Empfänger registrieren"
+          detail={"Erstellt einen neuen Empfänger-Eintrag in der Datenbank. Du wählst einen Namen und den Hardware-Typ (ESP32-S3, ESP32-C3 oder ESP8266).\nNach dem Erstellen kannst du die Firmware bauen und auf den Mikrocontroller flashen.\nEs wird eine Einkaufsliste mit allen benötigten Teilen und Links angezeigt."}
         >
-          + Neuer Empfänger
-        </button>
-        <button
-          data-testid="connection-log-toggle"
-          onClick={handleToggleLog}
-          style={{
-            padding: '8px 16px',
-            background: logEnabled ? '#22c55e' : 'var(--bg-tertiary)',
-            color: logEnabled ? '#fff' : 'var(--text-secondary)',
-            border: `1px solid ${logEnabled ? '#22c55e' : 'var(--border)'}`,
-            borderRadius: 8,
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
-        >
-          {logEnabled ? 'Log aktiv' : 'Log aus'}
-        </button>
-        {logEnabled && (
           <button
-            onClick={() => { setLogReceiverId(null); setShowLog(!showLog); if (!showLog) loadLog(null); }}
+            data-testid="receiver-create-btn"
+            onClick={() => setShowCreate(!showCreate)}
             style={{
               padding: '8px 16px',
-              background: showLog ? 'var(--accent)' : 'var(--bg-tertiary)',
-              color: showLog ? '#fff' : 'var(--text-secondary)',
-              border: `1px solid ${showLog ? 'var(--accent)' : 'var(--border)'}`,
+              background: 'var(--accent)',
+              color: '#fff',
+              border: 'none',
               borderRadius: 8,
               fontSize: 13,
+              fontWeight: 600,
               cursor: 'pointer',
             }}
           >
-            {showLog ? 'Log ausblenden' : 'Log anzeigen'}
+            + Neuer Empfänger
           </button>
+        </AdminTooltip>
+        <AdminTooltip
+          brief="Echtzeit-Kommunikationslog ein-/ausschalten"
+          detail={"Aktiviert oder deaktiviert das serverseitige Logging aller Empfänger-Kommunikation.\nWenn aktiv, werden alle HTTP-Anfragen der Empfänger (Heartbeats, Drohnen-Meldungen) mit Zeitstempel, Status-Code, Endpoint und Empfänger-Info protokolliert.\nNützlich zur Diagnose von Verbindungsproblemen, WiFi-Signalstärke und Firmware-Fehlern.\nDie Logs werden nur im Arbeitsspeicher gehalten und gehen bei Server-Neustart verloren."}
+        >
+          <button
+            data-testid="connection-log-toggle"
+            onClick={handleToggleLog}
+            style={{
+              padding: '8px 16px',
+              background: logEnabled ? '#22c55e' : 'var(--bg-tertiary)',
+              color: logEnabled ? '#fff' : 'var(--text-secondary)',
+              border: `1px solid ${logEnabled ? '#22c55e' : 'var(--border)'}`,
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            {logEnabled ? 'Log aktiv' : 'Log aus'}
+          </button>
+        </AdminTooltip>
+        {logEnabled && (
+          <AdminTooltip
+            brief="Log-Ansicht ein-/ausblenden"
+            detail={"Blendet das Echtzeit-Kommunikationslog ein oder aus.\nIm Log siehst du alle eingehenden Anfragen der Empfänger mit farbiger Markierung:\n- Grün: Drohnen-Meldungen (/ingest)\n- Blau: Heartbeats (Status-Updates)\n- Rot: Fehler (HTTP 4xx/5xx)\nDu kannst nach einzelnen Empfängern filtern."}
+          >
+            <button
+              onClick={() => { setLogReceiverId(null); setShowLog(!showLog); if (!showLog) loadLog(null); }}
+              style={{
+                padding: '8px 16px',
+                background: showLog ? 'var(--accent)' : 'var(--bg-tertiary)',
+                color: showLog ? '#fff' : 'var(--text-secondary)',
+                border: `1px solid ${showLog ? 'var(--accent)' : 'var(--border)'}`,
+                borderRadius: 8,
+                fontSize: 13,
+                cursor: 'pointer',
+              }}
+            >
+              {showLog ? 'Log ausblenden' : 'Log anzeigen'}
+            </button>
+          </AdminTooltip>
         )}
       </div>
 
@@ -545,25 +563,30 @@ export default function ReceiverList() {
           {/* Shopping list */}
           {SHOPPING_LISTS[newType] && (
             <div data-testid="shopping-list-section" style={{ marginTop: 12 }}>
-              <button
-                data-testid="shopping-list-toggle"
-                onClick={() => setShowShopping(!showShopping)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--accent)',
-                  cursor: 'pointer',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  padding: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                }}
+              <AdminTooltip
+                brief="Einkaufsliste mit allen benötigten Teilen"
+                detail={"Zeigt eine vollständige Einkaufsliste für den gewählten Hardware-Typ an.\nEnthält:\n- Alle Pflichtkomponenten (Board, Kabel, Netzteil, Gehäuse)\n- Optionale Teile (Antenne, PoE-Splitter, Abstandshalter)\n- Direkte Amazon-Links zu getesteten/kompatiblen Produkten\n- Geschätzte Gesamtkosten\n- Empfehlung welcher Typ sich für welchen Einsatz eignet"}
               >
-                <span style={{ transform: showShopping ? 'rotate(90deg)' : 'rotate(0)', transition: 'transform 0.2s', display: 'inline-block' }}>&#9654;</span>
-                Einkaufsliste: {SHOPPING_LISTS[newType].title}
-              </button>
+                <button
+                  data-testid="shopping-list-toggle"
+                  onClick={() => setShowShopping(!showShopping)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--accent)',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    padding: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <span style={{ transform: showShopping ? 'rotate(90deg)' : 'rotate(0)', transition: 'transform 0.2s', display: 'inline-block' }}>&#9654;</span>
+                  Einkaufsliste: {SHOPPING_LISTS[newType].title}
+                </button>
+              </AdminTooltip>
               {showShopping && (
                 <div data-testid="shopping-list-content" style={{
                   marginTop: 8,
@@ -727,7 +750,7 @@ export default function ReceiverList() {
         </div>
       )}
 
-      {/* Receiver table */}
+      {/* Receiver list */}
       {receivers.length === 0 ? (
         <div data-testid="receiver-empty" style={{
           background: 'var(--bg-secondary)',
@@ -740,7 +763,126 @@ export default function ReceiverList() {
         }}>
           Noch keine Empfänger erstellt.
         </div>
+      ) : isMobile ? (
+        /* ─── Mobile: Card Layout ─── */
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {receivers.map(node => (
+            <div key={node.id} data-testid={`receiver-row-${node.id}`} style={{
+              background: 'var(--bg-secondary)', border: '1px solid var(--border)',
+              borderRadius: 10, padding: 14, opacity: node.isActive ? 1 : 0.5,
+              borderLeft: `3px solid ${STATUS_COLORS[node.status]}`,
+            }}>
+              {/* Card header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <span data-testid={`receiver-status-${node.id}`} style={{
+                  width: 10, height: 10, borderRadius: '50%', flexShrink: 0,
+                  background: STATUS_COLORS[node.status],
+                  boxShadow: node.status === 'online' ? `0 0 6px ${STATUS_COLORS.online}` : 'none',
+                }} />
+                <span style={{ fontWeight: 600, fontSize: 14, flex: 1 }}>{node.name}</span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  {node.hardwareType.toUpperCase()}
+                </span>
+              </div>
+
+              {/* Card stats */}
+              <div style={{ display: 'flex', gap: 12, fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12, flexWrap: 'wrap' }}>
+                <span>{STATUS_LABELS[node.status]} &middot; {timeAgo(node.lastHeartbeat)}</span>
+                <span style={{ color: '#14b8a6' }}>{node.totalDetections} Erkennungen</span>
+                {node.firmwareVersion && <span>FW: {node.firmwareVersion}</span>}
+              </div>
+
+              {/* Location info */}
+              {node.lastLatitude != null && (
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
+                  Standort: {node.lastLatitude.toFixed(5)}, {node.lastLongitude?.toFixed(5)}
+                </div>
+              )}
+
+              {/* Location feedback */}
+              {locMsg && expandedId === node.id && (
+                <div style={{
+                  marginBottom: 10, padding: '8px 10px', borderRadius: 6, fontSize: 12,
+                  background: locMsg.includes('Fehler') ? 'rgba(239,68,68,0.1)' : 'rgba(34,197,94,0.1)',
+                  color: locMsg.includes('Fehler') ? '#ef4444' : '#22c55e',
+                }}>
+                  {locMsg}
+                </div>
+              )}
+
+              {/* PRIMARY ACTION: Standort setzen - large, prominent */}
+              <button
+                data-testid={`receiver-location-${node.id}`}
+                onClick={async () => {
+                  setExpandedId(node.id);
+                  if (!navigator.geolocation) { setLocMsg('GPS nicht verfügbar'); return; }
+                  setLocatingId(node.id);
+                  setLocMsg(null);
+                  navigator.geolocation.getCurrentPosition(
+                    async (pos) => {
+                      try {
+                        await setReceiverLocation(node.id, pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
+                        setLocMsg(`Standort gesetzt: ${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)} (±${pos.coords.accuracy.toFixed(0)}m)`);
+                        await loadData();
+                      } catch (err: unknown) { setLocMsg(err instanceof Error ? err.message : 'Fehler'); }
+                      finally { setLocatingId(null); }
+                    },
+                    (err) => { setLocMsg(`GPS-Fehler: ${err.message}`); setLocatingId(null); },
+                    { enableHighAccuracy: true, timeout: 15000 }
+                  );
+                }}
+                disabled={locatingId === node.id}
+                style={{
+                  width: '100%', padding: '12px 16px', borderRadius: 8,
+                  background: locatingId === node.id ? 'rgba(20,184,166,0.15)' : 'rgba(20,184,166,0.1)',
+                  border: '1px solid #14b8a6', color: '#14b8a6',
+                  cursor: locatingId === node.id ? 'wait' : 'pointer',
+                  fontSize: 14, fontWeight: 600,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  marginBottom: 8, minHeight: 48,
+                }}
+              >
+                {locatingId === node.id ? 'GPS wird abgerufen...' : 'Standort setzen'}
+              </button>
+
+              {/* Secondary actions row */}
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <button
+                  data-testid={`receiver-toggle-${node.id}`}
+                  onClick={() => handleToggleActive(node)}
+                  style={{ ...mobileBtnStyle }}
+                >
+                  {node.isActive ? 'Deakt.' : 'Akt.'}
+                </button>
+                <button
+                  data-testid={`receiver-build-${node.id}`}
+                  onClick={() => { setFlashRegenKey(!!node.lastBuildAt); setFlashNode(node); }}
+                  style={{ ...mobileBtnStyle, background: '#14b8a6', color: '#fff', border: 'none' }}
+                >
+                  {node.lastBuildAt ? 'Neu bauen' : 'Firmware'}
+                </button>
+                {node.lastBuildAt && node.status !== 'offline' && node.hardwareType !== 'esp8266' && !node.otaUpdatePending && (
+                  <button
+                    data-testid={`receiver-ota-${node.id}`}
+                    onClick={async () => { try { await triggerOtaUpdate(node.id); await loadData(); } catch { /* */ } }}
+                    style={{ ...mobileBtnStyle, borderColor: '#3b82f6', color: '#3b82f6' }}
+                  >
+                    OTA
+                  </button>
+                )}
+                <button
+                  data-testid={`receiver-delete-${node.id}`}
+                  onClick={() => handleDelete(node.id)}
+                  style={{ ...mobileBtnStyle, color: '#ef4444', borderColor: '#ef4444' }}
+                >
+                  Löschen
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       ) : (
+        /* ─── Desktop: Table Layout ─── */
         <div style={{
           background: 'var(--bg-secondary)',
           border: '1px solid var(--border)',
@@ -823,22 +965,32 @@ export default function ReceiverList() {
                     </td>
                     <td style={{ ...tdStyle, textAlign: 'center' }}>
                       <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }} onClick={e => e.stopPropagation()}>
-                        <button
-                          data-testid={`receiver-toggle-${node.id}`}
-                          onClick={() => handleToggleActive(node)}
-                          title={node.isActive ? 'Deaktivieren' : 'Aktivieren'}
-                          style={actionBtnStyle}
+                        <AdminTooltip
+                          brief={node.isActive ? 'Empfänger deaktivieren' : 'Empfänger aktivieren'}
+                          detail={node.isActive
+                            ? 'Deaktiviert diesen Empfänger. Er wird weiterhin in der Liste angezeigt (ausgegraut), aber seine Drohnen-Meldungen werden vom Server ignoriert.\nNützlich um einen Empfänger vorübergehend stillzulegen ohne ihn zu löschen.'
+                            : 'Aktiviert diesen Empfänger wieder. Seine Drohnen-Meldungen werden ab sofort vom Server verarbeitet und auf der Karte angezeigt.'}
                         >
-                          {node.isActive ? 'Deakt.' : 'Akt.'}
-                        </button>
-                        <button
-                          data-testid={`receiver-delete-${node.id}`}
-                          onClick={() => handleDelete(node.id)}
-                          title="Löschen"
-                          style={{ ...actionBtnStyle, color: '#ef4444' }}
+                          <button
+                            data-testid={`receiver-toggle-${node.id}`}
+                            onClick={() => handleToggleActive(node)}
+                            style={actionBtnStyle}
+                          >
+                            {node.isActive ? 'Deakt.' : 'Akt.'}
+                          </button>
+                        </AdminTooltip>
+                        <AdminTooltip
+                          brief="Empfänger unwiderruflich löschen"
+                          detail={"Löscht diesen Empfänger und seinen API-Key aus der Datenbank. Die Firmware auf dem ESP wird dadurch nicht verändert, aber der Empfänger kann sich nicht mehr am Server authentifizieren.\nDiese Aktion kann nicht rückgängig gemacht werden. Der ESP muss danach neu registriert und geflasht werden."}
                         >
-                          Löschen
-                        </button>
+                          <button
+                            data-testid={`receiver-delete-${node.id}`}
+                            onClick={() => handleDelete(node.id)}
+                            style={{ ...actionBtnStyle, color: '#ef4444' }}
+                          >
+                            Löschen
+                          </button>
+                        </AdminTooltip>
                       </div>
                     </td>
                   </tr>
@@ -883,35 +1035,45 @@ export default function ReceiverList() {
                           {/* OTA Update */}
                           {node.lastBuildAt && node.status !== 'offline' && node.hardwareType !== 'esp8266' && (
                             node.otaUpdatePending ? (
-                              <button
-                                data-testid={`receiver-ota-cancel-${node.id}`}
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  try { await cancelOtaUpdate(node.id); await loadData(); } catch { /* silent */ }
-                                }}
-                                style={{
-                                  padding: '5px 12px', background: 'rgba(234,179,8,0.15)',
-                                  border: '1px solid #eab308', borderRadius: 6, color: '#eab308',
-                                  cursor: 'pointer', fontSize: 11, fontWeight: 600,
-                                }}
+                              <AdminTooltip
+                                brief="OTA-Update abbrechen"
+                                detail={"Bricht das ausstehende Over-the-Air Update ab. Der Empfänger wird beim nächsten Heartbeat informiert, dass kein Update mehr bereitsteht.\nFalls der ESP das Update bereits herunterlädt, wird es trotzdem abgebrochen."}
                               >
-                                OTA ausstehend... (Abbrechen)
-                              </button>
+                                <button
+                                  data-testid={`receiver-ota-cancel-${node.id}`}
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    try { await cancelOtaUpdate(node.id); await loadData(); } catch { /* silent */ }
+                                  }}
+                                  style={{
+                                    padding: '5px 12px', background: 'rgba(234,179,8,0.15)',
+                                    border: '1px solid #eab308', borderRadius: 6, color: '#eab308',
+                                    cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                                  }}
+                                >
+                                  OTA ausstehend... (Abbrechen)
+                                </button>
+                              </AdminTooltip>
                             ) : (
-                              <button
-                                data-testid={`receiver-ota-${node.id}`}
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  try { await triggerOtaUpdate(node.id); await loadData(); } catch { /* silent */ }
-                                }}
-                                style={{
-                                  padding: '5px 12px', background: 'rgba(59,130,246,0.1)',
-                                  border: '1px solid #3b82f6', borderRadius: 6, color: '#3b82f6',
-                                  cursor: 'pointer', fontSize: 11, fontWeight: 600,
-                                }}
+                              <AdminTooltip
+                                brief="Firmware drahtlos aktualisieren (OTA)"
+                                detail={"Sendet die zuletzt gebaute Firmware per Over-the-Air Update an den ESP.\nDer Empfänger lädt die neue Firmware beim nächsten Heartbeat herunter, verifiziert die Integrität (SHA-256) und startet automatisch neu.\nKein physischer Zugriff auf den ESP nötig!\nVoraussetzungen:\n- Empfänger muss online sein\n- Firmware muss vorher gebaut worden sein\n- Nur ESP32-S3 und ESP32-C3 (nicht ESP8266)\nBei Fehler wird automatisch auf die vorherige Firmware zurückgerollt (Rollback)."}
                               >
-                                OTA Update senden
-                              </button>
+                                <button
+                                  data-testid={`receiver-ota-${node.id}`}
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    try { await triggerOtaUpdate(node.id); await loadData(); } catch { /* silent */ }
+                                  }}
+                                  style={{
+                                    padding: '5px 12px', background: 'rgba(59,130,246,0.1)',
+                                    border: '1px solid #3b82f6', borderRadius: 6, color: '#3b82f6',
+                                    cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                                  }}
+                                >
+                                  OTA Update senden
+                                </button>
+                              </AdminTooltip>
                             )
                           )}
                           {node.otaLastResult && (
@@ -924,147 +1086,174 @@ export default function ReceiverList() {
                             </span>
                           )}
                           {node.lastBuildAt && (
+                            <AdminTooltip
+                              brief="Anwendungs-Firmware herunterladen (.bin)"
+                              detail={"Lädt die reine Anwendungs-Firmware als .bin-Datei herunter.\nDiese Datei enthält NUR den FlightArc-Code ohne Bootloader und Partitionstabelle.\n\nVerwendung:\n- Für OTA-Updates über esptool oder das Web-Interface des ESP\n- Wenn Bootloader und Partitionen bereits auf dem ESP vorhanden sind\n- Offset beim manuellen Flashen: 0x10000 (ESP32) bzw. 0x0 (ESP8266)\n\nFür ein komplett frisches Board verwende stattdessen \"Full-Flash (Merged)\"."}
+                            >
+                              <button
+                                data-testid={`receiver-download-${node.id}`}
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  try {
+                                    const blob = await downloadFirmware(node.id);
+                                    const url = URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = `flightarc-${node.hardwareType}-${node.id}.bin`;
+                                    a.click();
+                                    URL.revokeObjectURL(url);
+                                  } catch { /* silent */ }
+                                }}
+                                style={{
+                                  padding: '5px 12px',
+                                  background: 'var(--bg-tertiary)',
+                                  border: '1px solid #14b8a6',
+                                  borderRadius: 6,
+                                  color: '#14b8a6',
+                                  cursor: 'pointer',
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                }}
+                              >
+                                App-Firmware
+                              </button>
+                            </AdminTooltip>
+                          )}
+                          {node.lastBuildMergedSize && (
+                            <AdminTooltip
+                              brief="Komplettes Flash-Image herunterladen"
+                              detail={"Lädt das vollständige Flash-Image (Merged Binary) herunter. Diese Datei enthält ALLES in einem:\n- Bootloader\n- Partitionstabelle\n- NVS (Konfigurationsdaten)\n- FlightArc Anwendungs-Firmware\n\nVerwendung:\n- Für ein komplett frisches/neues Board (Erstinstallation)\n- Wenn der Flash-Speicher vorher gelöscht wurde (erase_flash)\n- Wird immer ab Offset 0x0 geflasht\n\nEmpfohlen für den ersten Flash. Für spätere Updates reicht die \"App-Firmware\" oder \"OTA Update\"."}
+                            >
+                              <button
+                                data-testid={`receiver-download-merged-${node.id}`}
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  try {
+                                    const blob = await downloadFirmware(node.id, 'merged');
+                                    const url = URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = `flightarc-${node.hardwareType}-${node.id}-merged.bin`;
+                                    a.click();
+                                    URL.revokeObjectURL(url);
+                                  } catch { /* silent */ }
+                                }}
+                                style={{
+                                  padding: '5px 12px',
+                                  background: 'var(--bg-tertiary)',
+                                  border: '1px solid var(--border)',
+                                  borderRadius: 6,
+                                  color: 'var(--text-secondary)',
+                                  cursor: 'pointer',
+                                  fontSize: 11,
+                                }}
+                              >
+                                Full-Flash (Merged)
+                              </button>
+                            </AdminTooltip>
+                          )}
+                          <AdminTooltip
+                            brief={node.lastBuildAt ? 'Firmware neu kompilieren mit neuem API-Key' : 'Firmware erstmalig kompilieren'}
+                            detail={node.lastBuildAt
+                              ? 'Öffnet den Flash-Wizard und kompiliert eine neue Firmware mit einem NEUEN API-Key.\nDer alte Key wird ungültig — der ESP muss danach neu geflasht werden (per USB oder OTA).\nNützlich wenn:\n- Du die Backend-URL ändern willst\n- WiFi-Zugangsdaten aktualisieren willst\n- Der alte Key kompromittiert wurde\n- Du auf eine neue Firmware-Version aktualisieren willst'
+                              : 'Öffnet den Flash-Wizard: Ein 5-Schritte-Assistent der eine individuelle Firmware für diesen Empfänger kompiliert.\n\nSchritte:\n1. Vorbereitung — Board-Info und Boot-Modus\n2. Konfiguration — Backend-URL und WiFi-Daten eingeben\n3. Build — Firmware wird live auf dem Server kompiliert\n4. Verifizierung — Automatische Checks (Größe, Checksumme, API-Key)\n5. Download — .bin-Datei herunterladen und flashen\n\nJede Firmware enthält einen einzigartigen API-Key für die sichere Kommunikation.'}
+                          >
                             <button
-                              data-testid={`receiver-download-${node.id}`}
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                try {
-                                  const blob = await downloadFirmware(node.id);
-                                  const url = URL.createObjectURL(blob);
-                                  const a = document.createElement('a');
-                                  a.href = url;
-                                  a.download = `flightarc-${node.hardwareType}-${node.id}.bin`;
-                                  a.click();
-                                  URL.revokeObjectURL(url);
-                                } catch { /* silent */ }
-                              }}
+                              data-testid={`receiver-build-${node.id}`}
+                              onClick={() => { setFlashRegenKey(!!node.lastBuildAt); setFlashNode(node); }}
                               style={{
                                 padding: '5px 12px',
-                                background: 'var(--bg-tertiary)',
-                                border: '1px solid #14b8a6',
+                                background: '#14b8a6',
+                                border: 'none',
                                 borderRadius: 6,
-                                color: '#14b8a6',
+                                color: '#fff',
                                 cursor: 'pointer',
                                 fontSize: 11,
                                 fontWeight: 600,
                               }}
                             >
-                              App-Firmware
+                              {node.lastBuildAt ? 'Neu bauen (neuer Key)' : 'Firmware bauen'}
                             </button>
+                          </AdminTooltip>
+                          {logEnabled && (
+                            <AdminTooltip
+                              brief="Gefilterte Logs für diesen Empfänger"
+                              detail={"Öffnet das Kommunikations-Log gefiltert auf diesen einen Empfänger.\nZeigt nur dessen Heartbeats, Drohnen-Meldungen und Fehler an.\nNützlich um die Verbindungsqualität eines einzelnen Empfängers zu diagnostizieren:\n- Heartbeat-Intervall (sollte alle 30s kommen)\n- WiFi-Signalstärke (RSSI in dBm)\n- Freier Arbeitsspeicher (Heap)\n- Firmware-Version\n- HTTP-Fehlercodes"}
+                            >
+                              <button
+                                data-testid={`receiver-log-${node.id}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setLogReceiverId(node.id);
+                                  setShowLog(true);
+                                  loadLog(node.id);
+                                }}
+                                style={{
+                                  padding: '5px 12px',
+                                  background: logReceiverId === node.id && showLog ? '#eab308' : 'var(--bg-tertiary)',
+                                  border: '1px solid var(--border)',
+                                  borderRadius: 6,
+                                  color: logReceiverId === node.id && showLog ? '#fff' : 'var(--text-secondary)',
+                                  cursor: 'pointer',
+                                  fontSize: 11,
+                                }}
+                              >
+                                Kommunikations-Log
+                              </button>
+                            </AdminTooltip>
                           )}
-                          {node.lastBuildMergedSize && (
+                          <AdminTooltip
+                            brief="GPS-Position des Empfängers speichern"
+                            detail={"Ermittelt deinen aktuellen Standort per Browser-GPS und speichert ihn als Position dieses Empfängers.\nDer Standort wird auf der Karte als Empfänger-Marker angezeigt.\n\nSo geht's:\n1. Gehe physisch zum Standort des Empfängers\n2. Öffne diese Seite auf deinem Smartphone\n3. Klicke auf \"Standort setzen\"\n4. Erlaube die GPS-Abfrage im Browser\n\nDie Genauigkeit hängt vom GPS-Empfang ab (wird in Metern angezeigt).\nBenötigt HTTPS oder localhost für die Geolocation-API."}
+                          >
                             <button
-                              data-testid={`receiver-download-merged-${node.id}`}
+                              data-testid={`receiver-location-${node.id}`}
                               onClick={async (e) => {
                                 e.stopPropagation();
-                                try {
-                                  const blob = await downloadFirmware(node.id, 'merged');
-                                  const url = URL.createObjectURL(blob);
-                                  const a = document.createElement('a');
-                                  a.href = url;
-                                  a.download = `flightarc-${node.hardwareType}-${node.id}-merged.bin`;
-                                  a.click();
-                                  URL.revokeObjectURL(url);
-                                } catch { /* silent */ }
+                                if (!navigator.geolocation) {
+                                  setLocMsg('GPS nicht verfügbar in diesem Browser');
+                                  return;
+                                }
+                                setLocatingId(node.id);
+                                setLocMsg(null);
+                                navigator.geolocation.getCurrentPosition(
+                                  async (pos) => {
+                                    try {
+                                      await setReceiverLocation(
+                                        node.id,
+                                        pos.coords.latitude,
+                                        pos.coords.longitude,
+                                        pos.coords.accuracy
+                                      );
+                                      setLocMsg(`Standort gesetzt: ${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)} (±${pos.coords.accuracy.toFixed(0)}m)`);
+                                      await loadData();
+                                    } catch (err: unknown) {
+                                      setLocMsg(err instanceof Error ? err.message : 'Fehler beim Speichern');
+                                    } finally {
+                                      setLocatingId(null);
+                                    }
+                                  },
+                                  (err) => {
+                                    setLocMsg(`GPS-Fehler: ${err.message}`);
+                                    setLocatingId(null);
+                                  },
+                                  { enableHighAccuracy: true, timeout: 15000 }
+                                );
                               }}
+                              disabled={locatingId === node.id}
                               style={{
                                 padding: '5px 12px',
                                 background: 'var(--bg-tertiary)',
                                 border: '1px solid var(--border)',
                                 borderRadius: 6,
-                                color: 'var(--text-secondary)',
-                                cursor: 'pointer',
+                                color: locatingId === node.id ? '#14b8a6' : 'var(--text-secondary)',
+                                cursor: locatingId === node.id ? 'wait' : 'pointer',
                                 fontSize: 11,
                               }}
                             >
-                              Full-Flash (Merged)
+                              {locatingId === node.id ? 'GPS wird abgerufen...' : 'Standort setzen'}
                             </button>
-                          )}
-                          <button
-                            data-testid={`receiver-build-${node.id}`}
-                            onClick={() => { setFlashRegenKey(!!node.lastBuildAt); setFlashNode(node); }}
-                            style={{
-                              padding: '5px 12px',
-                              background: '#14b8a6',
-                              border: 'none',
-                              borderRadius: 6,
-                              color: '#fff',
-                              cursor: 'pointer',
-                              fontSize: 11,
-                              fontWeight: 600,
-                            }}
-                          >
-                            {node.lastBuildAt ? 'Neu bauen (neuer Key)' : 'Firmware bauen'}
-                          </button>
-                          {logEnabled && (
-                            <button
-                              data-testid={`receiver-log-${node.id}`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setLogReceiverId(node.id);
-                                setShowLog(true);
-                                loadLog(node.id);
-                              }}
-                              style={{
-                                padding: '5px 12px',
-                                background: logReceiverId === node.id && showLog ? '#eab308' : 'var(--bg-tertiary)',
-                                border: '1px solid var(--border)',
-                                borderRadius: 6,
-                                color: logReceiverId === node.id && showLog ? '#fff' : 'var(--text-secondary)',
-                                cursor: 'pointer',
-                                fontSize: 11,
-                              }}
-                            >
-                              Kommunikations-Log
-                            </button>
-                          )}
-                          <button
-                            data-testid={`receiver-location-${node.id}`}
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              if (!navigator.geolocation) {
-                                setLocMsg('GPS nicht verfügbar in diesem Browser');
-                                return;
-                              }
-                              setLocatingId(node.id);
-                              setLocMsg(null);
-                              navigator.geolocation.getCurrentPosition(
-                                async (pos) => {
-                                  try {
-                                    await setReceiverLocation(
-                                      node.id,
-                                      pos.coords.latitude,
-                                      pos.coords.longitude,
-                                      pos.coords.accuracy
-                                    );
-                                    setLocMsg(`Standort gesetzt: ${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)} (±${pos.coords.accuracy.toFixed(0)}m)`);
-                                    await loadData();
-                                  } catch (err: unknown) {
-                                    setLocMsg(err instanceof Error ? err.message : 'Fehler beim Speichern');
-                                  } finally {
-                                    setLocatingId(null);
-                                  }
-                                },
-                                (err) => {
-                                  setLocMsg(`GPS-Fehler: ${err.message}`);
-                                  setLocatingId(null);
-                                },
-                                { enableHighAccuracy: true, timeout: 15000 }
-                              );
-                            }}
-                            disabled={locatingId === node.id}
-                            style={{
-                              padding: '5px 12px',
-                              background: 'var(--bg-tertiary)',
-                              border: '1px solid var(--border)',
-                              borderRadius: 6,
-                              color: locatingId === node.id ? '#14b8a6' : 'var(--text-secondary)',
-                              cursor: locatingId === node.id ? 'wait' : 'pointer',
-                              fontSize: 11,
-                            }}
-                          >
-                            {locatingId === node.id ? 'GPS wird abgerufen...' : 'Standort setzen'}
-                          </button>
+                          </AdminTooltip>
                         </div>
                         {/* Location feedback */}
                         {locMsg && expandedId === node.id && (
@@ -1119,4 +1308,16 @@ const actionBtnStyle: React.CSSProperties = {
   color: 'var(--text-secondary)',
   cursor: 'pointer',
   fontSize: 11,
+};
+
+const mobileBtnStyle: React.CSSProperties = {
+  padding: '8px 14px',
+  background: 'var(--bg-tertiary)',
+  border: '1px solid var(--border)',
+  borderRadius: 6,
+  color: 'var(--text-secondary)',
+  cursor: 'pointer',
+  fontSize: 12,
+  fontWeight: 600,
+  minHeight: 40,
 };
