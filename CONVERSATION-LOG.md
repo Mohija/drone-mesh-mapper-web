@@ -15,6 +15,9 @@
 - [x] ESP Hardware-Empfänger Phase 6: Tests
 - [x] Umfassende E2E-Tests für Receiver-System (60 Tests, alle bestanden)
 - [ ] Empfänger-Datenübertragung prüfen: Ziel ist es, dass Empfänger Drohnen-Daten sofort bei Erkennung senden (nicht im Batch alle 2s), damit die Karte Live-Informationen in Echtzeit darstellen kann. Aktuelles Ingest-Intervall analysieren, ggf. auf Event-basierte Übermittlung umstellen.
+- [ ] Logging-System überarbeiten: Prüfen ob Logging überall richtig implementiert ist. Mandanten-weises Log-System mit konfigurierbaren Log-Levels (debug/info/warn/error). Best Practices recherchieren. Neuer Admin-Tab "Log-Viewer" pro Mandant mit Filterung, Suche und Level-Auswahl.
+- [ ] E2E-Tests für Mobile-Ansichten: Alle neuen Mobile-Layouts (Kartenansicht, Admin-Drawer, Empfänger-Karten, UserList-Karten, FlightReport stacked, ViolationTable) brauchen Playwright E2E-Tests mit Mobile-Viewport.
+- [ ] Benutzerhandbuch aktualisieren: Mobile-Ansichten dokumentieren, Einsatz-Zonen Einstellungen (Admin-Tab), Adress-Prüfung bei Zonen-Erstellung, neue Admin-Tooltips, Tablet-Erkennung.
 
 ## Änderungshistorie
 
