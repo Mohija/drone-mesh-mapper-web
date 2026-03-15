@@ -63,4 +63,8 @@ private:
     void _saveCredentials();
     void _loadCredentials();
     void _updateWiFiMode();
+    void _scanAndCache();    // Scan networks and cache results before AP starts
+
+    // Cached scan results (JSON string, populated before AP starts)
+    String _cachedScanJson = "[]";
 };

@@ -29,6 +29,50 @@ const FLASH_INFO: Record<string, { mode: string; size: string; chip: string; era
   'esp8266':  { mode: 'qio', size: '4MB', chip: 'esp8266', erase: 'esptool.py --chip esp8266 erase_flash', offset: '0x0' },
 };
 
+const BOOT_MODE_INFO: Record<string, { port: string; auto: string; manual: { steps: string[]; buttons: string; note?: string } }> = {
+  'esp32-s3': {
+    port: '/dev/ttyACM0 (Linux) oder COM-Port (Windows)',
+    auto: 'Die meisten ESP32-S3 DevKits haben einen USB-JTAG/Serial-Port. Wenn das Board per nativem USB (USB-C direkt am Chip) angeschlossen ist, ist meist kein manueller Boot-Modus nötig — esptool kann den ESP automatisch resetten.',
+    manual: {
+      buttons: 'BOOT + RST (RESET/EN)',
+      steps: [
+        'BOOT-Taste gedrückt halten',
+        'RST-Taste kurz drücken (während BOOT gehalten wird)',
+        'BOOT-Taste loslassen',
+        'Das Board ist jetzt im Download-Modus (bereit zum Flashen)',
+      ],
+      note: 'Der ESP32-S3 hat zwei USB-Anschlüsse auf manchen Boards: USB (nativ, ttyACM) und UART (ttyUSB). Für den Flash-Modus den nativen USB-Port verwenden.',
+    },
+  },
+  'esp32-c3': {
+    port: '/dev/ttyACM0 oder /dev/ttyUSB0 (je nach Board)',
+    auto: 'ESP32-C3 DevKits mit USB-Serial/JTAG unterstützen automatischen Reset über DTR/RTS. Bei USB-CDC Boards (nativ USB) muss der Boot-Modus manuell aktiviert werden.',
+    manual: {
+      buttons: 'BOOT (GPIO9) + RST (RESET/EN)',
+      steps: [
+        'BOOT-Taste (GPIO9) gedrückt halten',
+        'RST-Taste kurz drücken',
+        'BOOT-Taste loslassen',
+        'Download-Modus aktiv',
+      ],
+    },
+  },
+  'esp8266': {
+    port: '/dev/ttyUSB0 (Linux) oder COM-Port (Windows)',
+    auto: 'NodeMCU und D1 Mini Boards haben einen USB-UART Chip (CH340/CP2102) der automatischen Reset über DTR/RTS unterstützt. In der Regel ist kein manueller Boot-Modus nötig.',
+    manual: {
+      buttons: 'FLASH (GPIO0) + RST (RESET)',
+      steps: [
+        'FLASH-Taste (GPIO0) gedrückt halten',
+        'RST-Taste kurz drücken',
+        'FLASH-Taste loslassen',
+        'Download-Modus aktiv',
+      ],
+      note: 'Bei manchen ESP8266-Boards heißt die FLASH-Taste auch "PROG" oder "IO0".',
+    },
+  },
+};
+
 function ChecklistItem({ check }: { check: FirmwareCheck }) {
   const [expanded, setExpanded] = useState(false);
   const hasDetails = check.expected || check.actual || check.detail;
@@ -140,6 +184,68 @@ function ChecklistSummary({ checks }: { checks: FirmwareCheck[] }) {
         {checks.map((check, i) => (
           <ChecklistItem key={i} check={check} />
         ))}
+      </div>
+    </div>
+  );
+}
+
+function BootModeInstructions({ hardwareType, compact }: { hardwareType: string; compact?: boolean }) {
+  const info = BOOT_MODE_INFO[hardwareType];
+  if (!info) return null;
+
+  if (compact) {
+    return (
+      <div style={{
+        marginTop: 10, padding: '8px 10px',
+        background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)',
+        borderRadius: 6, fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5,
+      }}>
+        <strong style={{ color: '#3b82f6' }}>Boot-Modus ({hardwareType.toUpperCase()}):</strong>{' '}
+        {info.manual.steps.map((s, i) => (
+          <span key={i}>{i > 0 ? ' \u2192 ' : ' '}{s}</span>
+        ))}
+        <div style={{ marginTop: 4, color: 'var(--text-muted)' }}>
+          Port: <code style={{ fontSize: 10 }}>{info.port}</code>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      background: 'var(--bg-primary)', border: '1px solid var(--border)',
+      borderRadius: 8, padding: 12, marginTop: 12,
+    }}>
+      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>
+        Boot-Modus: {hardwareType.toUpperCase()}
+      </div>
+
+      <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 8 }}>
+        {info.auto}
+      </div>
+
+      <div style={{
+        background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)',
+        borderRadius: 6, padding: 10, marginBottom: 8,
+      }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: '#3b82f6', marginBottom: 6 }}>
+          Manueller Download-Modus (Tasten: {info.manual.buttons})
+        </div>
+        <ol style={{ margin: 0, paddingLeft: 18, fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.8 }}>
+          {info.manual.steps.map((step, i) => (
+            <li key={i} style={{ fontWeight: i === 0 ? 600 : 400 }}>{step}</li>
+          ))}
+        </ol>
+      </div>
+
+      {info.manual.note && (
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+          {info.manual.note}
+        </div>
+      )}
+
+      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6 }}>
+        Serieller Port: <code style={{ fontSize: 10 }}>{info.port}</code>
       </div>
     </div>
   );
@@ -347,6 +453,9 @@ export default function ReceiverFlashWizard({ node, onClose, regenerateKey = fal
                   kein HTTPS, eingeschränkter RAM (~80KB).
                 </div>
               )}
+
+              {/* Boot mode instructions */}
+              <BootModeInstructions hardwareType={node.hardwareType} />
             </div>
             <button data-testid="flash-wizard-next" onClick={() => setStep('config')} style={primaryBtnStyle}>Weiter</button>
           </div>
@@ -578,6 +687,9 @@ esptool.py --chip ${flashInfo.chip} --port /dev/ttyUSB0 \\
 
 # Windows: --port COM3 (o.ä.) statt /dev/ttyUSB0`}
               </code>
+
+              {/* Boot mode reminder */}
+              <BootModeInstructions hardwareType={node.hardwareType} compact />
 
               {/* SHA-256 troubleshooting hint */}
               <div style={{

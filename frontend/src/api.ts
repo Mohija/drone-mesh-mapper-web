@@ -740,6 +740,19 @@ export async function deleteReceiver(id: string): Promise<void> {
   if (!res.ok) throw new Error(`API error: ${res.status}`);
 }
 
+export async function setReceiverLocation(id: string, latitude: number, longitude: number, accuracy?: number): Promise<ReceiverNode> {
+  const res = await authFetch(`${API_BASE}/receivers/${encodeURIComponent(id)}/location`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ latitude, longitude, accuracy }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Standort setzen fehlgeschlagen' }));
+    throw new Error(err.error || `API error: ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function regenerateReceiverKey(id: string): Promise<ReceiverNode> {
   const res = await authFetch(`${API_BASE}/receivers/${encodeURIComponent(id)}/regenerate-key`, {
     method: 'POST',
@@ -908,4 +921,70 @@ export async function downloadFirmware(nodeId: string): Promise<Blob> {
     throw new Error(err.error || `API error: ${res.status}`);
   }
   return res.blob();
+}
+
+
+// ─── Simulation API ──────────────────────────────────────
+
+export interface SimulatorInstance {
+  id: string;
+  name: string;
+  status: 'stopped' | 'running' | 'error';
+  numDrones: number;
+  activeDrones: number;
+  lat: number;
+  lon: number;
+  hardwareType: 'esp32-s3' | 'esp32-c3' | 'esp8266';
+  receiverNodeId: string;
+  startedAt: number | null;
+  uptimeSeconds: number;
+  detectionsSent: number;
+  error: string | null;
+}
+
+export async function fetchSimulators(): Promise<SimulatorInstance[]> {
+  const res = await authFetch(`${API_BASE}/simulation/instances`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function createSimulator(data: {
+  name: string;
+  numDrones: number;
+  lat: number;
+  lon: number;
+  hardwareType: string;
+}): Promise<SimulatorInstance> {
+  const res = await authFetch(`${API_BASE}/simulation/instances`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Erstellen fehlgeschlagen' }));
+    throw new Error(err.error || `API error: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function deleteSimulator(id: string): Promise<void> {
+  const res = await authFetch(`${API_BASE}/simulation/instances/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+}
+
+export async function startSimulator(id: string): Promise<SimulatorInstance> {
+  const res = await authFetch(`${API_BASE}/simulation/instances/${encodeURIComponent(id)}/start`, { method: 'POST' });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function stopSimulator(id: string): Promise<SimulatorInstance> {
+  const res = await authFetch(`${API_BASE}/simulation/instances/${encodeURIComponent(id)}/stop`, { method: 'POST' });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function stopAllSimulators(): Promise<void> {
+  const res = await authFetch(`${API_BASE}/simulation/stop-all`, { method: 'POST' });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
 }

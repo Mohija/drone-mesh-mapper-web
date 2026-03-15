@@ -5,7 +5,7 @@ import { useTheme } from '../ThemeContext';
 type Section =
   | 'overview' | 'login' | 'map' | 'drones' | 'flightzones'
   | 'nfz' | 'violations' | 'reports' | 'settings' | 'admin'
-  | 'receivers' | 'hardware' | 'tips';
+  | 'receivers' | 'simulation' | 'hardware' | 'tips';
 
 const SECTIONS: { id: Section; title: string; icon: string }[] = [
   { id: 'overview', title: 'Übersicht', icon: '📋' },
@@ -19,6 +19,7 @@ const SECTIONS: { id: Section; title: string; icon: string }[] = [
   { id: 'settings', title: 'Einstellungen', icon: '⚙️' },
   { id: 'admin', title: 'Administration', icon: '👤' },
   { id: 'receivers', title: 'Empfänger-Verwaltung', icon: '📡' },
+  { id: 'simulation', title: 'Simulation', icon: '🧪' },
   { id: 'hardware', title: 'Hardware-Inbetriebnahme', icon: '🔧' },
   { id: 'tips', title: 'Tipps & Tricks', icon: '💡' },
 ];
@@ -733,6 +734,47 @@ function SectionReceivers() {
   );
 }
 
+function SectionSimulation() {
+  return (
+    <div>
+      <h2>Simulation</h2>
+      <p>
+        Unter <strong>Administration → Simulation</strong> kannst du Dummy-Empfänger erstellen und starten,
+        die simulierte Drohnen-Daten erzeugen. Diese verhalten sich exakt wie echte Hardware-Empfänger
+        (ESP32/ESP8266) und eignen sich zum Testen der Karte, Zonen und Verstöße ohne echte Hardware.
+      </p>
+      <h3>Simulator erstellen</h3>
+      <ol>
+        <li>Klicke auf <strong>„+ Neuer Simulator"</strong></li>
+        <li><strong>Name</strong> — Ein beschreibender Name (z.B. „Bielefeld City")</li>
+        <li><strong>Drohnen</strong> — Anzahl simulierter Drohnen (1–50)</li>
+        <li><strong>Position</strong> — Breitengrad/Längengrad als Zentrum der Simulation</li>
+        <li><strong>Hardware</strong> — Simulierter Chip-Typ (ESP32-S3, ESP32-C3, ESP8266)</li>
+        <li>Klicke <strong>„Erstellen & Starten"</strong></li>
+      </ol>
+      <h3>Funktionsweise</h3>
+      <ul>
+        <li>Jeder Simulator erzeugt einen echten Empfänger-Eintrag (mit [SIM]-Prefix) in der Datenbank</li>
+        <li>Drohnen fliegen in realistischen Kreisbahnen mit variierender Höhe und Geschwindigkeit</li>
+        <li>Detections werden alle <strong>2 Sekunden</strong> gesendet (wie bei echten Empfängern)</li>
+        <li>Heartbeats alle <strong>30 Sekunden</strong> mit simulierten Systemwerten (WiFi, Heap, Uptime)</li>
+        <li>Verschiedene Drohnenmodelle (DJI, Autel, Skydio, etc.) mit unterschiedlichen Quellen (WiFi/BLE)</li>
+      </ul>
+      <h3>Voraussetzung</h3>
+      <p>
+        Die Datenquelle <strong>„Empfänger"</strong> muss in den <strong>Einstellungen</strong> aktiviert sein,
+        damit die simulierten Drohnen auf der Karte erscheinen.
+      </p>
+      <h3>Wichtig</h3>
+      <ul>
+        <li>Simulatoren sind <strong>flüchtig</strong> — nach einem Server-Neustart sind sie weg</li>
+        <li>Die erzeugten [SIM]-Empfänger bleiben in der DB (Status: offline)</li>
+        <li>„Alle stoppen" beendet alle laufenden Simulatoren des aktuellen Mandanten</li>
+      </ul>
+    </div>
+  );
+}
+
 function SectionHardware() {
   return (
     <div>
@@ -788,6 +830,41 @@ function SectionHardware() {
         Verbinde das ESP-Board per USB mit deinem Computer. Stelle sicher, dass es ein Datenkabel ist
         (bei reinen Ladekabeln wird das Board nicht erkannt).
       </InfoBox>
+      <h4>Board in den Download-Modus versetzen</h4>
+      <p>
+        Bevor die Firmware geflasht werden kann, muss das Board in den Download-Modus versetzt werden.
+        Viele DevKits machen das automatisch (via DTR/RTS). Falls nicht, manuell:
+      </p>
+      <table style={tableStyle}>
+        <thead>
+          <tr><th style={thStyle}>Board</th><th style={thStyle}>Tasten</th><th style={thStyle}>Anleitung</th><th style={thStyle}>Port</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style={tdStyle}><strong>ESP32-S3</strong></td>
+            <td style={tdStyle}>BOOT + RST</td>
+            <td style={tdStyle}>BOOT halten → RST kurz drücken → BOOT loslassen</td>
+            <td style={tdStyle}><code>/dev/ttyACM0</code></td>
+          </tr>
+          <tr>
+            <td style={tdStyle}><strong>ESP32-C3</strong></td>
+            <td style={tdStyle}>BOOT (GPIO9) + RST</td>
+            <td style={tdStyle}>BOOT halten → RST kurz drücken → BOOT loslassen</td>
+            <td style={tdStyle}><code>/dev/ttyACM0</code> oder <code>/dev/ttyUSB0</code></td>
+          </tr>
+          <tr>
+            <td style={tdStyle}><strong>ESP8266</strong></td>
+            <td style={tdStyle}>FLASH (GPIO0) + RST</td>
+            <td style={tdStyle}>FLASH halten → RST kurz drücken → FLASH loslassen</td>
+            <td style={tdStyle}><code>/dev/ttyUSB0</code></td>
+          </tr>
+        </tbody>
+      </table>
+      <InfoBox type="warning">
+        <strong>ESP32-S3 Hinweis:</strong> Bei Boards mit nativem USB (ttyACM) wird <code>Serial.print</code> nur angezeigt
+        wenn die Firmware mit <code>ARDUINO_USB_CDC_ON_BOOT=1</code> gebaut wurde (FlightArc macht das automatisch).
+        Der Port wechselt nach dem Flashen möglicherweise — unter Linux mit <code>ls /dev/ttyACM*</code> prüfen.
+      </InfoBox>
       <h4>Option A: esptool (empfohlen)</h4>
       <InfoBox type="warning">
         <strong>Wichtig:</strong> Beim ersten Flashen oder bei SHA-256-Fehlern immer zuerst den Flash komplett löschen!
@@ -820,27 +897,44 @@ function SectionHardware() {
         „Install" → Wähle die heruntergeladene .bin Datei → Flash.
       </p>
       <h3>Schritt 4: Erstinbetriebnahme</h3>
+      <h4>LED-Signale</h4>
+      <table style={tableStyle}>
+        <thead>
+          <tr><th style={thStyle}>LED-Muster</th><th style={thStyle}>Bedeutung</th><th style={thStyle}>Was tun?</th></tr>
+        </thead>
+        <tbody>
+          <tr><td style={tdStyle}><strong>Schnelles Blinken</strong> (100ms)</td><td style={tdStyle}>Boot / WLAN-Suche</td><td style={tdStyle}>Warten — ESP sucht nach konfiguriertem Netzwerk</td></tr>
+          <tr><td style={tdStyle}><strong>Langsames Pulsieren</strong> (kurz an, lang aus)</td><td style={tdStyle}>Kein WLAN — Hotspot offen</td><td style={tdStyle}>Mit Handy/Laptop mit <strong>„FlightArc-XXXX"</strong> verbinden und WLAN konfigurieren</td></tr>
+          <tr><td style={tdStyle}><strong>Doppelblinken</strong> (2x kurz, Pause)</td><td style={tdStyle}>WLAN ok, Backend nicht erreichbar</td><td style={tdStyle}>Backend-URL und Netzwerk prüfen (Server erreichbar? Firewall? Port?)</td></tr>
+          <tr><td style={tdStyle}><strong>Dauerhaft an</strong></td><td style={tdStyle}>Alles ok — Online</td><td style={tdStyle}>Empfänger funktioniert, sendet Heartbeats und Erkennungen</td></tr>
+          <tr><td style={tdStyle}><strong>Kurzes Aus-Blitzen</strong> (80ms)</td><td style={tdStyle}>Drohne erkannt</td><td style={tdStyle}>Normale Aktivität — LED blitzt bei jeder gesendeten Erkennung</td></tr>
+          <tr><td style={tdStyle}><strong>SOS-Muster</strong></td><td style={tdStyle}>Schwerer Fehler</td><td style={tdStyle}>ESP neustarten, ggf. Flash löschen und Firmware neu flashen</td></tr>
+        </tbody>
+      </table>
+
+      <h4>Erstinbetriebnahme</h4>
       <ol>
-        <li><strong>Strom anschließen</strong> — Der ESP startet und die LED blinkt schnell (Boot / WiFi-Verbindung wird versucht).</li>
+        <li><strong>Strom anschließen</strong> — LED blinkt schnell (WLAN-Suche, ~15 Sekunden).</li>
         <li><strong>WiFi-Verbindung</strong> —
           <ul>
-            <li>Wenn WiFi-Daten in der Firmware eingebettet: Verbindet sich automatisch. LED blinkt langsam (WiFi OK).</li>
-            <li>Wenn kein WiFi konfiguriert oder das Netzwerk nicht erreichbar ist: Nach 30 Sekunden startet der ESP
-              automatisch einen Hotspot <strong>„FlightArc-XXXX"</strong> (LED: Dreifach-Blinken).</li>
+            <li>Wenn WiFi-Daten in der Firmware eingebettet: Verbindet sich automatisch. LED wechselt zu Doppelblinken (Backend-Suche), dann dauerhaft an.</li>
+            <li>Wenn kein WiFi konfiguriert oder das Netzwerk nicht erreichbar: Nach 15 Sekunden startet der ESP
+              automatisch einen Hotspot <strong>„FlightArc-XXXX"</strong> (LED: langsames Pulsieren).</li>
           </ul>
         </li>
         <li><strong>Captive Portal</strong> (bei Hotspot) — Verbinde dich mit dem Hotspot <strong>„FlightArc-XXXX"</strong>,
           ein Konfigurationsportal öffnet sich automatisch:
           <ul>
-            <li>WiFi-Netzwerk auswählen oder manuell eingeben</li>
-            <li>Passwort eingeben → „Verbinden" klicken</li>
-            <li>Optional: GPS-Position über Browser-Geolocation setzen</li>
+            <li>Es wird eine <strong>zwischengespeicherte Netzwerkliste</strong> angezeigt, die vor dem Hotspot-Start gescannt wurde</li>
+            <li>WiFi-Netzwerk aus der Liste auswählen und Passwort eingeben</li>
+            <li><strong>Netzwerk nicht gefunden?</strong> — SSID und Passwort können auch manuell eingegeben werden</li>
+            <li>Hinweis: Den Standort des Empfängers setzt du über die FlightArc Web-App unter <strong>Administration → Empfänger → Standort setzen</strong></li>
             <li>Der ESP verbindet sich mit dem WiFi und der <strong>Hotspot schaltet sich automatisch ab</strong></li>
           </ul>
         </li>
-        <li><strong>Automatische Wiederherstellung</strong> — Falls das WiFi-Netzwerk ausfällt, startet der ESP den
-          Hotspot erneut. Sobald das Netzwerk wieder da ist, verbindet er sich automatisch und der Hotspot geht aus.</li>
-        <li><strong>Online</strong> — LED leuchtet dauerhaft. Der Empfänger sendet nun Heartbeats (alle 30s) und Erkennungen (alle 2s).</li>
+        <li><strong>Automatische Wiederherstellung</strong> — Falls das WiFi ausfällt, startet der ESP nach 3 gescheiterten Versuchen (~30s)
+          den Hotspot erneut (LED: langsames Pulsieren). Sobald das Netzwerk wieder da ist, verbindet er sich automatisch und der Hotspot geht aus.</li>
+        <li><strong>Online</strong> — LED leuchtet dauerhaft. Der Empfänger sendet Heartbeats (alle 30s) und Erkennungen (alle 2s).</li>
       </ol>
       <h3>Antenne anschließen (ESP32-S3 mit IPEX)</h3>
       <InfoBox type="info">
@@ -1136,6 +1230,7 @@ const SECTION_CONTENT: Record<Section, () => JSX.Element> = {
   settings: SectionSettings,
   admin: SectionAdmin,
   receivers: SectionReceivers,
+  simulation: SectionSimulation,
   hardware: SectionHardware,
   tips: SectionTips,
 };

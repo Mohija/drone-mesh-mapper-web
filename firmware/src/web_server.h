@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include <DNSServer.h>
 #include "wifi_manager.h"
 #include "http_client.h"
 #include "odid_scanner.h"
@@ -20,6 +21,9 @@ private:
     WiFiManager* _wifi = nullptr;
     FlightArcClient* _client = nullptr;
     OdidScanner* _scanner = nullptr;
+
+    DNSServer _dns;
+    bool _dnsRunning = false;
 
     float _lat = 0;
     float _lon = 0;

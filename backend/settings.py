@@ -147,6 +147,10 @@ class SettingsManager:
         # In-memory fallback
         with self._lock:
             if "sources" in updates:
+                # Ensure all default sources exist
+                for src_id, src_defaults in DEFAULT_SOURCES.items():
+                    if src_id not in self._mem_settings["sources"]:
+                        self._mem_settings["sources"][src_id] = _deep_copy(src_defaults)
                 for src_id, src_cfg in updates["sources"].items():
                     if src_id in self._mem_settings["sources"]:
                         self._mem_settings["sources"][src_id].update(src_cfg)
@@ -161,7 +165,13 @@ class SettingsManager:
         ts = TenantSettings.query.filter_by(tenant_id=tenant_id).first()
         if ts:
             if "sources" in updates:
-                current = _deep_copy(ts.sources) if ts.sources else _deep_copy(DEFAULT_SOURCES)
+                # Start from defaults so new source types are always present
+                current = _deep_copy(DEFAULT_SOURCES)
+                if ts.sources:
+                    for src_id, src_cfg in ts.sources.items():
+                        if src_id in current:
+                            current[src_id].update(src_cfg)
+                # Apply incoming updates
                 for src_id, src_cfg in updates["sources"].items():
                     if src_id in current:
                         current[src_id].update(src_cfg)

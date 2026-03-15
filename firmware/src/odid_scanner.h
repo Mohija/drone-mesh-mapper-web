@@ -46,6 +46,11 @@ public:
     void begin();
     void loop();
 
+    // Pause/resume promiscuous mode (needed when AP is active)
+    void pauseWifiScan();
+    void resumeWifiScan();
+    bool isWifiScanPaused() const { return _wifiPaused; }
+
     // Get buffered detections and clear buffer
     int getDetections(OdidDetection* out, int maxCount);
     int getDetectionCount() const { return _count; }
@@ -59,6 +64,7 @@ private:
     volatile int _count = 0;
 
     void _startPromiscuousMode();
+    bool _wifiPaused = false;
     void _addOrUpdateDetection(const OdidDetection& det);
 
 #if HAS_BLE

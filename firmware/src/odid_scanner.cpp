@@ -131,14 +131,13 @@ void OdidScanner::begin() {
     detectionQueue = xQueueCreate(MAX_DETECTIONS, sizeof(OdidDetection));
 #endif
 
-    _startPromiscuousMode();
+    // Start WiFi promiscuous mode paused — will be resumed when STA connects
+    // This avoids blocking the AP hotspot and WiFi network scans
+    _wifiPaused = true;
+    Serial.println("[Scanner] WiFi scan starts paused (until STA connected)");
 
 #if HAS_BLE
     _startBleScan();
-#endif
-
-    Serial.println("[Scanner] ODID scanner started (opendroneid library)");
-#if HAS_BLE
     Serial.println("[Scanner] BLE scanning enabled (NimBLE)");
 #else
     Serial.println("[Scanner] BLE not available, WiFi only");
@@ -146,6 +145,8 @@ void OdidScanner::begin() {
 #if USE_DUAL_CORE
     Serial.println("[Scanner] Dual-core mode active (ESP32-S3)");
 #endif
+
+    Serial.println("[Scanner] ODID scanner ready");
 }
 
 void OdidScanner::loop() {
@@ -515,3 +516,29 @@ void OdidScanner::_startBleScan() {
 }
 
 #endif // HAS_BLE
+
+// ─── Pause/Resume WiFi promiscuous mode ─────────────────
+
+void OdidScanner::pauseWifiScan() {
+    if (_wifiPaused) return;
+    _wifiPaused = true;
+#ifdef ESP32
+    esp_wifi_set_promiscuous(false);
+#endif
+#if HAS_BLE
+    // Pause BLE too — radio coexistence with AP
+    NimBLEDevice::getScan()->stop();
+#endif
+    Serial.println("[Scanner] Scanning paused (WiFi + BLE)");
+}
+
+void OdidScanner::resumeWifiScan() {
+    if (!_wifiPaused) return;
+    _wifiPaused = false;
+    _startPromiscuousMode();
+#if HAS_BLE
+    // Resume BLE scan
+    NimBLEDevice::getScan()->start(0, nullptr, false);
+#endif
+    Serial.println("[Scanner] Scanning resumed (WiFi + BLE)");
+}

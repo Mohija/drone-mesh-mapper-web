@@ -6,6 +6,7 @@ const navItems = [
   { to: '/admin/tenants', label: 'Mandanten', superAdminOnly: true },
   { to: '/admin/users', label: 'Benutzer' },
   { to: '/admin/receivers', label: 'Empfänger' },
+  { to: '/admin/simulation', label: 'Simulation' },
 ];
 
 export default function AdminLayout() {

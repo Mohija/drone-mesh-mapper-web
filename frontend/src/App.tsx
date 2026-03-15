@@ -11,6 +11,7 @@ import AdminDashboard from './components/admin/AdminDashboard';
 import TenantList from './components/admin/TenantList';
 import UserList from './components/admin/UserList';
 import ReceiverList from './components/admin/ReceiverList';
+import SimulationTab from './components/admin/SimulationTab';
 
 export default function App() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
         <Route path="tenants" element={<TenantList />} />
         <Route path="users" element={<UserList />} />
         <Route path="receivers" element={<ReceiverList />} />
+        <Route path="simulation" element={<SimulationTab />} />
       </Route>
     </Routes>
   );

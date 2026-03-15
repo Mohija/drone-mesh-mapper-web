@@ -2,7 +2,7 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-14 (v1.5.2: Connection Log für Empfänger-Kommunikation)
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-15 (v1.5.3: Firmware v1.0.8, Simulation-Tab, Standort über Web-App)
 - **Typ:** Projekt | **Status:** Development
 
 ## Offene Aufgaben
@@ -16,6 +16,91 @@
 - [x] Umfassende E2E-Tests für Receiver-System (60 Tests, alle bestanden)
 
 ## Änderungshistorie
+
+### 2026-03-15 - v1.5.3: Firmware v1.0.8, Simulation-Tab, Standort über Web-App
+
+**Firmware v1.0.8: Vollständig getesteter Hardware-Betrieb (ESP32-S3 DevKitC)**
+- RGB Neopixel LED (GPIO48) statt GPIO2 — farbige Statusanzeige:
+  - Blau blinken = Boot/WLAN-Suche
+  - Gelb pulsieren = Kein WLAN, Hotspot offen
+  - Orange doppelblinken = WLAN ok, Backend nicht erreichbar
+  - Grün dauerhaft = Online, alles ok
+  - Weiß flash = Drohne erkannt
+  - Rot SOS = Fehler
+- Captive Portal: Netzwerke werden VOR dem Hotspot-Start gescannt und gecacht
+- WiFi-Scanner (Promiscuous Mode) + BLE pausieren im AP-Modus (Hotspot sonst unsichtbar)
+- Scanner startet erst wenn STA verbunden (nicht beim Boot)
+- DNS-Server für automatisches Captive Portal Popup
+- Manuelles SSID-Feld falls Netzwerk nicht in der Liste
+- Live-Verbindungsstatus nach WLAN-Auswahl
+
+**Empfänger-Standort über Web-App (statt Captive Portal)**
+- Neuer Button "Standort setzen" in der Empfänger-Detail-Ansicht
+- Nutzt Browser Geolocation API (Handy-GPS)
+- Speichert Koordinaten + Genauigkeit am Empfänger
+- Backend: `POST /api/receivers/<id>/location`
+- Captive Portal: GPS-Sektion entfernt, Hinweis auf Web-App
+
+### 2026-03-15 - v1.0.1: LED-Feedback, Boot-Mode Anleitung, Firmware-Fixes, Simulation-Tab
+
+**Firmware v1.0.1: Überarbeitetes LED-Feedback**
+- 5 klare LED-Zustände statt 7 unklare:
+  - Schnelles Blinken (100ms) = Boot/WLAN-Suche
+  - Langsames Pulsieren (300ms an, 1200ms aus) = Kein WLAN, Hotspot offen
+  - Doppelblinken (2x kurz, Pause) = WLAN ok, Backend nicht erreichbar
+  - Dauerhaft an = Alles ok, online
+  - SOS-Muster = Schwerer Fehler
+- Detection-Flash: 80ms Aus-Blitz bei jeder Erkennung
+- AP-Timeout von 30s auf 15s reduziert
+- AP startet auch bei verlorenem WLAN nach 3 Versuchen (~30s)
+
+**Flash-Wizard: Board-spezifische Boot-Mode Anleitung**
+- Jeder Board-Typ (ESP32-S3, ESP32-C3, ESP8266) zeigt die passende Anleitung zum Versetzen in den Download-Modus
+- Intro-Step: Ausführliche Anleitung mit Tasten, Auto-Reset-Info, Port-Hinweisen
+- Download-Step: Kompakte Kurzanleitung als Erinnerung beim Flashen
+- HelpPage: Neue Tabelle mit allen Board-Typen und Boot-Mode Schritten
+
+**Firmware-Fixes (aus realem Hardware-Test mit ESP32-S3)**
+- `inject_build_flags.py` (NEU): PlatformIO Extra-Script für space-safe Build-Flags (WiFi SSIDs mit Leerzeichen)
+- `platformio.ini`: Umstellung von `-D` sysenv auf `extra_scripts` mit `CPPDEFINES`
+- `main.cpp`: Stack-Overflow Fix — `OdidDetection[50]` von Stack zu `static` (9KB war zu groß für 8KB loopTask)
+- `ARDUINO_USB_CDC_ON_BOOT=1` für ESP32-S3 serielle Ausgabe über nativen USB-Port
+
+### 2026-03-15 - Simulation-Tab mit Dummy-Empfängern
+
+**Neues Feature: Admin → Simulation Tab**
+- Erstellen, Starten, Stoppen und Löschen von Dummy-Empfängern direkt in der Admin-UI
+- Jeder Simulator erzeugt einen echten ReceiverNode in der DB (mit [SIM]-Prefix)
+- Drohnen fliegen in realistischen Kreisbahnen (verschiedene Modelle, Quellen, RSSI)
+- In-Process Threads (kein subprocess) — direkte Calls an ReceiverProvider.ingest()
+- Stats: Laufzeit, Detections, aktive Drohnen — alles live aktualisiert (3s Polling)
+- "Alle stoppen" Button für schnelles Cleanup
+
+**Bug Fix: Empfänger-Quelle ließ sich nicht aktivieren**
+- `backend/settings.py` `_write_to_db()`: Neue Source-Typen wurden beim Speichern ignoriert wenn sie noch nicht in der DB existierten. Fix: Merge immer zuerst mit DEFAULT_SOURCES.
+
+**Dateien:**
+- `backend/services/simulation_manager.py` (NEU) — SimulationManager + SimulatedDrone
+- `backend/routes/simulation_routes.py` (NEU) — REST API für Simulatoren
+- `backend/routes/__init__.py` — Blueprint registriert
+- `backend/app.py` — SimulationManager initialisiert + atexit Cleanup
+- `backend/settings.py` — Bug Fix für Source-Toggle
+- `frontend/src/api.ts` — Simulation API-Funktionen
+- `frontend/src/components/admin/SimulationTab.tsx` (NEU) — UI-Komponente
+- `frontend/src/components/admin/AdminLayout.tsx` — Nav-Item hinzugefügt
+- `frontend/src/App.tsx` — Route hinzugefügt
+- `frontend/src/components/HelpPage.tsx` — Dokumentation ergänzt
+- `examples/dummy_receiver.py` — Standalone Dummy (Default: Bielefeld)
+
+## Wichtige Hinweise
+
+### ⚠️ KRITISCH: Firmware ↔ Dummy-Synchronisation
+**Bei JEDER Änderung an der Firmware (firmware/src/) MUSS auch der Dummy-Receiver angepasst werden:**
+- `backend/services/simulation_manager.py` — In-Process Simulator (SimulatedDrone, to_detection_dict)
+- `examples/dummy_receiver.py` — Standalone Python Dummy (OdidDetection, FlightArcClient)
+
+Beide müssen exakt die gleichen Payloads, Felder, Timing und Logik haben wie die echte Firmware,
+damit man die erwarteten Ergebnisse und Logs vergleichen kann.
 
 ### 2026-03-14 - v1.5.2: Connection Log + erweiterte Firmware-Telemetrie
 

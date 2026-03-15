@@ -3,13 +3,28 @@
 #include <Arduino.h>
 #include "config.h"
 
+/**
+ * LED Status — visual feedback.
+ *
+ * ESP32-S3 DevKitC: RGB Neopixel on GPIO48 (neopixelWrite)
+ * ESP32-C3 / ESP8266: Built-in LED on GPIO2 (digitalWrite)
+ *
+ * States:
+ *   LED_BOOT        Blue fast blink       — Booting, WLAN-Suche
+ *   LED_NO_WIFI     Yellow slow pulse     — Kein WLAN, Hotspot offen
+ *   LED_NO_BACKEND  Orange double blink   — WLAN ok, Backend nicht erreichbar
+ *   LED_ONLINE      Green solid           — Alles ok
+ *   LED_ERROR       Red SOS               — Schwerer Fehler
+ *
+ * Detection flash: Brief white flash on any state.
+ */
+
 enum LedState {
-    LED_BOOT,           // Fast blink (100ms) - connecting to WiFi
-    LED_AP_ACTIVE,      // Triple blink every 2s - AP hotspot active, waiting for provisioning
-    LED_WIFI_OK,        // Slow blink (500ms) - WiFi OK, no backend
-    LED_ONLINE,         // Solid on - heartbeat OK
-    LED_DETECTION,      // Brief flash off (50ms) - detection received
-    LED_ERROR           // Double blink every 2s - error
+    LED_BOOT,
+    LED_NO_WIFI,
+    LED_NO_BACKEND,
+    LED_ONLINE,
+    LED_ERROR
 };
 
 class LedStatus {
@@ -21,9 +36,10 @@ public:
 
 private:
     LedState _state = LED_BOOT;
-    unsigned long _lastToggle = 0;
-    bool _ledOn = false;
+    bool _on = false;
     bool _flashActive = false;
     unsigned long _flashStart = 0;
-    int _blinkPhase = 0;
+
+    void _setColor(uint8_t r, uint8_t g, uint8_t b);
+    void _off();
 };

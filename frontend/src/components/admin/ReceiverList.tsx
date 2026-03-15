@@ -9,6 +9,7 @@ import {
   fetchConnectionLog,
   toggleConnectionLog,
   clearConnectionLog,
+  setReceiverLocation,
 } from '../../api';
 import type { ReceiverNode, ReceiverStats, ConnectionLogEntry } from '../../api';
 import ReceiverFlashWizard from './ReceiverFlashWizard';
@@ -247,6 +248,10 @@ export default function ReceiverList() {
   // Flash wizard
   const [flashNode, setFlashNode] = useState<ReceiverNode | null>(null);
   const [flashRegenKey, setFlashRegenKey] = useState(false);
+
+  // GPS location
+  const [locatingId, setLocatingId] = useState<string | null>(null);
+  const [locMsg, setLocMsg] = useState<string | null>(null);
 
   // Connection log
   const [logEnabled, setLogEnabled] = useState(false);
@@ -940,7 +945,64 @@ export default function ReceiverList() {
                               Kommunikations-Log
                             </button>
                           )}
+                          <button
+                            data-testid={`receiver-location-${node.id}`}
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (!navigator.geolocation) {
+                                setLocMsg('GPS nicht verfügbar in diesem Browser');
+                                return;
+                              }
+                              setLocatingId(node.id);
+                              setLocMsg(null);
+                              navigator.geolocation.getCurrentPosition(
+                                async (pos) => {
+                                  try {
+                                    await setReceiverLocation(
+                                      node.id,
+                                      pos.coords.latitude,
+                                      pos.coords.longitude,
+                                      pos.coords.accuracy
+                                    );
+                                    setLocMsg(`Standort gesetzt: ${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)} (±${pos.coords.accuracy.toFixed(0)}m)`);
+                                    await loadData();
+                                  } catch (err: unknown) {
+                                    setLocMsg(err instanceof Error ? err.message : 'Fehler beim Speichern');
+                                  } finally {
+                                    setLocatingId(null);
+                                  }
+                                },
+                                (err) => {
+                                  setLocMsg(`GPS-Fehler: ${err.message}`);
+                                  setLocatingId(null);
+                                },
+                                { enableHighAccuracy: true, timeout: 15000 }
+                              );
+                            }}
+                            disabled={locatingId === node.id}
+                            style={{
+                              padding: '5px 12px',
+                              background: 'var(--bg-tertiary)',
+                              border: '1px solid var(--border)',
+                              borderRadius: 6,
+                              color: locatingId === node.id ? '#14b8a6' : 'var(--text-secondary)',
+                              cursor: locatingId === node.id ? 'wait' : 'pointer',
+                              fontSize: 11,
+                            }}
+                          >
+                            {locatingId === node.id ? 'GPS wird abgerufen...' : 'Standort setzen'}
+                          </button>
                         </div>
+                        {/* Location feedback */}
+                        {locMsg && expandedId === node.id && (
+                          <div style={{
+                            marginTop: 8, padding: '6px 10px', borderRadius: 6, fontSize: 11,
+                            background: locMsg.includes('Fehler') ? 'rgba(239,68,68,0.1)' : 'rgba(34,197,94,0.1)',
+                            color: locMsg.includes('Fehler') ? '#ef4444' : '#22c55e',
+                          }}>
+                            {locMsg}
+                          </div>
+                        )}
                       </td>
                     </tr>
                   )}

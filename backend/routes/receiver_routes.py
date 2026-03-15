@@ -96,6 +96,34 @@ def update_receiver(node_id: str):
     return jsonify(node.to_dict())
 
 
+@receiver_bp.route("/<node_id>/location", methods=["POST"])
+@login_required
+@role_required("tenant_admin")
+def set_receiver_location(node_id: str):
+    """Set receiver location from browser geolocation (e.g. phone GPS)."""
+    node = ReceiverNode.query.filter_by(id=node_id, tenant_id=g.tenant_id).first()
+    if not node:
+        return jsonify({"error": "Empfänger nicht gefunden"}), 404
+
+    data = request.get_json(silent=True) or {}
+    lat = data.get("latitude")
+    lon = data.get("longitude")
+    accuracy = data.get("accuracy")
+
+    if lat is None or lon is None:
+        return jsonify({"error": "latitude und longitude erforderlich"}), 400
+
+    node.last_latitude = float(lat)
+    node.last_longitude = float(lon)
+    if accuracy is not None:
+        node.last_location_accuracy = float(accuracy)
+
+    db.session.commit()
+    logger.info("Location set for receiver %s: %.6f, %.6f (acc: %.1f)",
+                node.id, node.last_latitude, node.last_longitude, node.last_location_accuracy or 0)
+    return jsonify(node.to_dict())
+
+
 @receiver_bp.route("/<node_id>", methods=["DELETE"])
 @login_required
 @role_required("tenant_admin")

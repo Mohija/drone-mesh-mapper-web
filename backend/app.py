@@ -124,6 +124,13 @@ settings.bind(DEFAULT_TENANT_ID, app)
 registry = ProviderRegistry(fleet)
 app.config["_registry"] = registry
 
+# Initialize simulation manager (dummy receiver spawner)
+from services.simulation_manager import SimulationManager
+import atexit
+sim_manager = SimulationManager(app=app, registry=registry)
+app.config["_sim_manager"] = sim_manager
+atexit.register(sim_manager.stop_all)
+
 archive = TrailArchiveManager(app=app, tenant_id=DEFAULT_TENANT_ID)
 archive.bind(app, DEFAULT_TENANT_ID)
 

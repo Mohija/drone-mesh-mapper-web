@@ -113,9 +113,14 @@ void WiFiManager::loop() {
     }
 
     // ── AP startup: start AP when STA can't connect ──────────
+    // After boot timeout OR when WiFi was previously connected but lost
     if (!connected && !_apActive) {
-        if (!_staConfigured || (now - _bootTime > WIFI_AP_TIMEOUT_MS)) {
-            Serial.println("[WiFi] STA not connected — starting AP for provisioning");
+        bool bootTimeout = (now - _bootTime > WIFI_AP_TIMEOUT_MS);
+        bool wifiLost = (_staConnectAttempts >= 3);  // 3 failed retries = 30s
+        if (!_staConfigured || bootTimeout || wifiLost) {
+            // Scan networks BEFORE starting AP (hardware can't do both)
+            _scanAndCache();
+            Serial.println("[WiFi] Starting AP for provisioning");
             _startAp();
         }
     }
@@ -147,8 +152,8 @@ void WiFiManager::loop() {
         _connectSta();
     }
 
-    // ── Periodic WiFi scan (for captive portal + network selection) ─
-    if (now - _lastScan > WIFI_SCAN_INTERVAL_MS) {
+    // ── Periodic WiFi scan (only when not in AP mode) ─
+    if (!_apActive && (now - _lastScan > WIFI_SCAN_INTERVAL_MS)) {
         _lastScan = now;
         WiFi.scanNetworks(true); // async scan
     }
@@ -197,8 +202,13 @@ void WiFiManager::setStaCredentials(const String& ssid, const String& pass) {
 }
 
 String WiFiManager::getScanResultsJson() {
+    // When AP is active, return cached results (can't scan while AP runs)
+    if (_apActive) {
+        return _cachedScanJson;
+    }
+
     int n = WiFi.scanComplete();
-    if (n < 0) return "[]";
+    if (n < 0) return _cachedScanJson;  // Return cache if no fresh results
 
     String json = "[";
     for (int i = 0; i < n; i++) {
@@ -209,16 +219,50 @@ String WiFiManager::getScanResultsJson() {
     }
     json += "]";
     WiFi.scanDelete();
+
+    // Update cache
+    _cachedScanJson = json;
     return json;
+}
+
+void WiFiManager::_scanAndCache() {
+    Serial.println("[WiFi] Scanning networks...");
+
+    // Stop any active connection attempt so scan can run
+    WiFi.disconnect(false);
+    WiFi.mode(WIFI_STA);
+    delay(200);
+
+    int n = WiFi.scanNetworks(false, false, false, 300);  // sync, no hidden, no passive, 300ms/ch
+    Serial.printf("[WiFi] Found %d networks\n", n);
+
+    if (n > 0) {
+        String json = "[";
+        for (int i = 0; i < n; i++) {
+            if (i > 0) json += ",";
+            json += "{\"ssid\":\"" + WiFi.SSID(i) + "\","
+                    "\"rssi\":" + String(WiFi.RSSI(i)) + ","
+                    "\"secure\":" + String(WiFi.encryptionType(i) != 0 ? "true" : "false") + "}";
+        }
+        json += "]";
+        _cachedScanJson = json;
+        WiFi.scanDelete();
+    }
 }
 
 void WiFiManager::_startAp() {
     if (_apActive) return;
 
-    _updateWiFiMode();
-    WiFi.softAP(_apSsid.c_str());
+    // Set mode to AP (or AP+STA if STA configured)
+    WiFi.mode(_staConfigured ? WIFI_AP_STA : WIFI_AP);
+    delay(100);
+
+    // Start AP on channel 1, open network
+    WiFi.softAP(_apSsid.c_str(), nullptr, 1, 0, 4);  // ch1, no pass, not hidden, max 4 clients
     _apActive = true;
-    Serial.printf("[WiFi] AP started: %s (IP: %s)\n", _apSsid.c_str(), WiFi.softAPIP().toString().c_str());
+
+    delay(100);
+    Serial.printf("[WiFi] AP started: %s (IP: %s, ch: 1)\n", _apSsid.c_str(), WiFi.softAPIP().toString().c_str());
 }
 
 void WiFiManager::_stopAp() {

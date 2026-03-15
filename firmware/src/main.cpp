@@ -78,25 +78,37 @@ void loop() {
 
     // LED state based on connectivity
     if (!wifiMgr.isStaConnected()) {
-        if (wifiMgr.isApActive()) {
-            led.setState(LED_AP_ACTIVE);  // AP mode — waiting for provisioning
+        if (millis() - lastIngest < 15000 && !wifiMgr.isApActive()) {
+            // First 15s after boot: still searching
+            led.setState(LED_BOOT);
         } else {
-            led.setState(LED_BOOT);       // Trying to connect
+            // No WiFi for a while — slow pulse, AP should be open
+            led.setState(LED_NO_WIFI);
         }
     } else if (!client.isBackendReachable()) {
-        led.setState(LED_WIFI_OK);
+        led.setState(LED_NO_BACKEND);
     } else {
         led.setState(LED_ONLINE);
     }
 
-    // Scanner loop (mostly event-driven)
+    // ODID scanner: only active when STA connected and AP off
+    // Promiscuous mode blocks AP beacon transmission
+    if (wifiMgr.isStaConnected() && !wifiMgr.isApActive()) {
+        if (scanner.isWifiScanPaused()) {
+            scanner.resumeWifiScan();
+        }
+    } else if (!scanner.isWifiScanPaused()) {
+        scanner.pauseWifiScan();
+    }
+
+    // Scanner loop (mostly event-driven, BLE runs independently)
     scanner.loop();
 
     // Send detections every INGEST_INTERVAL_MS
     if (wifiMgr.isStaConnected() && (now - lastIngest >= INGEST_INTERVAL_MS)) {
         lastIngest = now;
 
-        OdidDetection detections[MAX_DETECTIONS];
+        static OdidDetection detections[MAX_DETECTIONS];
         int count = scanner.getDetections(detections, MAX_DETECTIONS);
 
         if (count > 0) {
