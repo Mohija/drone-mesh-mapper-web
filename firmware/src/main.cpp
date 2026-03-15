@@ -130,7 +130,7 @@ void loop() {
         float lon = portal.hasLocation() ? portal.getLongitude() : 0;
         float acc = portal.hasLocation() ? portal.getAccuracy() : 0;
 
-        client.sendHeartbeat(
+        OtaInfo ota = client.sendHeartbeat(
             FIRMWARE_VERSION,
             HARDWARE_TYPE,
             wifiMgr.getConnectedSsid().c_str(),
@@ -142,6 +142,22 @@ void loop() {
             wifiMgr.isApActive(),
             lat, lon, acc
         );
+
+        // OTA update available?
+        if (ota.available && ota.url.length() > 0) {
+            Serial.printf("[Main] OTA update available: %s (%d bytes)\n",
+                          ota.version.c_str(), ota.size);
+            // Pause scanner during OTA download
+            scanner.pauseWifiScan();
+            led.setState(LED_BOOT);  // Blink during OTA
+
+            if (client.performOtaUpdate(ota.url)) {
+                // Won't reach here — ESP reboots on success
+            } else {
+                Serial.println("[Main] OTA failed, resuming normal operation");
+            }
+            // Resume after failed OTA (success reboots)
+        }
     }
 
     // LED update

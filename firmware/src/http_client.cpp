@@ -86,7 +86,7 @@ bool FlightArcClient::sendIngest(OdidDetection* detections, int count,
     return ok;
 }
 
-bool FlightArcClient::sendHeartbeat(const char* fwVersion, const char* hwType,
+OtaInfo FlightArcClient::sendHeartbeat(const char* fwVersion, const char* hwType,
                                      const char* wifiSsid, int wifiRssi, int wifiChannel,
                                      int freeHeap, int uptimeSeconds,
                                      int detectionsSinceBoot, bool apActive,
@@ -119,7 +119,23 @@ bool FlightArcClient::sendHeartbeat(const char* fwVersion, const char* hwType,
     String body;
     serializeJson(doc, body);
 
-    return _httpPost("/api/receivers/heartbeat", body);
+    OtaInfo ota;
+    String response = _httpPostWithResponse("/api/receivers/heartbeat", body);
+
+    if (response.length() > 0) {
+        JsonDocument respDoc;
+        if (deserializeJson(respDoc, response) == DeserializationError::Ok) {
+            if (respDoc["firmware_update"]["available"] | false) {
+                ota.available = true;
+                ota.url = respDoc["firmware_update"]["url"].as<String>();
+                ota.sha256 = respDoc["firmware_update"]["sha256"].as<String>();
+                ota.size = respDoc["firmware_update"]["size"] | 0;
+                ota.version = respDoc["firmware_update"]["version"].as<String>();
+            }
+        }
+    }
+
+    return ota;
 }
 
 bool FlightArcClient::_httpPost(const String& path, const String& body) {
@@ -184,3 +200,123 @@ bool FlightArcClient::_httpPost(const String& path, const String& body) {
     return _lastSuccess;
 #endif
 }
+
+String FlightArcClient::_httpPostWithResponse(const String& path, const String& body) {
+    String url = _backendUrl + path;
+    String response;
+
+#ifdef ESP32
+  #if HAS_TLS
+    if (url.startsWith("https")) {
+        WiFiClientSecure client;
+        client.setInsecure();
+        HTTPClient http;
+        http.begin(client, url);
+        http.addHeader("Content-Type", "application/json");
+        http.addHeader("X-Node-Key", _apiKey);
+        http.setTimeout(10000);
+
+        int code = http.POST(body);
+        _lastHttpCode = code;
+        _lastSuccess = (code >= 200 && code < 300);
+        if (_lastSuccess) {
+            response = http.getString();
+            _retryCount = 0;
+        } else {
+            _retryCount++;
+        }
+        http.end();
+        return response;
+    }
+  #endif
+    {
+        HTTPClient http;
+        http.begin(url);
+        http.addHeader("Content-Type", "application/json");
+        http.addHeader("X-Node-Key", _apiKey);
+        http.setTimeout(10000);
+
+        int code = http.POST(body);
+        _lastHttpCode = code;
+        _lastSuccess = (code >= 200 && code < 300);
+        if (_lastSuccess) {
+            response = http.getString();
+            _retryCount = 0;
+        } else {
+            _retryCount++;
+        }
+        http.end();
+    }
+#else
+    WiFiClient client;
+    HTTPClient http;
+    http.begin(client, url);
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("X-Node-Key", _apiKey);
+    http.setTimeout(10000);
+
+    int code = http.POST(body);
+    _lastHttpCode = code;
+    _lastSuccess = (code >= 200 && code < 300);
+    if (_lastSuccess) {
+        response = http.getString();
+        _retryCount = 0;
+    } else {
+        _retryCount++;
+    }
+    http.end();
+#endif
+    return response;
+}
+
+#ifdef ESP32
+#include <HTTPUpdate.h>
+
+bool FlightArcClient::performOtaUpdate(const String& otaUrl) {
+    // Construct full URL with API key as query parameter
+    String fullUrl = _backendUrl + otaUrl + "?key=" + _apiKey;
+
+    Serial.println("[OTA] Starting firmware update...");
+    Serial.printf("[OTA] URL: %s\n", (_backendUrl + otaUrl).c_str());
+
+  #if HAS_TLS
+    if (fullUrl.startsWith("https")) {
+        WiFiClientSecure client;
+        client.setInsecure();
+        t_httpUpdate_return ret = httpUpdate.update(client, fullUrl);
+        switch (ret) {
+            case HTTP_UPDATE_FAILED:
+                Serial.printf("[OTA] Failed: %s\n", httpUpdate.getLastErrorString().c_str());
+                return false;
+            case HTTP_UPDATE_NO_UPDATES:
+                Serial.println("[OTA] No updates");
+                return false;
+            case HTTP_UPDATE_OK:
+                Serial.println("[OTA] Success, rebooting...");
+                return true;
+        }
+        return false;
+    }
+  #endif
+
+    WiFiClient client;
+    t_httpUpdate_return ret = httpUpdate.update(client, fullUrl);
+    switch (ret) {
+        case HTTP_UPDATE_FAILED:
+            Serial.printf("[OTA] Failed: %s\n", httpUpdate.getLastErrorString().c_str());
+            return false;
+        case HTTP_UPDATE_NO_UPDATES:
+            Serial.println("[OTA] No updates");
+            return false;
+        case HTTP_UPDATE_OK:
+            Serial.println("[OTA] Success, rebooting...");
+            return true;
+    }
+    return false;
+}
+#else
+bool FlightArcClient::performOtaUpdate(const String& otaUrl) {
+    Serial.println("[OTA] Not supported on ESP8266");
+    return false;
+}
+#endif

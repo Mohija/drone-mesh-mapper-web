@@ -285,8 +285,93 @@ def heartbeat():
         free_heap=data.get("free_heap"),
         uptime_seconds=data.get("uptime_seconds"))
 
+    # Check if OTA update should be offered
+    response_data: dict = {"ok": True, "server_time": time.time()}
+
+    if node.ota_update_pending and node.is_active:
+        stored_fw = os.path.join(FIRMWARE_STORE, f"{node.id}.bin")
+        if os.path.isfile(stored_fw):
+            response_data["firmware_update"] = {
+                "available": True,
+                "url": f"/api/receivers/firmware/ota/{node.id}",
+                "sha256": node.last_build_sha256 or "",
+                "size": node.last_build_size or 0,
+                "version": node.last_build_version or "",
+            }
+
+    # Auto-detect successful OTA: firmware version changed after pending update
+    if node.ota_update_pending and node.firmware_version and node.last_build_version:
+        if node.firmware_version == node.last_build_version:
+            node.ota_update_pending = False
+            node.ota_last_result = "success"
+            db.session.commit()
+            logger.info("OTA update successful for receiver %s (now %s)", node.id, node.firmware_version)
+
     logger.debug("Heartbeat from receiver %s (%s)", node.id, node.name)
-    return jsonify({"ok": True, "server_time": time.time()})
+    return jsonify(response_data)
+
+
+# ─── OTA Endpoints ────────────────────────────────────────
+
+
+@receiver_bp.route("/firmware/ota/<node_id>", methods=["GET"])
+@node_auth_required
+def ota_download(node_id: str):
+    """Serve firmware binary for OTA update. Authenticated via X-Node-Key or ?key= param."""
+    node = g.receiver_node
+    if node.id != node_id:
+        return jsonify({"error": "Node-ID stimmt nicht überein"}), 403
+
+    stored_path = os.path.join(FIRMWARE_STORE, f"{node.id}.bin")
+    if not os.path.isfile(stored_path):
+        return jsonify({"error": "Keine Firmware vorhanden"}), 404
+
+    node.ota_last_attempt = time.time()
+    db.session.commit()
+
+    from services.connection_log import connection_log
+    connection_log.log(g.tenant_id,
+        receiver_id=node.id, receiver_name=node.name,
+        endpoint="/firmware/ota", method="GET", http_status=200,
+        ip=request.remote_addr)
+
+    logger.info("OTA download for receiver %s (%d bytes)", node.id, os.path.getsize(stored_path))
+    return send_file(stored_path, mimetype="application/octet-stream")
+
+
+@receiver_bp.route("/<node_id>/ota-trigger", methods=["POST"])
+@login_required
+@role_required("tenant_admin")
+def trigger_ota(node_id: str):
+    """Set OTA update pending flag. Update will be offered in next heartbeat."""
+    node = ReceiverNode.query.filter_by(id=node_id, tenant_id=g.tenant_id).first()
+    if not node:
+        return jsonify({"error": "Empfänger nicht gefunden"}), 404
+    if not node.last_build_at:
+        return jsonify({"error": "Keine Firmware gebaut. Bitte zuerst bauen."}), 400
+
+    stored_fw = os.path.join(FIRMWARE_STORE, f"{node.id}.bin")
+    if not os.path.isfile(stored_fw):
+        return jsonify({"error": "Firmware-Binary nicht gefunden"}), 404
+
+    node.ota_update_pending = True
+    node.ota_last_result = None
+    db.session.commit()
+    logger.info("OTA update triggered for receiver %s", node.id)
+    return jsonify({"ok": True, "message": "OTA-Update wird beim nächsten Heartbeat angeboten"})
+
+
+@receiver_bp.route("/<node_id>/ota-cancel", methods=["POST"])
+@login_required
+@role_required("tenant_admin")
+def cancel_ota(node_id: str):
+    """Cancel pending OTA update."""
+    node = ReceiverNode.query.filter_by(id=node_id, tenant_id=g.tenant_id).first()
+    if not node:
+        return jsonify({"error": "Empfänger nicht gefunden"}), 404
+    node.ota_update_pending = False
+    db.session.commit()
+    return jsonify({"ok": True})
 
 
 # ─── Firmware Build Endpoint ───────────────────────────────
@@ -295,6 +380,70 @@ def heartbeat():
 FIRMWARE_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "firmware")
 FIRMWARE_STORE = os.path.join(os.path.dirname(__file__), "..", "data", "firmware")
 VENV_BIN = os.path.join(os.path.dirname(__file__), "..", "venv", "bin")
+
+# boot_app0.bin needed for merged binary
+BOOT_APP0_PATH = os.path.join(
+    os.path.expanduser("~"), ".platformio", "packages",
+    "framework-arduinoespressif32", "tools", "partitions", "boot_app0.bin"
+)
+
+
+def _create_merged_binary(node_id: str, hw_type: str, env_name: str) -> int | None:
+    """Create merged full-flash binary (bootloader + partitions + boot_app0 + firmware).
+    Returns merged file size in bytes, or None on failure/unsupported.
+    """
+    if hw_type == "esp8266":
+        return None  # merge-bin not supported for ESP8266
+
+    board = BOARD_INFO.get(hw_type)
+    if not board:
+        return None
+
+    build_dir = os.path.join(FIRMWARE_DIR, ".pio", "build", env_name)
+    bootloader = os.path.join(build_dir, "bootloader.bin")
+    partitions = os.path.join(build_dir, "partitions.bin")
+    firmware = os.path.join(FIRMWARE_STORE, f"{node_id}.bin")
+    merged_out = os.path.join(FIRMWARE_STORE, f"{node_id}_merged.bin")
+
+    for f in [bootloader, partitions, firmware]:
+        if not os.path.isfile(f):
+            logger.warning("Missing file for merge: %s", f)
+            return None
+
+    # boot_app0.bin — needed for OTA partition selection
+    boot_app0 = BOOT_APP0_PATH
+    if not os.path.isfile(boot_app0):
+        logger.warning("boot_app0.bin not found at %s", boot_app0)
+        return None
+
+    esptool_bin = os.path.join(VENV_BIN, "esptool")
+    if not os.path.isfile(esptool_bin):
+        esptool_bin = os.path.join(VENV_BIN, "esptool.py")
+
+    cmd = [
+        esptool_bin, "--chip", board["chip"], "merge-bin",
+        "-o", merged_out,
+        "--flash-mode", board["flash_mode"],
+        "--flash-size", board["flash_size"],
+        "--flash-freq", "80m",
+        "0x0", bootloader,
+        "0x8000", partitions,
+        "0xe000", boot_app0,
+        "0x10000", firmware,
+    ]
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        if result.returncode != 0:
+            logger.error("merge-bin failed: %s", result.stderr)
+            return None
+
+        merged_size = os.path.getsize(merged_out)
+        logger.info("Created merged binary for %s: %d bytes", node_id, merged_size)
+        return merged_size
+    except Exception as e:
+        logger.error("merge-bin error: %s", e)
+        return None
 
 # In-memory build jobs: {node_id: {status, log, error, checks, ...}}
 import threading
@@ -533,6 +682,9 @@ def build_firmware():
             env[f"WIFI_SSID{suffix}"] = ""
             env[f"WIFI_PASS{suffix}"] = ""
     env["NODE_NAME"] = sanitize_node_name(node.name[:20])
+    build_version = f"1.0.{int(time.time()) % 100000}"
+    env["FIRMWARE_VERSION"] = build_version
+    env["NODE_ID"] = node.id
 
     try:
         logger.info("Building firmware for %s (%s)...", node.id, env_name)
@@ -590,8 +742,13 @@ def build_firmware():
         node.last_build_at = time.time()
         node.last_build_size = fw_info["size"]
         node.last_build_sha256 = fw_info.get("sha256", "")
+        node.last_build_version = build_version
+        # Create merged binary (bootloader + partitions + app)
+        merged_size = _create_merged_binary(node.id, hw, env_name)
+        node.last_build_merged_size = merged_size
         db.session.commit()
-        logger.info("Firmware stored: %s (%d bytes)", stored_path, fw_info["size"])
+        logger.info("Firmware stored: %s (%d bytes, merged: %s)", stored_path, fw_info["size"],
+                     f"{merged_size} bytes" if merged_size else "N/A")
 
         response = send_file(
             stored_path,
@@ -677,6 +834,9 @@ def build_firmware_stream():
             build_env[f"WIFI_SSID{suffix}"] = ""
             build_env[f"WIFI_PASS{suffix}"] = ""
     build_env["NODE_NAME"] = sanitize_node_name(node.name[:20])
+    build_version = f"1.0.{int(time.time()) % 100000}"
+    build_env["FIRMWARE_VERSION"] = build_version
+    build_env["NODE_ID"] = node.id
 
     # Capture app context for DB operations inside generator
     app = request._get_current_object().__class__
@@ -754,6 +914,9 @@ def build_firmware_stream():
                     n.last_build_at = time.time()
                     n.last_build_size = fw_info["size"]
                     n.last_build_sha256 = fw_info.get("sha256", "")
+                    n.last_build_version = build_version
+                    merged_size = _create_merged_binary(n.id, hw, env_name)
+                    n.last_build_merged_size = merged_size
                     db.session.commit()
 
             yield sse("log", {"line": f"[Build] Verifizierung: {passed}/{total} Checks bestanden"})
@@ -782,20 +945,29 @@ def build_firmware_stream():
 @login_required
 @role_required("tenant_admin")
 def download_firmware(node_id):
-    """Download previously built firmware for a receiver."""
+    """Download previously built firmware. Use ?type=merged for full-flash binary."""
     node = ReceiverNode.query.filter_by(id=node_id, tenant_id=g.tenant_id).first()
     if not node:
         return jsonify({"error": "Empfänger nicht gefunden"}), 404
 
-    stored_path = os.path.join(FIRMWARE_STORE, f"{node.id}.bin")
-    if not os.path.isfile(stored_path):
-        return jsonify({"error": "Keine Firmware vorhanden. Bitte zuerst bauen."}), 404
+    fw_type = request.args.get("type", "app")
+
+    if fw_type == "merged":
+        stored_path = os.path.join(FIRMWARE_STORE, f"{node.id}_merged.bin")
+        download_name = f"flightarc-{node.hardware_type}-{node.id}-merged.bin"
+        if not os.path.isfile(stored_path):
+            return jsonify({"error": "Kein Merged-Binary vorhanden. Nur für ESP32 verfügbar."}), 404
+    else:
+        stored_path = os.path.join(FIRMWARE_STORE, f"{node.id}.bin")
+        download_name = f"flightarc-{node.hardware_type}-{node.id}.bin"
+        if not os.path.isfile(stored_path):
+            return jsonify({"error": "Keine Firmware vorhanden. Bitte zuerst bauen."}), 404
 
     return send_file(
         stored_path,
         mimetype="application/octet-stream",
         as_attachment=True,
-        download_name=f"flightarc-{node.hardware_type}-{node.id}.bin",
+        download_name=download_name,
     )
 
 
@@ -860,6 +1032,9 @@ def build_firmware_async():
             build_env[f"WIFI_SSID{suffix}"] = ""
             build_env[f"WIFI_PASS{suffix}"] = ""
     build_env["NODE_NAME"] = sanitize_node_name(node_name[:20])
+    build_version = f"1.0.{int(time.time()) % 100000}"
+    build_env["FIRMWARE_VERSION"] = build_version
+    build_env["NODE_ID"] = node_id
 
     from flask import current_app
     app_ctx = current_app._get_current_object()
@@ -924,6 +1099,9 @@ def build_firmware_async():
                     n.last_build_at = time.time()
                     n.last_build_size = fw_info["size"]
                     n.last_build_sha256 = fw_info.get("sha256", "")
+                    n.last_build_version = build_version
+                    merged_size = _create_merged_binary(n.id, hw, env_name)
+                    n.last_build_merged_size = merged_size
                     db.session.commit()
 
             job["log"].append(f"[Build] Verifizierung: {passed}/{total} Checks bestanden")

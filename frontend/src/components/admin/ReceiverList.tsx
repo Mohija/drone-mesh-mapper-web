@@ -10,6 +10,8 @@ import {
   toggleConnectionLog,
   clearConnectionLog,
   setReceiverLocation,
+  triggerOtaUpdate,
+  cancelOtaUpdate,
 } from '../../api';
 import type { ReceiverNode, ReceiverStats, ConnectionLogEntry } from '../../api';
 import ReceiverFlashWizard from './ReceiverFlashWizard';
@@ -878,6 +880,49 @@ export default function ReceiverList() {
                           </div>
                         )}
                         <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          {/* OTA Update */}
+                          {node.lastBuildAt && node.status !== 'offline' && node.hardwareType !== 'esp8266' && (
+                            node.otaUpdatePending ? (
+                              <button
+                                data-testid={`receiver-ota-cancel-${node.id}`}
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  try { await cancelOtaUpdate(node.id); await loadData(); } catch { /* silent */ }
+                                }}
+                                style={{
+                                  padding: '5px 12px', background: 'rgba(234,179,8,0.15)',
+                                  border: '1px solid #eab308', borderRadius: 6, color: '#eab308',
+                                  cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                                }}
+                              >
+                                OTA ausstehend... (Abbrechen)
+                              </button>
+                            ) : (
+                              <button
+                                data-testid={`receiver-ota-${node.id}`}
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  try { await triggerOtaUpdate(node.id); await loadData(); } catch { /* silent */ }
+                                }}
+                                style={{
+                                  padding: '5px 12px', background: 'rgba(59,130,246,0.1)',
+                                  border: '1px solid #3b82f6', borderRadius: 6, color: '#3b82f6',
+                                  cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                                }}
+                              >
+                                OTA Update senden
+                              </button>
+                            )
+                          )}
+                          {node.otaLastResult && (
+                            <span style={{
+                              fontSize: 10, padding: '4px 8px', borderRadius: 4,
+                              background: node.otaLastResult === 'success' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
+                              color: node.otaLastResult === 'success' ? '#22c55e' : '#ef4444',
+                            }}>
+                              OTA: {node.otaLastResult === 'success' ? 'Erfolgreich' : node.otaLastResult}
+                            </span>
+                          )}
                           {node.lastBuildAt && (
                             <button
                               data-testid={`receiver-download-${node.id}`}
@@ -904,7 +949,35 @@ export default function ReceiverList() {
                                 fontWeight: 600,
                               }}
                             >
-                              Firmware herunterladen
+                              App-Firmware
+                            </button>
+                          )}
+                          {node.lastBuildMergedSize && (
+                            <button
+                              data-testid={`receiver-download-merged-${node.id}`}
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                try {
+                                  const blob = await downloadFirmware(node.id, 'merged');
+                                  const url = URL.createObjectURL(blob);
+                                  const a = document.createElement('a');
+                                  a.href = url;
+                                  a.download = `flightarc-${node.hardwareType}-${node.id}-merged.bin`;
+                                  a.click();
+                                  URL.revokeObjectURL(url);
+                                } catch { /* silent */ }
+                              }}
+                              style={{
+                                padding: '5px 12px',
+                                background: 'var(--bg-tertiary)',
+                                border: '1px solid var(--border)',
+                                borderRadius: 6,
+                                color: 'var(--text-secondary)',
+                                cursor: 'pointer',
+                                fontSize: 11,
+                              }}
+                            >
+                              Full-Flash (Merged)
                             </button>
                           )}
                           <button

@@ -2,7 +2,7 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-15 (v1.5.3: Firmware v1.0.8, Simulation-Tab, Standort über Web-App)
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-15 (v1.5.4: Merged Binary + OTA Updates)
 - **Typ:** Projekt | **Status:** Development
 
 ## Offene Aufgaben
@@ -16,6 +16,27 @@
 - [x] Umfassende E2E-Tests für Receiver-System (60 Tests, alle bestanden)
 
 ## Änderungshistorie
+
+### 2026-03-15 - v1.5.4: Merged Binary + OTA Updates
+
+**Merged Binary (Full-Flash)**
+- Nach jedem Firmware-Build wird automatisch ein Merged Binary erzeugt (Bootloader + Partitions + boot_app0 + App)
+- Löst das SHA-256 Boot-Loop Problem bei Web-Flashern (web.esphome.io etc.)
+- Download über `?type=merged` Parameter oder "Full-Flash (Merged)" Button in der Empfänger-Liste
+- Nur für ESP32-S3 und ESP32-C3 (nicht ESP8266)
+
+**OTA (Over-The-Air) Updates**
+- Firmware prüft bei jedem Heartbeat ob ein Update verfügbar ist
+- Backend signalisiert Update im Heartbeat-Response (`firmware_update.available`)
+- Firmware lädt Update über HTTPS, schreibt in inaktiven OTA-Slot, rebootet
+- Admin UI: "OTA Update senden" Button in Empfänger-Details
+- Kein Brick-Risiko dank Dual-Slot Partition (app0/app1 + Rollback)
+- Einmalig muss die OTA-fähige Firmware per USB geflasht werden
+
+**Build-Versioning**
+- Jeder Build erhält eine unique Version (`1.0.{timestamp}`)
+- Heartbeat-Response vergleicht Firmware-Version mit Build-Version
+- OTA-Flag wird automatisch cleared wenn Update erfolgreich war
 
 ### 2026-03-15 - Benutzerhandbuch aktualisiert (Captive Portal, Standort setzen, Simulation, LED)
 - Hardware-Inbetriebnahme: Captive Portal zeigt nun gecachte Netzwerkliste (vor Hotspot-Start gescannt), manuelle SSID-Eingabe, Hinweis auf Standort-Setzen über Web-App statt GPS im Portal

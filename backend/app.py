@@ -107,6 +107,20 @@ with app.app_context():
             logger.info("Created membership for user %s in tenant %s (role=%s)", u.username, u.tenant_id, u.role)
     db.session.commit()
 
+    # Migration: add OTA and merged binary columns to receiver_nodes
+    for col_stmt in [
+        "ALTER TABLE receiver_nodes ADD COLUMN last_build_version VARCHAR(20)",
+        "ALTER TABLE receiver_nodes ADD COLUMN last_build_merged_size INTEGER",
+        "ALTER TABLE receiver_nodes ADD COLUMN ota_update_pending BOOLEAN DEFAULT 0 NOT NULL",
+        "ALTER TABLE receiver_nodes ADD COLUMN ota_last_attempt REAL",
+        "ALTER TABLE receiver_nodes ADD COLUMN ota_last_result VARCHAR(100)",
+    ]:
+        try:
+            db.session.execute(db.text(col_stmt))
+        except Exception:
+            pass  # Column already exists
+    db.session.commit()
+
 # Register blueprints (auth, admin)
 register_blueprints(app)
 

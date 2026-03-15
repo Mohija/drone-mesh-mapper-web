@@ -31,4 +31,5 @@ inject_str("WIFI_PASS_3")
 
 # Node identity
 inject_str("NODE_NAME", "FlightArc-Node")
+inject_str("NODE_ID")
 inject_str("FIRMWARE_VERSION", "1.0.0")

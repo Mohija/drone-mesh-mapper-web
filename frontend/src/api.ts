@@ -694,6 +694,11 @@ export interface ReceiverNode {
   lastBuildAt: number | null;
   lastBuildSize: number | null;
   lastBuildSha256: string | null;
+  lastBuildVersion: string | null;
+  lastBuildMergedSize: number | null;
+  otaUpdatePending: boolean;
+  otaLastAttempt: number | null;
+  otaLastResult: string | null;
 }
 
 export interface ReceiverStats {
@@ -914,13 +919,28 @@ export async function clearConnectionLog(): Promise<void> {
   if (!res.ok) throw new Error(`API error: ${res.status}`);
 }
 
-export async function downloadFirmware(nodeId: string): Promise<Blob> {
-  const res = await authFetch(`${API_BASE}/receivers/firmware/download/${encodeURIComponent(nodeId)}`);
+export async function downloadFirmware(nodeId: string, type: 'app' | 'merged' = 'app'): Promise<Blob> {
+  const params = type === 'merged' ? '?type=merged' : '';
+  const res = await authFetch(`${API_BASE}/receivers/firmware/download/${encodeURIComponent(nodeId)}${params}`);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Download fehlgeschlagen' }));
     throw new Error(err.error || `API error: ${res.status}`);
   }
   return res.blob();
+}
+
+export async function triggerOtaUpdate(nodeId: string): Promise<{ ok: boolean; message: string }> {
+  const res = await authFetch(`${API_BASE}/receivers/${encodeURIComponent(nodeId)}/ota-trigger`, { method: 'POST' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'OTA-Trigger fehlgeschlagen' }));
+    throw new Error(err.error || `API error: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function cancelOtaUpdate(nodeId: string): Promise<void> {
+  const res = await authFetch(`${API_BASE}/receivers/${encodeURIComponent(nodeId)}/ota-cancel`, { method: 'POST' });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
 }
 
 

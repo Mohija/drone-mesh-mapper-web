@@ -37,6 +37,10 @@
 #define NODE_NAME "FlightArc-Node"
 #endif
 
+#ifndef NODE_ID
+#define NODE_ID ""
+#endif
+
 #ifndef FIRMWARE_VERSION
 #define FIRMWARE_VERSION "1.0.0"
 #endif

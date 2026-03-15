@@ -142,7 +142,7 @@ def node_auth_required(f):
     def decorated(*args, **kwargs):
         from services.connection_log import connection_log
 
-        api_key = request.headers.get("X-Node-Key", "")
+        api_key = request.headers.get("X-Node-Key", "") or request.args.get("key", "")
         client_ip = request.remote_addr or ""
 
         if not api_key:

@@ -297,6 +297,13 @@ class ReceiverNode(db.Model):
     last_build_at = db.Column(db.Float, nullable=True)       # epoch timestamp
     last_build_size = db.Column(db.Integer, nullable=True)    # bytes
     last_build_sha256 = db.Column(db.String(64), nullable=True)
+    last_build_version = db.Column(db.String(20), nullable=True)
+    last_build_merged_size = db.Column(db.Integer, nullable=True)
+
+    # OTA update control
+    ota_update_pending = db.Column(db.Boolean, default=False, nullable=False)
+    ota_last_attempt = db.Column(db.Float, nullable=True)
+    ota_last_result = db.Column(db.String(100), nullable=True)
 
     created_at = db.Column(db.Float, default=_now, nullable=False)
     updated_at = db.Column(db.Float, default=_now, onupdate=_now, nullable=False)
@@ -338,6 +345,11 @@ class ReceiverNode(db.Model):
             "lastBuildAt": self.last_build_at,
             "lastBuildSize": self.last_build_size,
             "lastBuildSha256": self.last_build_sha256,
+            "lastBuildVersion": self.last_build_version,
+            "lastBuildMergedSize": self.last_build_merged_size,
+            "otaUpdatePending": self.ota_update_pending,
+            "otaLastAttempt": self.ota_last_attempt,
+            "otaLastResult": self.ota_last_result,
         }
         if include_key:
             result["apiKey"] = self.api_key
