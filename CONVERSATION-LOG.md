@@ -25,6 +25,14 @@
 
 ## Änderungshistorie
 
+### 2026-03-16 - Empfänger-Abdeckung: Karten-Layer mit Antennen-Presets
+- **Receiver Coverage Layer**: Neuer 📡-Toggle in der Kopfleiste zeigt Empfänger-Positionen und Erkennungsradius auf der Karte
+- **Antennen-Presets**: 5 Typen (PCB 1km, Dipol 5dBi 2km, Omni 9dBi 3km, Panel 12dBi 5km, Yagi 15dBi 10km) mit konfigurierbarem Radius
+- **Coverage API**: GET /api/receivers/coverage liefert aktive Empfänger mit GPS-Position und Radius
+- **Admin-UI**: Antennentyp-Dropdown und Radius-Eingabe in Empfänger-Details
+- **Darstellung**: Farbcodierte Kreise (grün/gelb/grau nach Status), Hover-Tooltips, 30s Auto-Refresh
+- **Dateien:** backend/models.py, backend/app.py, backend/routes/receiver_routes.py, frontend/src/api.ts, frontend/src/components/MapComponent.tsx, frontend/src/components/MapPage.tsx, frontend/src/components/admin/ReceiverList.tsx
+
 ### 2026-03-16 - DIPUL WMS: Alle 34 Layer integriert
 - **Vollständige DIPUL-Integration**: Alle 34 verfügbaren WMS-Layer jetzt konfiguriert (vorher nur 17)
 - **2 neue Kategorien**: "Gewässer & Schifffahrt" (Binnenwasserstraßen, Seewasserstraßen, Schifffahrtsanlagen) und "Wohn- & Freizeitgebiete" (Wohngrundstücke, Freibäder)

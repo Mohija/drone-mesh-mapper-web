@@ -72,6 +72,7 @@ const SECTION_SUBS: Record<string, SubMeta[]> = {
     { id: 'telemetrie-daten', title: 'Telemetrie-Daten' },
     { id: 'firmware-versionierung', title: 'Firmware-Versionierung' },
     { id: 'auto-refresh', title: 'Auto-Refresh' },
+    { id: 'empfaenger-abdeckung', title: 'Empfänger-Abdeckung (Karten-Layer)' },
   ],
   simulation: [
     { id: 'simulator-erstellen', title: 'Simulator erstellen' },
@@ -455,6 +456,7 @@ function SectionMap() {
               <tr><td style={tdStyle}><strong>⊕ Radius-Filter</strong></td><td style={tdStyle}>Begrenzt die Anzeige auf einen Umkreis um das Kartenzentrum. Optionen: 5–500 km oder Aus. Schalte den Filter mit dem ⊕-Button an/aus.</td></tr>
               <tr><td style={tdStyle}><strong>↕ Höhenfilter</strong></td><td style={tdStyle}>Filtert Drohnen nach Höhenzone: Alle, 0–100m, 100–500m, 500–2000m, &gt;2000m.</td></tr>
               <tr><td style={tdStyle}><strong>🚫 NFZ-Button</strong></td><td style={tdStyle}>Öffnet das Flugverbotszonen-Panel (DIPUL-Layer).</td></tr>
+              <tr><td style={tdStyle}><strong>📡 Empfänger</strong></td><td style={tdStyle}>Blendet Empfänger-Positionen und Abdeckungsradius ein/aus.</td></tr>
               <tr><td style={tdStyle}><strong>📐 Zonen-Button</strong></td><td style={tdStyle}>Öffnet das Flugzonen-Panel zur Verwaltung von Überwachungszonen.</td></tr>
               <tr><td style={tdStyle}><strong>📊 Tracking-Button</strong></td><td style={tdStyle}>Öffnet das Tracking-Panel mit aktiven Verfolgungen.</td></tr>
               <tr><td style={tdStyle}><strong>⚙ Einstellungen</strong></td><td style={tdStyle}>Navigiert zur Einstellungen-Seite.</td></tr>
@@ -1008,6 +1010,46 @@ function SectionReceivers() {
         <summary style={h3SummaryStyle}><span className="help-caret">&#9654;</span> Auto-Refresh</summary>
         <div style={subContentStyle}>
           <p>Die Empfänger-Liste aktualisiert sich automatisch alle 30 Sekunden. Das Connection Log pollt alle 3 Sekunden wenn aktiv und sichtbar.</p>
+        </div>
+      </details>
+      <details className="help-sub" id="empfaenger-abdeckung">
+        <summary style={h3SummaryStyle}><span className="help-caret">&#9654;</span> Empfänger-Abdeckung (Karten-Layer)</summary>
+        <div style={subContentStyle}>
+          <p>
+            Der <strong>📡-Button</strong> in der Kopfleiste blendet die Empfänger-Positionen und deren theoretische
+            Erkennungsreichweite auf der Karte ein.
+          </p>
+          <h4>Antennen-Presets</h4>
+          <table style={tableStyle}>
+            <thead>
+              <tr><th style={thStyle}>Antennentyp</th><th style={thStyle}>Standard-Radius</th><th style={thStyle}>Typische Reichweite (WiFi Beacon)</th></tr>
+            </thead>
+            <tbody>
+              <tr><td style={tdStyle}>PCB-Antenne (eingebaut, ~2dBi)</td><td style={tdStyle}>1.000m</td><td style={tdStyle}>500m – 1km</td></tr>
+              <tr><td style={tdStyle}>Externe Dipol 5dBi</td><td style={tdStyle}>2.000m</td><td style={tdStyle}>1 – 2km</td></tr>
+              <tr><td style={tdStyle}>Externe Omni 9dBi</td><td style={tdStyle}>3.000m</td><td style={tdStyle}>2 – 3km</td></tr>
+              <tr><td style={tdStyle}>Panel 12dBi (gerichtet)</td><td style={tdStyle}>5.000m</td><td style={tdStyle}>3 – 5km</td></tr>
+              <tr><td style={tdStyle}>Yagi 15-18dBi (gerichtet)</td><td style={tdStyle}>10.000m</td><td style={tdStyle}>5 – 10km</td></tr>
+            </tbody>
+          </table>
+          <p>
+            <strong>Konfiguration:</strong> Im Admin-Bereich unter Empfänger → Detail aufklappen → Antennentyp
+            und Radius einstellen. Der Radius kann manuell überschrieben werden.
+          </p>
+          <p>
+            <strong>Darstellung:</strong> Halbtransparenter Kreis pro Empfänger. Farbe nach Status:
+            Grün (online), Gelb (stale), Grau (offline). Hover zeigt Name, Status, Radius und Antennentyp.
+          </p>
+          <InfoBox type="warning">
+            Die angezeigten Reichweiten sind <strong>theoretische Schätzwerte</strong> basierend auf
+            Freifeld-Berechnungen und Herstellerangaben. Die tatsächliche Erkennungsreichweite hängt stark
+            von den lokalen Bedingungen ab: Bebauung, Vegetation, Interferenzen durch andere 2,4-GHz-Geräte
+            (WLAN-Router, Bluetooth), Wetter, Drohnen-Orientierung und Geländeprofil.{' '}
+            <strong>In städtischen Umgebungen kann die reale Reichweite 50–80% unter dem theoretischen Wert liegen.</strong>{' '}
+            Die Abdeckungskreise müssen im realen Einsatzumfeld durch eigene Tests validiert und die Radien
+            entsprechend angepasst werden. Verlassen Sie sich nicht blind auf die dargestellte Abdeckung —
+            sie dient als Planungshilfe, nicht als Garantie.
+          </InfoBox>
         </div>
       </details>
     </div>
