@@ -2,12 +2,14 @@
 SQLAlchemy models for FlightArc multi-tenant system.
 """
 
+import logging
+import os
 import secrets
 import time
 import uuid
 
 from database import db
-from sqlalchemy import JSON
+from sqlalchemy import JSON, event
 
 
 def _uuid8():
@@ -391,3 +393,21 @@ class SystemLog(db.Model):
             "message": self.message,
             "details": self.details,
         }
+
+
+# ─── Cleanup: delete firmware binaries when ReceiverNode is deleted ─────
+
+_cleanup_logger = logging.getLogger("models.cleanup")
+
+@event.listens_for(ReceiverNode, "after_delete")
+def _cleanup_firmware_binaries(mapper, connection, target):
+    """Remove firmware binaries when a ReceiverNode is deleted (including cascade)."""
+    fw_dir = os.path.join(os.path.dirname(__file__), "data", "firmware")
+    for suffix in ("", "_merged"):
+        path = os.path.join(fw_dir, f"{target.id}{suffix}.bin")
+        if os.path.isfile(path):
+            try:
+                os.remove(path)
+                _cleanup_logger.info("Deleted firmware binary: %s", os.path.basename(path))
+            except OSError as e:
+                _cleanup_logger.warning("Failed to delete %s: %s", path, e)
