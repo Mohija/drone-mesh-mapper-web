@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { startBuildAsync, pollBuildStatus, downloadFirmware } from '../../api';
+import { startBuildAsync, pollBuildStatus, downloadFirmware, fetchWifiNetworks } from '../../api';
 import type { ReceiverNode, FirmwareCheck } from '../../api';
 
 interface Props {
@@ -21,6 +21,10 @@ const STEP_LABELS: Record<Step, string> = {
 interface WifiNetwork {
   ssid: string;
   password: string;
+  /** Pre-filled from tenant settings — password stored server-side */
+  isTenant?: boolean;
+  /** If true, the backend uses the stored password instead of the one sent */
+  use_stored?: boolean;
 }
 
 const FLASH_INFO: Record<string, { mode: string; size: string; chip: string; erase: string; offset: string }> = {
@@ -251,10 +255,14 @@ function BootModeInstructions({ hardwareType, compact }: { hardwareType: string;
   );
 }
 
-export default function ReceiverFlashWizard({ node, onClose, regenerateKey = false }: Props) {
+export default function ReceiverFlashWizard({ node, onClose, regenerateKey: _regenKeyProp = false }: Props) {
   const [step, setStep] = useState<Step>('intro');
   const [backendUrl, setBackendUrl] = useState(window.location.origin);
-  const [wifiNetworks, setWifiNetworks] = useState<WifiNetwork[]>([{ ssid: '', password: '' }]);
+  const [wifiNetworks, setWifiNetworks] = useState<WifiNetwork[]>([]);
+  const [tenantNetworksLoaded, setTenantNetworksLoaded] = useState(false);
+  // API key: only regenerate if user explicitly checks the box (or first build)
+  const isFirstBuild = !node.lastBuildAt;
+  const [regenerateKey, setRegenerateKey] = useState(isFirstBuild);
   const [building, setBuilding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [buildLog, setBuildLog] = useState<string[]>([]);
@@ -264,6 +272,34 @@ export default function ReceiverFlashWizard({ node, onClose, regenerateKey = fal
 
   const isEsp8266 = node.hardwareType === 'esp8266';
   const flashInfo = FLASH_INFO[node.hardwareType] || FLASH_INFO['esp32-s3'];
+
+  // Load tenant WiFi networks on mount
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const tenantNets = await fetchWifiNetworks();
+        if (cancelled) return;
+        if (tenantNets.length > 0) {
+          setWifiNetworks(tenantNets.map(n => ({
+            ssid: n.ssid,
+            password: '',
+            isTenant: true,
+            use_stored: !!n.has_password,
+          })));
+        } else {
+          setWifiNetworks([{ ssid: '', password: '' }]);
+        }
+      } catch {
+        if (!cancelled) {
+          setWifiNetworks([{ ssid: '', password: '' }]);
+        }
+      } finally {
+        if (!cancelled) setTenantNetworksLoaded(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // Auto-scroll log
   useEffect(() => {
@@ -275,14 +311,26 @@ export default function ReceiverFlashWizard({ node, onClose, regenerateKey = fal
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, []);
 
-  const updateNetwork = (index: number, field: keyof WifiNetwork, value: string) => {
-    setWifiNetworks(prev => prev.map((n, i) => i === index ? { ...n, [field]: value } : n));
+  const updateNetwork = (index: number, field: 'ssid' | 'password', value: string) => {
+    setWifiNetworks(prev => prev.map((n, i) => {
+      if (i !== index) return n;
+      const updated = { ...n, [field]: value };
+      // When user types a password for a tenant network, stop using stored password
+      if (field === 'password' && value && n.isTenant) {
+        updated.use_stored = false;
+      }
+      // If user clears password on tenant network that had stored password, re-enable use_stored
+      if (field === 'password' && !value && n.isTenant) {
+        updated.use_stored = true;
+      }
+      return updated;
+    }));
   };
   const addNetwork = () => {
     if (wifiNetworks.length < 3) setWifiNetworks(prev => [...prev, { ssid: '', password: '' }]);
   };
   const removeNetwork = (index: number) => {
-    if (wifiNetworks.length > 1) setWifiNetworks(prev => prev.filter((_, i) => i !== index));
+    if (wifiNetworks.length > 0) setWifiNetworks(prev => prev.filter((_, i) => i !== index));
   };
 
   const startPolling = useCallback((nodeId: string) => {
@@ -319,7 +367,14 @@ export default function ReceiverFlashWizard({ node, onClose, regenerateKey = fal
     setStep('build');
 
     try {
-      const networks = wifiNetworks.filter(n => n.ssid.trim());
+      const networks = wifiNetworks
+        .filter(n => n.ssid.trim())
+        .map(n => {
+          if (n.use_stored) {
+            return { ssid: n.ssid, use_stored: true as const };
+          }
+          return { ssid: n.ssid, password: n.password };
+        });
       await startBuildAsync({
         node_id: node.id,
         backend_url: backendUrl,
@@ -484,7 +539,7 @@ export default function ReceiverFlashWizard({ node, onClose, regenerateKey = fal
             </div>
 
             <div style={{ marginBottom: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}>
                 <label style={{ ...labelStyle, marginBottom: 0, flex: 1 }}>WiFi-Netzwerke (optional)</label>
                 {wifiNetworks.length < 3 && (
                   <button
@@ -499,29 +554,44 @@ export default function ReceiverFlashWizard({ node, onClose, regenerateKey = fal
                   </button>
                 )}
               </div>
-              {wifiNetworks.map((net, i) => (
+              <div style={{ fontSize: 10, color: '#eab308', marginBottom: 8 }}>
+                Nur 2,4-GHz-Netzwerke. iPhone-Hotspot: &quot;Kompatibilit&auml;t maximieren&quot; aktivieren. Details im Handbuch.
+              </div>
+              {!tenantNetworksLoaded ? (
+                <div style={{ padding: 8, fontSize: 12, color: 'var(--text-muted)' }}>Lade WiFi-Netzwerke...</div>
+              ) : wifiNetworks.map((net, i) => (
                 <div
                   key={i}
                   data-testid={`flash-wifi-network-${i}`}
                   style={{
-                    background: 'var(--bg-primary)', border: '1px solid var(--border)',
+                    background: 'var(--bg-primary)',
+                    border: `1px solid ${net.isTenant ? 'rgba(20,184,166,0.3)' : 'var(--border)'}`,
                     borderRadius: 8, padding: 10, marginBottom: 8,
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
                     <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, flex: 1 }}>
                       Netzwerk {i + 1}
+                      {net.isTenant && (
+                        <span data-testid={`flash-wifi-tenant-badge-${i}`} style={{
+                          marginLeft: 6, fontSize: 9, fontWeight: 700,
+                          padding: '1px 5px', borderRadius: 3,
+                          background: 'rgba(20,184,166,0.15)', color: '#14b8a6',
+                          verticalAlign: 'middle', textTransform: 'uppercase',
+                          letterSpacing: '0.5px',
+                        }}>
+                          Mandant
+                        </span>
+                      )}
                     </span>
-                    {wifiNetworks.length > 1 && (
-                      <button
-                        data-testid={`flash-wifi-remove-${i}`}
-                        onClick={() => removeNetwork(i)}
-                        style={{
-                          background: 'none', border: 'none', color: 'var(--text-muted)',
-                          cursor: 'pointer', fontSize: 14, padding: '0 4px',
-                        }}
-                      >x</button>
-                    )}
+                    <button
+                      data-testid={`flash-wifi-remove-${i}`}
+                      onClick={() => removeNetwork(i)}
+                      style={{
+                        background: 'none', border: 'none', color: 'var(--text-muted)',
+                        cursor: 'pointer', fontSize: 14, padding: '0 4px',
+                      }}
+                    >x</button>
                   </div>
                   <input
                     data-testid={`flash-wifi-ssid-${i}`}
@@ -535,7 +605,7 @@ export default function ReceiverFlashWizard({ node, onClose, regenerateKey = fal
                     type="password"
                     value={net.password}
                     onChange={e => updateNetwork(i, 'password', e.target.value)}
-                    placeholder="Passwort"
+                    placeholder={net.use_stored ? 'Gespeichertes Passwort' : 'Passwort'}
                     style={inputStyle}
                   />
                 </div>
@@ -544,10 +614,26 @@ export default function ReceiverFlashWizard({ node, onClose, regenerateKey = fal
             <div style={{
               background: 'var(--bg-primary)', borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 12,
             }}>
-              <div style={{ color: 'var(--text-muted)' }}>API-Key wird automatisch in die Firmware eingebettet.</div>
-              <div style={{ color: 'var(--text-muted)', marginTop: 4 }}>
+              <div style={{ color: 'var(--text-muted)', marginBottom: 8 }}>
                 Hardware: {node.hardwareType.toUpperCase()} | Flash: {flashInfo.mode.toUpperCase()} | {flashInfo.size}
               </div>
+              {isFirstBuild ? (
+                <div style={{ color: '#14b8a6', fontSize: 12 }}>
+                  Erster Build — neuer API-Key wird automatisch erstellt.
+                </div>
+              ) : (
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12 }}>
+                  <input
+                    type="checkbox"
+                    checked={regenerateKey}
+                    onChange={e => setRegenerateKey(e.target.checked)}
+                    style={{ accentColor: '#ef4444' }}
+                  />
+                  <span style={{ color: regenerateKey ? '#ef4444' : 'var(--text-muted)' }}>
+                    Neuen API-Key generieren {regenerateKey && '(alter Key wird ungültig!)'}
+                  </span>
+                </label>
+              )}
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => setStep('intro')} style={secondaryBtnStyle}>Zurück</button>
@@ -716,7 +802,10 @@ esptool.py --chip ${flashInfo.chip} --port /dev/ttyUSB0 \\
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 20 }}>
               Flashe die Firmware auf den ESP, verbinde ihn mit Strom und warte auf den ersten Heartbeat.
-              Der Empfänger erstellt einen WiFi-Hotspot "FlightArc-..." für die Konfiguration.
+              Wenn kein WLAN konfiguriert ist, erstellt der Empfänger nach ~8s einen WiFi-Hotspot "FlightArc-..." für die Konfiguration.
+              Das Captive Portal öffnet sich nach dem Verbinden mit dem Hotspot automatisch.
+              <br /><strong>Hinweis:</strong> iOS benötigt ca. 30–45s, Android 5–15s bis das Portal-Popup erscheint.
+              Alternativ direkt <strong>http://192.168.4.1</strong> im Browser öffnen.
             </div>
             <button onClick={onClose} style={primaryBtnStyle}>Schliessen</button>
           </div>

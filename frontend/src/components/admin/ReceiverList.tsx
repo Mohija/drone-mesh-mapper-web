@@ -16,6 +16,7 @@ import {
   pollBuildStatus,
   updateReceiverCoverage,
   fetchFirmwareChangelog,
+  fetchWifiNetworks,
 } from '../../api';
 import type { ReceiverNode, ReceiverStats, ConnectionLogEntry, FirmwareChangelogEntry } from '../../api';
 import ReceiverFlashWizard from './ReceiverFlashWizard';
@@ -282,12 +283,15 @@ export default function ReceiverList() {
 
   // OTA flow (build + trigger + monitor)
   const [otaNode, setOtaNode] = useState<ReceiverNode | null>(null);
-  const [otaStep, setOtaStep] = useState<'idle' | 'building' | 'triggering' | 'waiting' | 'done' | 'error'>('idle');
+  const [otaStep, setOtaStep] = useState<'idle' | 'config' | 'building' | 'triggering' | 'waiting' | 'done' | 'error'>('idle');
   const [otaLog, setOtaLog] = useState<string[]>([]);
   const [otaError, setOtaError] = useState<string | null>(null);
   const [otaLoadingId, setOtaLoadingId] = useState<string | null>(null);
   const otaPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const otaLogEndRef = useRef<HTMLDivElement | null>(null);
+  // OTA WiFi config
+  const [otaWifiEnabled, setOtaWifiEnabled] = useState(false);
+  const [otaWifiNetworks, setOtaWifiNetworks] = useState<Array<{ ssid: string; password: string; isTenant?: boolean; use_stored?: boolean }>>([]);
 
   // Connection log
   const [logEnabled, setLogEnabled] = useState(false);
@@ -357,20 +361,50 @@ export default function ReceiverList() {
 
   const handleOtaFlow = async (node: ReceiverNode) => {
     setOtaNode(node);
-    setOtaStep('building');
+    setOtaStep('config');
     setOtaLog([]);
     setOtaError(null);
+    setOtaWifiEnabled(false);
+    // Pre-load tenant WiFi for the config step
+    try {
+      const tenantNets = await fetchWifiNetworks();
+      setOtaWifiNetworks(tenantNets.map(n => ({
+        ssid: n.ssid, password: '', isTenant: true, use_stored: !!n.has_password,
+      })));
+    } catch {
+      setOtaWifiNetworks([]);
+    }
+  };
+
+  const startOtaBuild = async () => {
+    if (!otaNode) return;
+    const node = otaNode;
+    setOtaStep('building');
     setOtaLoadingId(node.id);
 
-    // ── Step 1: Build firmware (reuse last build config for WiFi credentials) ──
+    // ── Step 1: Build firmware ──
     addOtaLog(`Firmware-Build für "${node.name}" wird gestartet...`);
     const buildConfig = (node as any).lastBuildConfig;
-    const wifiNets = buildConfig?.wifi_networks;
-    if (wifiNets?.length > 0) {
-      addOtaLog(`WiFi-Credentials aus letztem Build übernommen (${wifiNets.length} Netzwerk${wifiNets.length > 1 ? 'e' : ''})`);
+
+    // Determine WiFi networks for this build
+    let wifiNets;
+    if (otaWifiEnabled && otaWifiNetworks.some(n => n.ssid.trim())) {
+      // User chose to update WiFi credentials
+      wifiNets = otaWifiNetworks.filter(n => n.ssid.trim()).map(n => {
+        if (n.use_stored) return { ssid: n.ssid, use_stored: true as const };
+        return { ssid: n.ssid, password: n.password };
+      });
+      addOtaLog(`Neue WiFi-Credentials: ${wifiNets.length} Netzwerk${wifiNets.length > 1 ? 'e' : ''}`);
     } else {
-      addOtaLog('Hinweis: Keine WiFi-Credentials gespeichert — ESP nutzt vorherige Konfiguration');
+      // Reuse last build config
+      wifiNets = buildConfig?.wifi_networks;
+      if (wifiNets?.length > 0) {
+        addOtaLog(`WiFi-Credentials aus letztem Build übernommen (${wifiNets.length} Netzwerk${wifiNets.length > 1 ? 'e' : ''})`);
+      } else {
+        addOtaLog('Hinweis: Keine WiFi-Credentials gespeichert — ESP nutzt vorherige Konfiguration');
+      }
     }
+
     try {
       await startBuildAsync({
         node_id: node.id,
@@ -1113,10 +1147,10 @@ export default function ReceiverList() {
                 </button>
                 <button
                   data-testid={`receiver-build-${node.id}`}
-                  onClick={() => { setFlashRegenKey(!!node.lastBuildAt); setFlashNode(node); }}
+                  onClick={() => { setFlashRegenKey(false); setFlashNode(node); }}
                   style={{ ...mobileBtnStyle, background: '#14b8a6', color: '#fff', border: 'none' }}
                 >
-                  {node.lastBuildAt ? 'Neu bauen' : 'Firmware'}
+                  Firmware erstellen
                 </button>
                 {node.status !== 'offline' && node.hardwareType !== 'esp8266' && !node.otaUpdatePending && (() => {
                   const latestForHw = stats?.latestFirmwareVersions?.[node.hardwareType];
@@ -1209,6 +1243,34 @@ export default function ReceiverList() {
                           Deaktiviert
                         </span>
                       )}
+                      {(() => {
+                        const latestForHw = stats?.latestFirmwareVersions?.[node.hardwareType];
+                        const isOutdated = latestForHw && node.firmwareVersion
+                          && semverCompare(node.firmwareVersion, latestForHw) < 0;
+                        const buildIsLatest = latestForHw && node.lastBuildVersion
+                          && semverCompare(node.lastBuildVersion, latestForHw) >= 0;
+                        const buildNewer = node.lastBuildVersion && node.firmwareVersion
+                          && node.lastBuildVersion !== node.firmwareVersion;
+                        if (isOutdated) return (
+                          <span data-testid={`receiver-update-badge-${node.id}`} title="Es gibt eine neue Firmware-Version, bitte updaten!" style={{
+                            background: 'rgba(251,146,60,0.15)', color: '#fb923c',
+                            padding: '1px 6px', borderRadius: 4, fontWeight: 600,
+                            fontSize: 10, whiteSpace: 'nowrap', cursor: 'default', marginLeft: 8,
+                          }}>
+                            ⚠️ Neue FW: {latestForHw}
+                          </span>
+                        );
+                        if (buildNewer && buildIsLatest) return (
+                          <span data-testid={`receiver-update-badge-${node.id}`} style={{
+                            background: 'rgba(59,130,246,0.15)', color: '#3b82f6',
+                            padding: '1px 6px', borderRadius: 4, fontWeight: 600,
+                            fontSize: 10, whiteSpace: 'nowrap', marginLeft: 8,
+                          }}>
+                            Update: {node.lastBuildVersion}
+                          </span>
+                        );
+                        return null;
+                      })()}
                     </td>
                     <td style={{ ...tdStyle, textAlign: 'center' }}>
                       <span style={{ fontSize: 12 }}>{node.hardwareType.toUpperCase()}</span>
@@ -1517,14 +1579,12 @@ export default function ReceiverList() {
                             </AdminTooltip>
                           )}
                           <AdminTooltip
-                            brief={node.lastBuildAt ? 'Firmware neu kompilieren mit neuem API-Key' : 'Firmware erstmalig kompilieren'}
-                            detail={node.lastBuildAt
-                              ? 'Öffnet den Flash-Wizard und kompiliert eine neue Firmware mit einem NEUEN API-Key.\nDer alte Key wird ungültig — der ESP muss danach neu geflasht werden (per USB oder OTA).\nNützlich wenn:\n- Du die Backend-URL ändern willst\n- WiFi-Zugangsdaten aktualisieren willst\n- Der alte Key kompromittiert wurde\n- Du auf eine neue Firmware-Version aktualisieren willst'
-                              : 'Öffnet den Flash-Wizard: Ein 5-Schritte-Assistent der eine individuelle Firmware für diesen Empfänger kompiliert.\n\nSchritte:\n1. Vorbereitung — Board-Info und Boot-Modus\n2. Konfiguration — Backend-URL und WiFi-Daten eingeben\n3. Build — Firmware wird live auf dem Server kompiliert\n4. Verifizierung — Automatische Checks (Größe, Checksumme, API-Key)\n5. Download — .bin-Datei herunterladen und flashen\n\nJede Firmware enthält einen einzigartigen API-Key für die sichere Kommunikation.'}
+                            brief="Firmware erstellen oder aktualisieren"
+                            detail={'Öffnet den Flash-Wizard: Ein 5-Schritte-Assistent der eine individuelle Firmware für diesen Empfänger kompiliert.\n\nSchritte:\n1. Vorbereitung — Board-Info und Boot-Modus\n2. Konfiguration — Backend-URL, WiFi-Daten, optional neuer API-Key\n3. Build — Firmware wird live auf dem Server kompiliert\n4. Verifizierung — Automatische Checks (Größe, Checksumme, API-Key)\n5. Download — .bin-Datei herunterladen und flashen\n\nWiFi-Netzwerke aus den Mandant-Einstellungen werden automatisch vorausgefüllt.'}
                           >
                             <button
                               data-testid={`receiver-build-${node.id}`}
-                              onClick={() => { setFlashRegenKey(!!node.lastBuildAt); setFlashNode(node); }}
+                              onClick={() => { setFlashRegenKey(false); setFlashNode(node); }}
                               style={{
                                 padding: '5px 12px',
                                 background: '#14b8a6',
@@ -1536,7 +1596,7 @@ export default function ReceiverList() {
                                 fontWeight: 600,
                               }}
                             >
-                              {node.lastBuildAt ? 'Neu bauen (neuer Key)' : 'Firmware bauen'}
+                              Firmware erstellen
                             </button>
                           </AdminTooltip>
                           {logEnabled && (
@@ -1695,7 +1755,7 @@ export default function ReceiverList() {
                     {otaNode.hardwareType} &middot; {otaNode.id}
                   </p>
                 </div>
-                {(otaStep === 'done' || otaStep === 'error') && (
+                {(otaStep === 'config' || otaStep === 'done' || otaStep === 'error') && (
                   <button onClick={closeOtaModal} style={{
                     background: 'var(--bg-tertiary)', border: '1px solid var(--border)',
                     borderRadius: 8, width: 36, height: 36, cursor: 'pointer',
@@ -1705,8 +1765,8 @@ export default function ReceiverList() {
                 )}
               </div>
 
-              {/* Progress Steps */}
-              <div style={{ padding: '16px 20px', display: 'flex', gap: 8, borderBottom: '1px solid var(--border)' }}>
+              {/* Progress Steps (hidden during config) */}
+              {otaStep !== 'config' && <div style={{ padding: '16px 20px', display: 'flex', gap: 8, borderBottom: '1px solid var(--border)' }}>
                 {(['building', 'triggering', 'waiting', 'done'] as const).map((step, i) => {
                   const labels = ['Firmware bauen', 'OTA auslösen', 'Warte auf ESP', 'Fertig'];
                   const icons = ['1', '2', '3', '\u2713'];
@@ -1737,10 +1797,70 @@ export default function ReceiverList() {
                     </div>
                   );
                 })}
-              </div>
+              </div>}
+
+              {/* Config step — optionally update WiFi before build */}
+              {otaStep === 'config' && (
+                <div style={{ padding: '16px 20px', overflow: 'auto', maxHeight: 400 }}>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>
+                    WiFi-Credentials aus dem letzten Build werden standardmäßig beibehalten.
+                    Optional kannst du die WLAN-Zugangsdaten für dieses Update anpassen.
+                  </p>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', marginBottom: 12 }}>
+                    <input
+                      type="checkbox"
+                      checked={otaWifiEnabled}
+                      onChange={e => setOtaWifiEnabled(e.target.checked)}
+                      style={{ accentColor: '#14b8a6' }}
+                    />
+                    WiFi-Netzwerke aktualisieren
+                  </label>
+                  {otaWifiEnabled && (
+                    <div style={{ background: 'var(--bg-primary)', borderRadius: 8, padding: 12, border: '1px solid var(--border)' }}>
+                      {otaWifiNetworks.map((net, i) => (
+                        <div key={i} style={{
+                          marginBottom: 8, padding: 8, borderRadius: 6,
+                          border: `1px solid ${net.isTenant ? 'rgba(20,184,166,0.3)' : 'var(--border)'}`,
+                          background: 'var(--bg-secondary)',
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', flex: 1 }}>
+                              Netzwerk {i + 1}
+                              {net.isTenant && <span style={{ marginLeft: 6, fontSize: 9, padding: '1px 5px', borderRadius: 3, background: 'rgba(20,184,166,0.15)', color: '#14b8a6', fontWeight: 700 }}>MANDANT</span>}
+                            </span>
+                            <button onClick={() => setOtaWifiNetworks(prev => prev.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 14 }}>x</button>
+                          </div>
+                          <input
+                            value={net.ssid}
+                            onChange={e => setOtaWifiNetworks(prev => prev.map((n, j) => j === i ? { ...n, ssid: e.target.value } : n))}
+                            placeholder="SSID"
+                            style={{ width: '100%', padding: '6px 8px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text-primary)', fontSize: 12, marginBottom: 4 }}
+                          />
+                          <input
+                            type="password"
+                            value={net.password}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setOtaWifiNetworks(prev => prev.map((n, j) => j === i ? { ...n, password: val, use_stored: !val && n.isTenant } : n));
+                            }}
+                            placeholder={net.use_stored ? 'Gespeichertes Passwort' : 'Passwort'}
+                            style={{ width: '100%', padding: '6px 8px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text-primary)', fontSize: 12 }}
+                          />
+                        </div>
+                      ))}
+                      {otaWifiNetworks.length < 3 && (
+                        <button onClick={() => setOtaWifiNetworks(prev => [...prev, { ssid: '', password: '' }])} style={{
+                          background: 'none', border: '1px solid var(--border)', borderRadius: 6,
+                          color: '#14b8a6', fontSize: 11, padding: '4px 10px', cursor: 'pointer', marginTop: 4,
+                        }}>+ Netzwerk</button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Log output */}
-              <div style={{
+              {otaStep !== 'config' && <div style={{
                 flex: 1, overflow: 'auto', padding: '12px 20px',
                 fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6,
                 background: 'var(--bg-primary)', minHeight: 150, maxHeight: 300,
@@ -1764,7 +1884,7 @@ export default function ReceiverList() {
                   </div>
                 )}
                 <div ref={otaLogEndRef} />
-              </div>
+              </div>}
 
               {/* Error */}
               {otaError && (
@@ -1782,6 +1902,24 @@ export default function ReceiverList() {
                 padding: '12px 20px', borderTop: '1px solid var(--border)',
                 display: 'flex', justifyContent: 'flex-end', gap: 8,
               }}>
+                {otaStep === 'config' && (
+                  <>
+                    <button onClick={closeOtaModal} style={{
+                      padding: '8px 16px', background: 'var(--bg-tertiary)',
+                      border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text-secondary)',
+                      cursor: 'pointer', fontSize: 13,
+                    }}>
+                      Abbrechen
+                    </button>
+                    <button onClick={startOtaBuild} style={{
+                      padding: '8px 20px', background: '#14b8a6',
+                      border: 'none', borderRadius: 8, color: '#fff',
+                      cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                    }}>
+                      Update starten
+                    </button>
+                  </>
+                )}
                 {(otaStep === 'done' || otaStep === 'error') && (
                   <button onClick={closeOtaModal} style={{
                     padding: '8px 20px', background: 'var(--accent)',

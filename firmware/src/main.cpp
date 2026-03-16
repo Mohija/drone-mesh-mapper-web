@@ -15,6 +15,13 @@
 #include "http_client.h"
 #include "led_status.h"
 
+#ifdef ESP32
+#include <esp_task_wdt.h>
+#if HAS_BLE
+#include <NimBLEDevice.h>
+#endif
+#endif
+
 WiFiManager wifiMgr;
 CaptivePortal portal;
 OdidScanner scanner;
@@ -70,11 +77,11 @@ void setup() {
 void loop() {
     unsigned long now = millis();
 
+    // Captive portal FIRST — DNS must respond fast for captive portal detection
+    portal.loop();
+
     // WiFi manager (reconnect logic)
     wifiMgr.loop();
-
-    // Captive portal
-    portal.loop();
 
     // LED state based on connectivity
     if (!wifiMgr.isStaConnected()) {
@@ -149,16 +156,28 @@ void loop() {
         if (ota.available && ota.url.length() > 0) {
             Serial.printf("[Main] OTA update available: %s (%d bytes)\n",
                           ota.version.c_str(), ota.size);
-            // Pause scanner during OTA download
+
+            // Free as much heap as possible before HTTPS OTA download
             scanner.pauseWifiScan();
+#if HAS_BLE
+            // Stop BLE completely to free ~30KB heap for TLS
+            NimBLEDevice::deinit(true);
+            delay(100);
+            Serial.printf("[Main] BLE stopped for OTA. Free heap: %d\n", ESP.getFreeHeap());
+#endif
             led.setState(LED_BOOT);  // Blink during OTA
+
+            // Set a watchdog: if OTA hangs >60s, reboot
+            esp_task_wdt_init(60, true);
+            esp_task_wdt_add(NULL);
 
             if (client.performOtaUpdate(ota.url)) {
                 // Won't reach here — ESP reboots on success
             } else {
-                Serial.println("[Main] OTA failed, resuming normal operation");
+                Serial.println("[Main] OTA failed, rebooting to restore BLE...");
+                delay(500);
+                ESP.restart();  // Reboot to re-init BLE cleanly
             }
-            // Resume after failed OTA (success reboots)
         }
     }
 

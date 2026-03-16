@@ -32,16 +32,89 @@ void WiFiManager::begin(const char* apSsid, const char* ssids[], const char* pas
 
     if (_activeSsid.length() > 0) {
         _staConfigured = true;
-        Serial.printf("[WiFi] STA mode — trying: %s\n", _activeSsid.c_str());
+        Serial.printf("[WiFi] STA mode — trying saved: %s\n", _activeSsid.c_str());
         WiFi.mode(WIFI_STA);
         _connectSta();
     } else if (_networkCount > 0) {
-        // No saved credentials, but we have build-time networks — try first one
+        _staConfigured = true;
+        WiFi.mode(WIFI_STA);
+
+        // Scan available networks, then try each matching one with a short timeout
+        if (_networkCount > 1) {
+            Serial.printf("[WiFi] Scanning to find best of %d networks...\n", _networkCount);
+            int n = WiFi.scanNetworks(false, false, false, 500);
+
+            // Build list of available configured networks sorted by RSSI
+            struct Match { int netIdx; int rssi; };
+            Match matches[MAX_WIFI_NETWORKS];
+            int matchCount = 0;
+
+            if (n > 0) {
+                // Log all found networks for debugging
+                for (int s = 0; s < n; s++) {
+                    Serial.printf("[WiFi]   Scan %d: \"%s\" (%d dBm)\n", s + 1, WiFi.SSID(s).c_str(), WiFi.RSSI(s));
+                }
+                for (int s = 0; s < n; s++) {
+                    String scanned = WiFi.SSID(s);
+                    int rssi = WiFi.RSSI(s);
+                    for (int c = 0; c < _networkCount; c++) {
+                        if (scanned == _networks[c].ssid) {
+                            // Check if already in list (keep best RSSI)
+                            bool found = false;
+                            for (int m = 0; m < matchCount; m++) {
+                                if (matches[m].netIdx == c) { found = true; break; }
+                            }
+                            if (!found && matchCount < MAX_WIFI_NETWORKS) {
+                                matches[matchCount++] = { c, rssi };
+                            }
+                        }
+                    }
+                }
+                // Sort by RSSI descending (simple bubble sort, max 3 items)
+                for (int i = 0; i < matchCount - 1; i++) {
+                    for (int j = i + 1; j < matchCount; j++) {
+                        if (matches[j].rssi > matches[i].rssi) {
+                            Match tmp = matches[i]; matches[i] = matches[j]; matches[j] = tmp;
+                        }
+                    }
+                }
+                WiFi.scanDelete();
+            }
+
+            // Try each matched network with a 5s connection timeout
+            for (int m = 0; m < matchCount; m++) {
+                int idx = matches[m].netIdx;
+                Serial.printf("[WiFi] Trying %d/%d: %s (RSSI: %d)...\n",
+                    m + 1, matchCount, _networks[idx].ssid.c_str(), matches[m].rssi);
+
+                WiFi.disconnect(false);
+                WiFi.begin(_networks[idx].ssid.c_str(), _networks[idx].pass.c_str());
+
+                // Wait up to 5 seconds for connection
+                unsigned long start = millis();
+                while (millis() - start < 5000) {
+                    if (WiFi.status() == WL_CONNECTED) {
+                        _activeSsid = _networks[idx].ssid;
+                        _activePass = _networks[idx].pass;
+                        Serial.printf("[WiFi] Connected to: %s\n", _activeSsid.c_str());
+                        return;  // Success — main loop handles the rest
+                    }
+                    delay(100);
+                }
+                Serial.printf("[WiFi] Failed: %s (timeout)\n", _networks[idx].ssid.c_str());
+            }
+
+            if (matchCount == 0) {
+                Serial.println("[WiFi] No configured network found in scan");
+            } else {
+                Serial.println("[WiFi] All networks failed");
+            }
+        }
+
+        // Fallback: try first network (or only network)
         _activeSsid = _networks[0].ssid;
         _activePass = _networks[0].pass;
-        _staConfigured = true;
-        Serial.printf("[WiFi] STA mode — trying first network: %s\n", _activeSsid.c_str());
-        WiFi.mode(WIFI_STA);
+        Serial.printf("[WiFi] STA mode — trying: %s\n", _activeSsid.c_str());
         _connectSta();
     } else {
         Serial.println("[WiFi] No credentials configured — starting AP for provisioning");
@@ -106,11 +179,30 @@ void WiFiManager::loop() {
         Serial.println("[WiFi] STA connection lost!");
     }
 
-    // ── AP shutdown: turn off AP once STA is stable ──────────
+    // ── AP shutdown: turn off AP once STA is stable AND no portal clients ──
     if (connected && _apActive && _staConnectedAt > 0) {
-        if (now - _staConnectedAt > WIFI_AP_SHUTDOWN_DELAY) {
-            Serial.println("[WiFi] STA stable — shutting down AP");
-            _stopAp();
+        unsigned long apAge = now - _staConnectedAt;
+        if (apAge > WIFI_AP_SHUTDOWN_DELAY) {
+#ifdef ESP32
+            int clients = WiFi.softAPgetStationNum();
+#else
+            int clients = wifi_softap_get_station_num();
+#endif
+            if (clients > 0 && apAge < WIFI_AP_MAX_LINGER_MS) {
+                // Portal still in use — keep AP alive but log periodically
+                static unsigned long lastLog = 0;
+                if (now - lastLog > 10000) {
+                    Serial.printf("[WiFi] AP still has %d client(s) — keeping alive\n", clients);
+                    lastLog = now;
+                }
+            } else {
+                if (clients > 0) {
+                    Serial.printf("[WiFi] AP max linger reached — shutting down (%d clients)\n", clients);
+                } else {
+                    Serial.println("[WiFi] STA stable, no AP clients — shutting down AP");
+                }
+                _stopAp();
+            }
         }
     }
 
@@ -118,7 +210,7 @@ void WiFiManager::loop() {
     // After boot timeout OR when WiFi was previously connected but lost
     if (!connected && !_apActive) {
         bool bootTimeout = (now - _bootTime > WIFI_AP_TIMEOUT_MS);
-        bool wifiLost = (_staConnectAttempts >= 3);  // 3 failed retries = 30s
+        bool wifiLost = (_staConnectAttempts >= 2);  // 2 failed retries = 20s
         if (!_staConfigured || bootTimeout || wifiLost) {
             // Scan networks BEFORE starting AP (hardware can't do both)
             _scanAndCache();
@@ -128,6 +220,13 @@ void WiFiManager::loop() {
     }
 
     // ── STA reconnect attempts ───────────────────────────────
+    // NEVER call WiFi.begin() while AP is active — it disrupts the entire WiFi
+    // stack (DNS stops responding, HTTP requests drop) causing 30-45s delays
+    // before iOS/Android shows the captive portal popup.
+    // The AP is only active because STA failed, so reconnecting is pointless.
+    // The user will provide new credentials via the portal → setStaCredentials().
+    if (_apActive) return;
+
     if (_staConfigured && !connected && (now - _lastReconnectAttempt > WIFI_RECONNECT_MS)) {
         _lastReconnectAttempt = now;
         _staConnectAttempts++;
@@ -233,23 +332,34 @@ void WiFiManager::_scanAndCache() {
     // Stop any active connection attempt so scan can run
     WiFi.disconnect(false);
     WiFi.mode(WIFI_STA);
-    delay(200);
+    delay(500);  // Give WiFi radio time to stabilize in STA mode
 
-    int n = WiFi.scanNetworks(false, false, false, 300);  // sync, no hidden, no passive, 300ms/ch
+    // Sync scan: 500ms per channel gives reliable results
+    int n = WiFi.scanNetworks(false, false, false, 500);
     Serial.printf("[WiFi] Found %d networks\n", n);
 
     if (n > 0) {
         String json = "[";
         for (int i = 0; i < n; i++) {
-            if (i > 0) json += ",";
-            json += "{\"ssid\":\"" + WiFi.SSID(i) + "\","
+            String ssid = WiFi.SSID(i);
+            if (ssid.isEmpty()) continue;  // Skip hidden networks
+
+            // Escape special JSON characters in SSID
+            ssid.replace("\\", "\\\\");
+            ssid.replace("\"", "\\\"");
+
+            if (json.length() > 1) json += ",";
+            json += "{\"ssid\":\"" + ssid + "\","
                     "\"rssi\":" + String(WiFi.RSSI(i)) + ","
                     "\"secure\":" + String(WiFi.encryptionType(i) != 0 ? "true" : "false") + "}";
         }
         json += "]";
         _cachedScanJson = json;
-        WiFi.scanDelete();
+        Serial.printf("[WiFi] Cached %d networks for portal\n", n);
+    } else {
+        Serial.println("[WiFi] No networks found — portal will show empty list");
     }
+    WiFi.scanDelete();
 }
 
 void WiFiManager::_startAp() {
@@ -259,12 +369,12 @@ void WiFiManager::_startAp() {
     WiFi.mode(_staConfigured ? WIFI_AP_STA : WIFI_AP);
     delay(100);
 
-    // Start AP on channel 1, open network
-    WiFi.softAP(_apSsid.c_str(), nullptr, 1, 0, 4);  // ch1, no pass, not hidden, max 4 clients
+    // Start AP on channel 6, open network, max 4 clients
+    WiFi.softAP(_apSsid.c_str(), nullptr, 6, 0, 4);
     _apActive = true;
 
     delay(100);
-    Serial.printf("[WiFi] AP started: %s (IP: %s, ch: 1)\n", _apSsid.c_str(), WiFi.softAPIP().toString().c_str());
+    Serial.printf("[WiFi] AP started: %s (IP: %s, ch: 6)\n", _apSsid.c_str(), WiFi.softAPIP().toString().c_str());
 }
 
 void WiFiManager::_stopAp() {

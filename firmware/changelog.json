@@ -1,6 +1,30 @@
 {
   "versions": [
     {
+      "version": "1.4.0",
+      "date": "2026-03-16",
+      "hardware": ["esp32-s3", "esp32-c3", "esp8266"],
+      "changes": [
+        "Captive Portal: Kein WiFi.begin() mehr während AP aktiv (behebt 30-45s Delay)",
+        "Captive Portal: AP-Timeout von 15s auf 8s reduziert, schnellerer Hotspot-Start",
+        "Captive Portal: WLAN-Scan robuster (500ms/Kanal, JSON-Escaping, Hidden-Networks)",
+        "Captive Portal: Windows 11 Workaround (/connecttest.txt → logout.net)",
+        "Captive Portal: Kein 'Success' im HTML (iOS CNA Kompatibilität)",
+        "Captive Portal: Firmware-Version prominent im Portal angezeigt"
+      ]
+    },
+    {
+      "version": "1.3.0",
+      "date": "2026-03-16",
+      "hardware": ["esp32-s3", "esp32-c3", "esp8266"],
+      "changes": [
+        "Captive Portal: 302-Redirects für alle OS (Android/Apple/Windows/Firefox)",
+        "Captive Portal: Erfolgsbildschirm mit Countdown und Auto-Close nach WLAN-Verbindung",
+        "Hotspot bleibt offen solange Portal-Clients verbunden sind (max 20s)",
+        "Zusätzliche Captive-Portal-Detection-Pfade (/gen_204, /canonical.html, etc.)"
+      ]
+    },
+    {
       "version": "1.2.0",
       "date": "2026-03-16",
       "hardware": ["esp32-s3", "esp32-c3", "esp8266"],

@@ -89,6 +89,7 @@ const SECTION_SUBS: Record<string, SubMeta[]> = {
     { id: 'schritt-4', title: 'Schritt 4: Erstinbetriebnahme' },
     { id: 'antenne', title: 'Antenne anschließen (ESP32-S3 mit IPEX)' },
     { id: 'led-anzeige', title: 'LED-Anzeige' },
+    { id: 'wifi-einschraenkungen', title: 'Bekannte WLAN-Einschränkungen' },
     { id: 'problembehandlung', title: 'Problembehandlung' },
     { id: 'hardware-vergleich', title: 'Vergleich der Hardware-Typen' },
     { id: 'einkaufslisten', title: 'Einkaufslisten' },
@@ -1230,7 +1231,7 @@ function SectionHardware() {
       <h4>Wizard: Konfiguration (Schritt 2)</h4>
       <ul>
         <li><strong>Backend-URL</strong> (Pflicht) — Die URL deines FlightArc-Servers (z.B. <code>https://mein-server.de:3020</code>). Ist vorausgefüllt mit der aktuellen URL.</li>
-        <li><strong>WiFi-Netzwerke</strong> (optional, bis zu 3) — Der Empfänger verbindet sich automatisch mit dem stärksten verfügbaren Netzwerk. Wenn leer, konfigurierst du WiFi später über das Captive Portal.</li>
+        <li><strong>WiFi-Netzwerke</strong> (optional, bis zu 3) — Mandant-WLANs werden automatisch vorausgefüllt. Der Empfänger verbindet sich automatisch mit dem stärksten verfügbaren Netzwerk. Wenn leer, konfigurierst du WiFi später über das Captive Portal. <strong>Wichtig: Nur 2,4-GHz-Netzwerke</strong> — siehe <em>Bekannte Einschränkungen</em>.</li>
       </ul>
       <p>Klicke auf <strong>„Firmware bauen"</strong>. Der API-Key wird automatisch eingebettet.</p>
       <h4>Wizard: Firmware herunterladen (Schritt 3-4)</h4>
@@ -1346,17 +1347,28 @@ esptool.py --chip esp8266 --port /dev/ttyUSB0 \\
               automatisch einen Hotspot <strong>„FlightArc-XXXX"</strong> (LED: langsames Pulsieren).</li>
           </ul>
         </li>
-        <li><strong>Captive Portal</strong> (bei Hotspot) — Verbinde dich mit dem Hotspot <strong>„FlightArc-XXXX"</strong>,
-          ein Konfigurationsportal öffnet sich automatisch:
+        <li><strong>Captive Portal</strong> (bei Hotspot) — Verbinde dich mit dem Hotspot <strong>„FlightArc-XXXX"</strong>:
           <ul>
+            <li>Das Konfigurationsportal öffnet sich automatisch als Popup. <strong>Wichtig: Das kann je nach Betriebssystem 20–45 Sekunden dauern</strong> (siehe Hinweis unten).</li>
+            <li>Falls das Portal nicht automatisch erscheint: Öffne manuell <strong>http://192.168.4.1</strong> im Browser.</li>
             <li>Es wird eine <strong>zwischengespeicherte Netzwerkliste</strong> angezeigt, die vor dem Hotspot-Start gescannt wurde</li>
             <li>WiFi-Netzwerk aus der Liste auswählen und Passwort eingeben</li>
             <li><strong>Netzwerk nicht gefunden?</strong> — SSID und Passwort können auch manuell eingegeben werden</li>
             <li>Hinweis: Den Standort des Empfängers setzt du über die FlightArc Web-App unter <strong>Administration → Empfänger → Standort setzen</strong></li>
-            <li>Der ESP verbindet sich mit dem WiFi und der <strong>Hotspot schaltet sich automatisch ab</strong></li>
+            <li>Nach erfolgreicher Verbindung zeigt das Portal eine Bestätigung und schließt sich automatisch. Der <strong>Hotspot schaltet sich danach ab</strong>.</li>
           </ul>
+          <InfoBox type="info">
+            <strong>Wartezeit beim Captive Portal:</strong> Nach dem Verbinden mit dem Hotspot dauert es typischerweise
+            20–45 Sekunden, bis das Konfigurationsportal automatisch erscheint. Das ist <strong>normales Verhalten</strong> —
+            das Betriebssystem (iOS, Android, Windows) führt zunächst mehrere interne Netzwerk-Prüfungen durch, bevor es das
+            Portal-Popup anzeigt. Der Empfänger antwortet sofort, die Verzögerung liegt vollständig auf der Client-Seite.
+            <br /><br />
+            <strong>Typische Wartezeiten:</strong> iOS: 30–45s | Android: 5–15s | Windows: 10–20s
+            <br />
+            <strong>Tipp:</strong> Wer nicht warten möchte, kann direkt <strong>http://192.168.4.1</strong> im Browser öffnen.
+          </InfoBox>
         </li>
-        <li><strong>Automatische Wiederherstellung</strong> — Falls das WiFi ausfällt, startet der ESP nach 3 gescheiterten Versuchen (~30s)
+        <li><strong>Automatische Wiederherstellung</strong> — Falls das WiFi ausfällt, startet der ESP nach 2 gescheiterten Versuchen (~20s)
           den Hotspot erneut (LED: langsames Pulsieren). Sobald das Netzwerk wieder da ist, verbindet er sich automatisch und der Hotspot geht aus.
           <br /><em>Hinweis: Während der Hotspot aktiv ist, pausiert der WiFi-Scanner (ODID-Erkennung). Dies ist eine Hardware-Einschränkung — der ESP kann nicht gleichzeitig als Access Point und im Promiscuous Mode scannen.</em></li>
         <li><strong>Online</strong> — LED leuchtet dauerhaft. Der Empfänger sendet Heartbeats (alle 30s) und Erkennungen (alle 2s).</li>
@@ -1410,6 +1422,49 @@ esptool.py --chip esp8266 --port /dev/ttyUSB0 \\
       </table>
         </div>
       </details>
+      <details className="help-sub" id="wifi-einschraenkungen">
+        <summary style={h3SummaryStyle}><span className="help-caret">&#9654;</span> Bekannte WLAN-Einschränkungen</summary>
+        <div style={subContentStyle}>
+          <InfoBox type="warning">
+            Der ESP32 unterstützt ausschließlich <strong>2,4-GHz-Netzwerke</strong>. 5-GHz-Netzwerke werden
+            beim Scan nicht erkannt und können nicht verwendet werden. Dies betrifft alle ESP32-Varianten
+            (S3, C3) sowie den ESP8266.
+          </InfoBox>
+          <h4>iPhone / iPad Hotspot (Persönlicher Hotspot)</h4>
+          <p>
+            Ab iPhone 12 sendet der persönliche Hotspot <strong>standardmäßig auf 5 GHz</strong>.
+            Der ESP32 kann dieses Netzwerk nicht sehen. So aktivierst du 2,4 GHz:
+          </p>
+          <ol>
+            <li>Öffne <strong>Einstellungen</strong> auf dem iPhone</li>
+            <li>Tippe auf <strong>Persönlicher Hotspot</strong></li>
+            <li>Aktiviere <strong>„Kompatibilität maximieren"</strong></li>
+          </ol>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            Diese Einstellung zwingt den Hotspot auf 2,4 GHz. Danach wird das iPhone-Netzwerk im
+            ESP32-Scan sichtbar. Hinweis: Die Datenrate sinkt leicht, aber die Kompatibilität
+            mit IoT-Geräten wird sichergestellt.
+          </p>
+          <h4>Dual-Band-Router (2,4 + 5 GHz)</h4>
+          <p>
+            Viele moderne Router senden auf beiden Frequenzbändern unter derselben SSID (Band Steering).
+            Der ESP32 verbindet sich automatisch mit dem 2,4-GHz-Band. Falls Probleme auftreten:
+          </p>
+          <ul>
+            <li>Prüfe in der Router-Konfiguration, ob 2,4 GHz aktiviert ist</li>
+            <li>Manche Router haben separate SSIDs für 2,4 und 5 GHz (z.B. <code>MeinNetz_2G</code>) — verwende die 2,4-GHz-SSID</li>
+            <li>Falls Band Steering aktiv ist und der ESP das Netzwerk nicht findet: Separate SSIDs konfigurieren</li>
+          </ul>
+          <h4>WLAN-Suche beim Booten</h4>
+          <p>
+            Bei mehreren konfigurierten Netzwerken scannt der ESP32 beim Start alle verfügbaren 2,4-GHz-Netzwerke
+            und verbindet sich mit dem <strong>stärksten bekannten Netzwerk</strong>. Schlägt die Verbindung fehl
+            (z.B. falsches Passwort), wird automatisch das nächste probiert. Erst wenn kein Netzwerk erreichbar ist,
+            startet der Hotspot für die manuelle Konfiguration.
+          </p>
+        </div>
+      </details>
+
       <details className="help-sub" id="problembehandlung">
         <summary style={h3SummaryStyle}><span className="help-caret">&#9654;</span> Problembehandlung</summary>
         <div style={subContentStyle}>
@@ -1419,7 +1474,9 @@ esptool.py --chip esp8266 --port /dev/ttyUSB0 \\
         </thead>
         <tbody>
           <tr><td style={tdStyle}>ESP wird nicht erkannt</td><td style={tdStyle}>Anderes USB-Kabel versuchen (Datenkabel!). ESP32-S3 hat native USB (kein Treiber nötig). ESP32-C3 und ESP8266 brauchen CH340 oder CP2102 Treiber. Unter Linux: <code>ls /dev/ttyUSB*</code> oder <code>ls /dev/ttyACM*</code> prüfen.</td></tr>
-          <tr><td style={tdStyle}>Kein WiFi-Hotspot</td><td style={tdStyle}>15 Sekunden warten — der Hotspot startet erst nach dem STA-Timeout (15s). Falls danach kein Hotspot: Board resetten (EN/RST-Taste).</td></tr>
+          <tr><td style={tdStyle}>Kein WiFi-Hotspot</td><td style={tdStyle}>8 Sekunden warten — der Hotspot startet erst nach dem STA-Timeout (~8s). Falls danach kein Hotspot: Board resetten (EN/RST-Taste).</td></tr>
+          <tr><td style={tdStyle}>Captive Portal öffnet sich nicht / sehr langsam</td><td style={tdStyle}>Das ist <strong>normales Verhalten</strong>. iOS braucht 30–45s, Android 5–15s, Windows 10–20s nach dem WLAN-Connect bis das Portal-Popup erscheint. Die Verzögerung liegt im Betriebssystem, nicht im Empfänger. <strong>Tipp:</strong> Direkt <code>http://192.168.4.1</code> im Browser öffnen, statt auf das Popup zu warten.</td></tr>
+          <tr><td style={tdStyle}>WLAN-Netzwerk wird nicht gefunden</td><td style={tdStyle}>Der ESP32 unterstützt <strong>nur 2,4 GHz</strong> — 5-GHz-Netzwerke sind unsichtbar. Siehe <em>Bekannte Einschränkungen</em> im Handbuch. Bei iPhone-Hotspot: <strong>„Kompatibilität maximieren"</strong> aktivieren (Einstellungen → Persönlicher Hotspot).</td></tr>
           <tr><td style={tdStyle}>Empfänger bleibt „Offline"</td><td style={tdStyle}>Backend-URL prüfen. Firewall-Port 3020 offen? HTTP statt HTTPS bei ESP8266.</td></tr>
           <tr><td style={tdStyle}>Doppelblinken (orange)</td><td style={tdStyle}>WiFi ist verbunden, aber Backend nicht erreichbar. Backend-URL, Firewall-Port (3020) und Netzwerkverbindung prüfen. Bei HTTPS: ESP8266 unterstützt nur HTTP.</td></tr>
           <tr><td style={tdStyle}>Keine Drohnen erkannt</td><td style={tdStyle}>Nur Drohnen mit aktivierter Remote ID (ODID) werden erkannt — EU-Pflicht seit 01.01.2024. DJI-Drohnen senden per WiFi NAN (ESP32 erforderlich). ESP8266 kann kein BLE und kein NAN. WiFi-Kanal prüfen: Empfänger lauscht auf dem Kanal des verbundenen WiFi-Netzwerks.</td></tr>
@@ -1664,8 +1721,18 @@ function SectionOta() {
             <li>Klappe den Empfänger auf und klicke auf <strong>„Full-Flash (Merged)"</strong></li>
             <li>Die Datei hat das Format <code>flightarc-esp32-s3-XXXX-merged.bin</code></li>
           </ol>
+          <InfoBox type="warning">
+            <strong>WiFi-Credentials bei USB-Flash:</strong> Beim Flashen einer Merged Binary (ab Adresse 0x0) wird der
+            gesamte Flash überschrieben — inklusive NVS-Speicher. WiFi-Zugangsdaten, die über das Captive Portal
+            gespeichert wurden, gehen dabei verloren. Die bei der Firmware-Erstellung eingebetteten WiFi-Netzwerke
+            bleiben erhalten, da sie in der Firmware selbst gespeichert sind.
+            <br /><br />
+            <strong>OTA-Updates sind davon nicht betroffen</strong> — sie aktualisieren nur die App-Partition und lassen
+            NVS (gespeicherte WiFi-Credentials) intakt.
+          </InfoBox>
           <h4>Flashen mit esptool</h4>
           <CodeBlock>{`# Merged Binary flashen (alles in einer Datei, Offset 0x0)
+# ACHTUNG: Löscht gespeicherte WiFi-Credentials aus dem Captive Portal!
 esptool.py --chip esp32s3 write_flash 0x0 flightarc-esp32-s3-XXXX-merged.bin`}</CodeBlock>
           <h4>Flashen mit Web-Flasher</h4>
           <p>

@@ -285,15 +285,29 @@ bool FlightArcClient::performOtaUpdate(const String& otaUrl) {
 
     Serial.println("[OTA] Starting firmware update...");
     Serial.printf("[OTA] URL: %s\n", (_backendUrl + otaUrl).c_str());
+    Serial.printf("[OTA] Free heap: %d bytes\n", ESP.getFreeHeap());
+
+    // OTA needs ~100KB free heap minimum for download buffer
+    if (ESP.getFreeHeap() < 100000) {
+        Serial.println("[OTA] Not enough heap! Rebooting to free memory...");
+        delay(500);
+        ESP.restart();
+    }
+
+    httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
 
   #if HAS_TLS
     if (fullUrl.startsWith("https")) {
         WiFiClientSecure client;
         client.setInsecure();
+        client.setTimeout(30);  // 30 second timeout
+
+        Serial.printf("[OTA] HTTPS download starting (heap: %d)...\n", ESP.getFreeHeap());
         t_httpUpdate_return ret = httpUpdate.update(client, fullUrl);
         switch (ret) {
             case HTTP_UPDATE_FAILED:
-                Serial.printf("[OTA] Failed: %s\n", httpUpdate.getLastErrorString().c_str());
+                Serial.printf("[OTA] HTTPS failed: %s (code %d)\n",
+                    httpUpdate.getLastErrorString().c_str(), httpUpdate.getLastError());
                 return false;
             case HTTP_UPDATE_NO_UPDATES:
                 Serial.println("[OTA] No updates");
@@ -307,10 +321,12 @@ bool FlightArcClient::performOtaUpdate(const String& otaUrl) {
   #endif
 
     WiFiClient client;
+    Serial.printf("[OTA] HTTP download starting (heap: %d)...\n", ESP.getFreeHeap());
     t_httpUpdate_return ret = httpUpdate.update(client, fullUrl);
     switch (ret) {
         case HTTP_UPDATE_FAILED:
-            Serial.printf("[OTA] Failed: %s\n", httpUpdate.getLastErrorString().c_str());
+            Serial.printf("[OTA] HTTP failed: %s (code %d)\n",
+                httpUpdate.getLastErrorString().c_str(), httpUpdate.getLastError());
             return false;
         case HTTP_UPDATE_NO_UPDATES:
             Serial.println("[OTA] No updates");

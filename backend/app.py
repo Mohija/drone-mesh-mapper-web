@@ -172,6 +172,16 @@ with app.app_context():
             pass  # Column already exists
     db.session.commit()
 
+    # Migration: add wifi_networks to tenant_settings
+    for col_stmt in [
+        "ALTER TABLE tenant_settings ADD COLUMN wifi_networks TEXT",
+    ]:
+        try:
+            db.session.execute(db.text(col_stmt))
+        except Exception:
+            pass  # Column already exists
+    db.session.commit()
+
 # Attach database logging handler
 from services.db_logger import DatabaseLogHandler
 db_handler = DatabaseLogHandler(app)
@@ -415,6 +425,57 @@ def update_mission_zone_defaults():
     tid = g.tenant_id or DEFAULT_TENANT_ID
     settings.update(updates, tenant_id=tid)
     return jsonify(settings.get_mission_zone_defaults(tenant_id=tid))
+
+
+@app.route("/api/settings/wifi-networks", methods=["GET"])
+@login_required
+@role_required("tenant_admin")
+def get_wifi_networks():
+    """Get tenant WiFi networks (passwords masked)."""
+    tid = g.tenant_id or DEFAULT_TENANT_ID
+    ts = TenantSettings.query.filter_by(tenant_id=tid).first()
+    networks = (ts.wifi_networks or []) if ts else []
+    # Mask passwords — never send plaintext to frontend
+    masked = [{"ssid": n.get("ssid", ""), "has_password": bool(n.get("password"))} for n in networks]
+    return jsonify(masked)
+
+
+@app.route("/api/settings/wifi-networks", methods=["POST"])
+@login_required
+@role_required("tenant_admin")
+def update_wifi_networks():
+    """Set tenant WiFi networks. Max 3."""
+    data = request.get_json(silent=True) or {}
+    networks = data.get("networks", [])
+    if len(networks) > 3:
+        return jsonify({"error": "Maximal 3 WiFi-Netzwerke erlaubt"}), 400
+
+    tid = g.tenant_id or DEFAULT_TENANT_ID
+    ts = TenantSettings.query.filter_by(tenant_id=tid).first()
+    if not ts:
+        return jsonify({"error": "Mandant nicht gefunden"}), 404
+
+    # Merge: if password is empty/null for an existing SSID, keep the old password
+    old_networks = ts.wifi_networks or []
+    old_by_ssid = {n["ssid"]: n.get("password", "") for n in old_networks}
+
+    resolved = []
+    for n in networks:
+        ssid = (n.get("ssid") or "").strip()
+        if not ssid:
+            continue
+        password = n.get("password")
+        if not password and ssid in old_by_ssid:
+            password = old_by_ssid[ssid]  # Keep existing password
+        resolved.append({"ssid": ssid, "password": password or ""})
+
+    ts.wifi_networks = resolved
+    # Bump settings version for client sync
+    settings._bump_version(tid)
+    db.session.commit()
+
+    masked = [{"ssid": n["ssid"], "has_password": bool(n["password"])} for n in resolved]
+    return jsonify(masked)
 
 
 @app.route("/api/status", methods=["GET"])

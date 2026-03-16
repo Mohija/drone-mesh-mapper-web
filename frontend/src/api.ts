@@ -533,6 +533,34 @@ export async function updateMissionZoneDefaults(data: Partial<MissionZoneDefault
   return res.json();
 }
 
+// ─── Tenant WiFi Networks API ──────────────────────────────
+
+export interface TenantWifiNetwork {
+  ssid: string;
+  password?: string;
+  has_password?: boolean;
+  use_stored?: boolean;
+}
+
+export async function fetchWifiNetworks(): Promise<TenantWifiNetwork[]> {
+  const res = await authFetch(`${API_BASE}/settings/wifi-networks`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function updateWifiNetworks(networks: TenantWifiNetwork[]): Promise<TenantWifiNetwork[]> {
+  const res = await authFetch(`${API_BASE}/settings/wifi-networks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ networks }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Fehler' }));
+    throw new Error(err.error || `API error: ${res.status}`);
+  }
+  return res.json();
+}
+
 // ─── Reverse Geocoding (Nominatim) ────────────────────────
 
 const _geocodeCache = new Map<string, string>();
@@ -873,7 +901,7 @@ export async function buildFirmware(data: {
   node_id: string;
   hardware_type?: string;
   backend_url: string;
-  wifi_networks?: { ssid: string; password: string }[];
+  wifi_networks?: { ssid: string; password?: string; use_stored?: boolean }[];
   regenerate_key?: boolean;
 }): Promise<FirmwareBuildResult> {
   const res = await authFetch(`${API_BASE}/receivers/firmware/build`, {
@@ -916,7 +944,7 @@ export async function startBuildAsync(data: {
   node_id: string;
   hardware_type?: string;
   backend_url: string;
-  wifi_networks?: { ssid: string; password: string }[];
+  wifi_networks?: { ssid: string; password?: string; use_stored?: boolean }[];
   regenerate_key?: boolean;
 }): Promise<void> {
   const res = await authFetch(`${API_BASE}/receivers/firmware/build-async`, {

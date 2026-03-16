@@ -23,7 +23,7 @@ static const char PORTAL_HTML[] PROGMEM = R"rawliteral(
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,sans-serif;background:#0f172a;color:#e2e8f0;padding:16px;max-width:480px;margin:0 auto}
 h1{font-size:20px;margin-bottom:4px;color:#14b8a6}
-.sub{font-size:11px;color:#64748b;margin-bottom:16px}
+.sub{font-size:12px;color:#94a3b8;margin-bottom:16px;background:#1e293b;display:inline-block;padding:3px 10px;border-radius:6px;border:1px solid #334155}
 .card{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:16px;margin-bottom:12px}
 .card h2{font-size:14px;color:#94a3b8;margin-bottom:10px}
 label{display:block;font-size:12px;color:#94a3b8;margin-bottom:4px}
@@ -124,10 +124,42 @@ function loadStatus(){
     if(connecting && d.wifi_connected){
       connecting=false;
       if(checkTimer){clearInterval(checkTimer);checkTimer=null;}
-      $('msg').innerHTML='<div class="s ok" style="margin:0">Verbunden mit '+d.wifi_ssid+'!</div>';
-      $('con-btn').disabled=false;
+      showDone(d.wifi_ssid);
     }
   }).catch(function(){});
+}
+
+function showDone(ssid){
+  // Replace entire page with completion screen
+  document.body.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:80vh;text-align:center;padding:20px">'
+    +'<div style="font-size:48px;margin-bottom:16px">&#10004;</div>'
+    +'<h1 style="color:#22c55e;font-size:22px;margin-bottom:8px">WLAN verbunden!</h1>'
+    +'<p style="color:#94a3b8;font-size:14px;margin-bottom:24px">Erfolgreich mit <strong style="color:#14b8a6">'+ssid+'</strong> verbunden.</p>'
+    +'<div style="background:#1e293b;border:1px solid #334155;border-radius:10px;padding:16px;width:100%;max-width:320px;margin-bottom:16px">'
+    +'<p style="color:#eab308;font-size:13px;margin-bottom:8px">&#9888; Hotspot wird deaktiviert...</p>'
+    +'<p style="color:#64748b;font-size:11px">Der Empfaenger ist jetzt im WLAN erreichbar. Diese Seite schliesst sich in <span id="cd">10</span> Sekunden.</p>'
+    +'</div>'
+    +'<button onclick="closePortal()" style="padding:10px 24px;background:#14b8a6;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer">Jetzt schliessen</button>'
+    +'</div>';
+  var t=10;
+  var ci=setInterval(function(){
+    t--;
+    var el=document.getElementById('cd');
+    if(el)el.textContent=t;
+    if(t<=0){clearInterval(ci);closePortal();}
+  },1000);
+}
+
+function closePortal(){
+  // Try to close the window/tab (works in captive portal webviews)
+  try{window.close();}catch(e){}
+  // Fallback: show closed message
+  setTimeout(function(){
+    document.body.innerHTML='<div style="display:flex;align-items:center;justify-content:center;min-height:80vh;text-align:center;padding:20px">'
+      +'<div><div style="font-size:48px;margin-bottom:16px">&#10004;</div>'
+      +'<p style="color:#22c55e;font-size:16px">Einrichtung abgeschlossen</p>'
+      +'<p style="color:#64748b;font-size:12px;margin-top:8px">Du kannst dieses Fenster jetzt schliessen.</p></div></div>';
+  },500);
 }
 
 function loadNets(){
@@ -165,7 +197,13 @@ function doManual(){
     .then(function(r){return r.json()}).then(function(){
       var checks=0;
       checkTimer=setInterval(function(){
-        checks++;loadStatus();
+        checks++;
+        fetch('/status').then(function(r){return r.json()}).then(function(d){
+          if(d.wifi_connected){
+            connecting=false;clearInterval(checkTimer);checkTimer=null;
+            showDone(d.wifi_ssid);
+          }
+        }).catch(function(){});
         if(checks>=3&&connecting){
           $('man-msg').innerHTML='<div class="s err" style="margin:0">Verbindung fehlgeschlagen. Passwort pruefen.</div>';
           connecting=false;clearInterval(checkTimer);checkTimer=null;
@@ -218,15 +256,49 @@ void CaptivePortal::begin(WiFiManager* wifi, FlightArcClient* client, OdidScanne
     _scanner = scanner;
     _portal = this;
 
-    // Main page
+    // Main page — serve PROGMEM HTML instantly (fast response = faster CNA detection)
+    // Networks are loaded via JS fetch('/scan') for JS-capable browsers.
+    // For iOS CNA (no JS): user taps "open in Safari" from the CNA popup.
     server.on("/", HTTP_GET, []() {
+        Serial.printf("[Portal] Serving main page (%d ms)\n", millis());
         server.send_P(200, "text/html", PORTAL_HTML);
     });
 
-    // Captive portal detection (Android/Apple/Windows)
-    server.on("/generate_204", HTTP_GET, []() { server.send_P(200, "text/html", PORTAL_HTML); });
-    server.on("/hotspot-detect.html", HTTP_GET, []() { server.send_P(200, "text/html", PORTAL_HTML); });
-    server.on("/connecttest.txt", HTTP_GET, []() { server.send_P(200, "text/html", PORTAL_HTML); });
+    // ── Captive portal detection ──────────────────────────────
+    // Reference: https://github.com/CDFER/Captive-Portal-ESP32
+    // All platforms use 302 redirect to trigger the "Sign in to network" popup.
+    // CRITICAL: HTML must NEVER contain the word "Success" — iOS CNA will not
+    //           show the popup if it finds that word in the response.
+
+    auto portalRedirect = []() {
+        Serial.printf("[Portal] Captive detect: %s → 302\n", server.uri().c_str());
+        server.sendHeader("Location", "http://192.168.4.1/", true);
+        server.send(302, "text/plain", "");
+    };
+
+    // Android
+    server.on("/generate_204", HTTP_GET, portalRedirect);
+    server.on("/gen_204", HTTP_GET, portalRedirect);
+
+    // Apple iOS / macOS
+    server.on("/hotspot-detect.html", HTTP_GET, portalRedirect);
+    server.on("/library/test/success.html", HTTP_GET, portalRedirect);
+
+    // Windows 11 (must redirect to http://logout.net — specific workaround)
+    server.on("/connecttest.txt", HTTP_GET, []() {
+        Serial.println("[Portal] Captive detect: /connecttest.txt → 302 logout.net");
+        server.sendHeader("Location", "http://logout.net", true);
+        server.send(302, "text/plain", "");
+    });
+    // Windows 10 (stops repeated panicking requests)
+    server.on("/wpad.dat", HTTP_GET, []() { server.send(404); });
+    // Windows / Microsoft general
+    server.on("/ncsi.txt", HTTP_GET, portalRedirect);
+    server.on("/redirect", HTTP_GET, portalRedirect);
+
+    // Firefox
+    server.on("/canonical.html", HTTP_GET, portalRedirect);
+    server.on("/success.txt", HTTP_GET, []() { server.send(200); });
 
     // WiFi scan results
     server.on("/scan", HTTP_GET, []() {
@@ -314,8 +386,8 @@ void CaptivePortal::begin(WiFiManager* wifi, FlightArcClient* client, OdidScanne
     });
 
     // Catch-all: redirect any unknown URL to the portal page
-    // Required for captive portal detection on Android/Windows/iOS
     server.onNotFound([]() {
+        Serial.printf("[Portal] Not found: %s%s → 302\n", server.hostHeader().c_str(), server.uri().c_str());
         server.sendHeader("Location", "http://192.168.4.1/", true);
         server.send(302, "text/plain", "");
     });
@@ -330,6 +402,7 @@ void CaptivePortal::loop() {
     if (apActive && !_dnsRunning) {
         // Captive DNS: redirect ALL domains to the ESP's AP IP
         _dns.setErrorReplyCode(DNSReplyCode::NoError);
+        _dns.setTTL(0);  // TTL=0: forces client to re-query immediately (faster portal detection)
         _dns.start(53, "*", WiFi.softAPIP());
         _dnsRunning = true;
         Serial.printf("[Portal] DNS started — all domains → %s\n", WiFi.softAPIP().toString().c_str());

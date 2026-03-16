@@ -661,6 +661,46 @@ def _record_firmware_history(node, version, method):
     })
     node.firmware_history = history[:50]
 
+
+def _resolve_wifi_networks(request_networks, tenant_id):
+    """Resolve WiFi networks for firmware build.
+
+    If request has networks, use those (per-receiver override).
+    Fill remaining slots (up to 3) with tenant defaults.
+    If a network has use_stored=true, look up password from tenant settings.
+    """
+    from models import TenantSettings
+
+    # Get tenant defaults
+    ts = TenantSettings.query.filter_by(tenant_id=tenant_id).first()
+    tenant_nets = (ts.wifi_networks or []) if ts else []
+    tenant_by_ssid = {n["ssid"]: n.get("password", "") for n in tenant_nets}
+
+    if not request_networks:
+        # No per-receiver networks — use tenant defaults
+        return tenant_nets[:3]
+
+    # Resolve stored passwords
+    resolved = []
+    for net in request_networks:
+        ssid = net.get("ssid", "").strip()
+        if not ssid:
+            continue
+        if net.get("use_stored") and ssid in tenant_by_ssid:
+            resolved.append({"ssid": ssid, "password": tenant_by_ssid[ssid]})
+        else:
+            resolved.append({"ssid": ssid, "password": net.get("password", "")})
+
+    # Fill remaining slots with tenant networks not already included
+    if len(resolved) < 3:
+        used_ssids = {n["ssid"] for n in resolved}
+        for tn in tenant_nets:
+            if tn["ssid"] not in used_ssids and len(resolved) < 3:
+                resolved.append(tn)
+
+    return resolved[:3]
+
+
 # boot_app0.bin needed for merged binary
 BOOT_APP0_PATH = os.path.join(
     os.path.expanduser("~"), ".platformio", "packages",
@@ -915,6 +955,7 @@ def build_firmware():
         pwd = data.get("wifi_password", "")
         if ssid:
             wifi_networks = [{"ssid": ssid, "password": pwd}]
+    wifi_networks = _resolve_wifi_networks(wifi_networks, g.tenant_id)
 
     if not node_id:
         return jsonify({"error": "node_id erforderlich"}), 400
@@ -1083,6 +1124,7 @@ def build_firmware_stream():
         pwd = data.get("wifi_password", "")
         if ssid:
             wifi_networks = [{"ssid": ssid, "password": pwd}]
+    wifi_networks = _resolve_wifi_networks(wifi_networks, g.tenant_id)
 
     if not node_id:
         return jsonify({"error": "node_id erforderlich"}), 400
@@ -1282,6 +1324,7 @@ def build_firmware_async():
         pwd = data.get("wifi_password", "")
         if ssid:
             wifi_networks = [{"ssid": ssid, "password": pwd}]
+    wifi_networks = _resolve_wifi_networks(wifi_networks, g.tenant_id)
 
     if not node_id:
         return jsonify({"error": "node_id erforderlich"}), 400

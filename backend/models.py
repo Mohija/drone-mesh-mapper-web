@@ -153,10 +153,17 @@ class TenantSettings(db.Model):
     mission_zone_min_alt_agl = db.Column(db.Float, nullable=True)
     mission_zone_max_alt_agl = db.Column(db.Float, nullable=True)
     log_level = db.Column(db.String(10), nullable=True)
+    wifi_networks = db.Column(JSON, nullable=True, default=list)  # [{ssid, password}] max 3
     created_at = db.Column(db.Float, default=_now, nullable=False)
     updated_at = db.Column(db.Float, default=_now, onupdate=_now, nullable=False)
 
     def to_dict(self):
+        # Mask WiFi passwords — only expose SSIDs and whether a password is set
+        wifi_nets = self.wifi_networks or []
+        masked_wifi = [
+            {"ssid": n.get("ssid", ""), "has_password": bool(n.get("password"))}
+            for n in wifi_nets
+        ]
         return {
             "id": self.id,
             "tenant_id": self.tenant_id,
@@ -169,6 +176,7 @@ class TenantSettings(db.Model):
             "mission_zone_min_alt_agl": self.mission_zone_min_alt_agl,
             "mission_zone_max_alt_agl": self.mission_zone_max_alt_agl,
             "log_level": self.log_level or "info",
+            "wifi_networks": masked_wifi,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }

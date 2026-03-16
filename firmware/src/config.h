@@ -64,8 +64,9 @@
 #define HEARTBEAT_INTERVAL_MS   30000   // Send heartbeat every 30 seconds
 #define WIFI_RECONNECT_MS       10000   // Retry WiFi every 10 seconds
 #define WIFI_SCAN_INTERVAL_MS   60000   // Scan for networks every 60 seconds
-#define WIFI_AP_TIMEOUT_MS      15000   // Start AP after 15s without STA connection
-#define WIFI_AP_SHUTDOWN_DELAY  5000    // Turn off AP 5s after STA connects (grace period)
+#define WIFI_AP_TIMEOUT_MS      8000    // Start AP after 8s without STA connection
+#define WIFI_AP_SHUTDOWN_DELAY  5000    // Min grace period: wait 5s after STA connects before checking clients
+#define WIFI_AP_MAX_LINGER_MS   20000   // Max 20s AP alive after STA connected (even with clients)
 #define MAX_DETECTIONS          50      // Ring buffer size
 #define AP_SSID_PREFIX          "FlightArc-"
 #define WEB_SERVER_PORT         80
