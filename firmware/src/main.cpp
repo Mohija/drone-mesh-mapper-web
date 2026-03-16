@@ -104,8 +104,10 @@ void loop() {
     // Scanner loop (mostly event-driven, BLE runs independently)
     scanner.loop();
 
-    // Send detections every INGEST_INTERVAL_MS
-    if (wifiMgr.isStaConnected() && (now - lastIngest >= INGEST_INTERVAL_MS)) {
+    // Event-based ingest: send immediately when new detections arrive
+    // (min INGEST_MIN_INTERVAL_MS between sends to prevent HTTP flooding)
+    if (wifiMgr.isStaConnected() && scanner.getDetectionCount() > 0
+        && (now - lastIngest >= INGEST_MIN_INTERVAL_MS)) {
         lastIngest = now;
 
         static OdidDetection detections[MAX_DETECTIONS];

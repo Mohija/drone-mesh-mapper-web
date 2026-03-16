@@ -38,10 +38,10 @@ except ImportError:
 
 # ─── Constants (matching firmware config.h) ────────────────────
 
-INGEST_INTERVAL_S = 2       # Send detections every 2 seconds
+INGEST_INTERVAL_S = 0.5     # Event-based: send every 0.5s (firmware sends on detection, min 100ms)
 HEARTBEAT_INTERVAL_S = 30   # Send heartbeat every 30 seconds
 MAX_DETECTIONS = 50         # Ring buffer size
-FIRMWARE_VERSION = "1.0.0-dummy"
+FIRMWARE_VERSION = "1.1.0-dummy"
 AP_SSID_PREFIX = "FlightArc-"
 
 # Pre-configured dummy API key (matching the "Dummy Simulator" receiver in the DB)
@@ -577,7 +577,7 @@ Beispiele:
             uptime = now - start_time
 
             # ── Scanner loop: update drone positions ──
-            dt = INGEST_INTERVAL_S  # Simulate time step
+            dt = INGEST_INTERVAL_S  # Simulate time step (0.5s event-based)
             for i in active_drones:
                 drones[i].update(dt)
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   fetchReceivers,
   createReceiver,
@@ -12,6 +12,8 @@ import {
   setReceiverLocation,
   triggerOtaUpdate,
   cancelOtaUpdate,
+  startBuildAsync,
+  pollBuildStatus,
 } from '../../api';
 import type { ReceiverNode, ReceiverStats, ConnectionLogEntry } from '../../api';
 import ReceiverFlashWizard from './ReceiverFlashWizard';
@@ -257,6 +259,15 @@ export default function ReceiverList() {
   const [locatingId, setLocatingId] = useState<string | null>(null);
   const [locMsg, setLocMsg] = useState<string | null>(null);
 
+  // OTA flow (build + trigger + monitor)
+  const [otaNode, setOtaNode] = useState<ReceiverNode | null>(null);
+  const [otaStep, setOtaStep] = useState<'idle' | 'building' | 'triggering' | 'waiting' | 'done' | 'error'>('idle');
+  const [otaLog, setOtaLog] = useState<string[]>([]);
+  const [otaError, setOtaError] = useState<string | null>(null);
+  const [otaLoadingId, setOtaLoadingId] = useState<string | null>(null);
+  const otaPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const otaLogEndRef = useRef<HTMLDivElement | null>(null);
+
   // Connection log
   const [logEnabled, setLogEnabled] = useState(false);
   const [logEntries, setLogEntries] = useState<ConnectionLogEntry[]>([]);
@@ -298,6 +309,147 @@ export default function ReceiverList() {
     const interval = setInterval(() => loadLog(logReceiverId), 3000);
     return () => clearInterval(interval);
   }, [showLog, logEnabled, logReceiverId, loadLog]);
+
+  const addOtaLog = (msg: string) => setOtaLog(prev => [...prev, msg]);
+
+  const handleOtaFlow = async (node: ReceiverNode) => {
+    setOtaNode(node);
+    setOtaStep('building');
+    setOtaLog([]);
+    setOtaError(null);
+    setOtaLoadingId(node.id);
+
+    // ── Step 1: Build firmware (reuse last build config for WiFi credentials) ──
+    addOtaLog(`Firmware-Build für "${node.name}" wird gestartet...`);
+    const buildConfig = (node as any).lastBuildConfig;
+    const wifiNets = buildConfig?.wifi_networks;
+    if (wifiNets?.length > 0) {
+      addOtaLog(`WiFi-Credentials aus letztem Build übernommen (${wifiNets.length} Netzwerk${wifiNets.length > 1 ? 'e' : ''})`);
+    } else {
+      addOtaLog('Hinweis: Keine WiFi-Credentials gespeichert — ESP nutzt vorherige Konfiguration');
+    }
+    try {
+      await startBuildAsync({
+        node_id: node.id,
+        backend_url: buildConfig?.backend_url || window.location.origin,
+        wifi_networks: wifiNets || undefined,
+      });
+      addOtaLog('Build gestartet, warte auf Abschluss...');
+    } catch (e: unknown) {
+      setOtaStep('error');
+      setOtaError(e instanceof Error ? e.message : 'Build-Start fehlgeschlagen');
+      setOtaLoadingId(null);
+      return;
+    }
+
+    // Poll build status
+    const buildDone = await new Promise<boolean>((resolve) => {
+      let attempts = 0;
+      const poll = setInterval(async () => {
+        attempts++;
+        try {
+          const status = await pollBuildStatus(node.id);
+          // Show build log lines
+          if (status.log.length > 0) {
+            setOtaLog(prev => {
+              const base = prev.filter(l => !l.startsWith('[build]'));
+              return [...base, ...status.log.slice(-8).map(l => `[build] ${l}`)];
+            });
+          }
+          if (status.status === 'done' && status.result) {
+            clearInterval(poll);
+            addOtaLog(`Build erfolgreich! (${(status.result.size / 1024).toFixed(0)} KB, SHA: ${status.result.sha256.slice(0, 12)}...)`);
+            resolve(true);
+          } else if (status.status === 'error') {
+            clearInterval(poll);
+            setOtaError(status.error || 'Build fehlgeschlagen');
+            resolve(false);
+          }
+        } catch { /* ignore poll error */ }
+        if (attempts > 120) { // 120 * 800ms = ~96s timeout
+          clearInterval(poll);
+          setOtaError('Build-Timeout (>90s)');
+          resolve(false);
+        }
+      }, 800);
+    });
+
+    if (!buildDone) {
+      setOtaStep('error');
+      setOtaLoadingId(null);
+      return;
+    }
+
+    // ── Step 2: Trigger OTA ──
+    setOtaStep('triggering');
+    addOtaLog('OTA-Update wird ausgelöst...');
+    try {
+      const result = await triggerOtaUpdate(node.id);
+      addOtaLog(result.message || 'OTA ausgelöst.');
+    } catch (e: unknown) {
+      setOtaStep('error');
+      setOtaError(e instanceof Error ? e.message : 'OTA-Trigger fehlgeschlagen');
+      setOtaLoadingId(null);
+      return;
+    }
+
+    // ── Step 3: Wait for heartbeat + OTA completion ──
+    setOtaStep('waiting');
+    addOtaLog('Warte auf ESP-Heartbeat (alle ~30s)...');
+    addOtaLog('ESP wird Firmware herunterladen, verifizieren und neu starten.');
+
+    let waitAttempts = 0;
+    if (otaPollRef.current) clearInterval(otaPollRef.current);
+    otaPollRef.current = setInterval(async () => {
+      waitAttempts++;
+      try {
+        const [r] = await Promise.all([fetchReceivers()]);
+        setReceivers(r);
+        const updated = r.find(rx => rx.id === node.id);
+        if (updated) {
+          if (updated.otaLastResult === 'success' && !updated.otaUpdatePending) {
+            if (otaPollRef.current) clearInterval(otaPollRef.current);
+            addOtaLog(`OTA erfolgreich! Neue Firmware: ${updated.firmwareVersion}`);
+            setOtaStep('done');
+            setOtaLoadingId(null);
+          } else if (updated.otaUpdatePending) {
+            const elapsed = waitAttempts * 5;
+            setOtaLog(prev => {
+              const base = prev.filter(l => !l.startsWith('[warte]'));
+              return [...base, `[warte] ${elapsed}s vergangen... OTA ausstehend`];
+            });
+          }
+        }
+      } catch { /* ignore */ }
+      if (waitAttempts >= 36) { // 36 * 5s = 3min
+        if (otaPollRef.current) clearInterval(otaPollRef.current);
+        addOtaLog('Timeout: ESP hat sich nach 3 Minuten nicht gemeldet.');
+        addOtaLog('Der ESP könnte noch updaten — prüfe den Status manuell.');
+        setOtaStep('done');
+        setOtaLoadingId(null);
+      }
+    }, 5000);
+  };
+
+  const closeOtaModal = () => {
+    if (otaPollRef.current) { clearInterval(otaPollRef.current); otaPollRef.current = null; }
+    setOtaNode(null);
+    setOtaStep('idle');
+    setOtaLog([]);
+    setOtaError(null);
+    setOtaLoadingId(null);
+    loadData();
+  };
+
+  // Auto-scroll OTA log
+  useEffect(() => {
+    otaLogEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [otaLog]);
+
+  // Cleanup OTA poll on unmount
+  useEffect(() => {
+    return () => { if (otaPollRef.current) clearInterval(otaPollRef.current); };
+  }, []);
 
   const handleToggleLog = async () => {
     try {
@@ -861,13 +1013,14 @@ export default function ReceiverList() {
                 >
                   {node.lastBuildAt ? 'Neu bauen' : 'Firmware'}
                 </button>
-                {node.lastBuildAt && node.status !== 'offline' && node.hardwareType !== 'esp8266' && !node.otaUpdatePending && (
+                {node.status !== 'offline' && node.hardwareType !== 'esp8266' && !node.otaUpdatePending && (
                   <button
                     data-testid={`receiver-ota-${node.id}`}
-                    onClick={async () => { try { await triggerOtaUpdate(node.id); await loadData(); } catch { /* */ } }}
-                    style={{ ...mobileBtnStyle, borderColor: '#3b82f6', color: '#3b82f6' }}
+                    disabled={otaLoadingId === node.id}
+                    onClick={() => handleOtaFlow(node)}
+                    style={{ ...mobileBtnStyle, borderColor: '#3b82f6', color: '#3b82f6', opacity: otaLoadingId === node.id ? 0.6 : 1 }}
                   >
-                    OTA
+                    {otaLoadingId === node.id ? 'OTA...' : 'OTA'}
                   </button>
                 )}
                 <button
@@ -1033,7 +1186,7 @@ export default function ReceiverList() {
                         )}
                         <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                           {/* OTA Update */}
-                          {node.lastBuildAt && node.status !== 'offline' && node.hardwareType !== 'esp8266' && (
+                          {node.status !== 'offline' && node.hardwareType !== 'esp8266' && (
                             node.otaUpdatePending ? (
                               <AdminTooltip
                                 brief="OTA-Update abbrechen"
@@ -1043,7 +1196,11 @@ export default function ReceiverList() {
                                   data-testid={`receiver-ota-cancel-${node.id}`}
                                   onClick={async (e) => {
                                     e.stopPropagation();
-                                    try { await cancelOtaUpdate(node.id); await loadData(); } catch { /* silent */ }
+                                    try {
+                                      await cancelOtaUpdate(node.id);
+                                      if (otaPollRef.current) { clearInterval(otaPollRef.current); otaPollRef.current = null; }
+                                      await loadData();
+                                    } catch { /* silent */ }
                                   }}
                                   style={{
                                     padding: '5px 12px', background: 'rgba(234,179,8,0.15)',
@@ -1061,17 +1218,19 @@ export default function ReceiverList() {
                               >
                                 <button
                                   data-testid={`receiver-ota-${node.id}`}
+                                  disabled={otaLoadingId === node.id}
                                   onClick={async (e) => {
                                     e.stopPropagation();
-                                    try { await triggerOtaUpdate(node.id); await loadData(); } catch { /* silent */ }
+                                    handleOtaFlow(node);
                                   }}
                                   style={{
                                     padding: '5px 12px', background: 'rgba(59,130,246,0.1)',
                                     border: '1px solid #3b82f6', borderRadius: 6, color: '#3b82f6',
                                     cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                                    opacity: otaLoadingId === node.id ? 0.6 : 1,
                                   }}
                                 >
-                                  OTA Update senden
+                                  {otaLoadingId === node.id ? 'OTA läuft...' : 'OTA Update senden'}
                                 </button>
                               </AdminTooltip>
                             )
@@ -1282,6 +1441,151 @@ export default function ReceiverList() {
           regenerateKey={flashRegenKey}
           onClose={() => { setFlashNode(null); setFlashRegenKey(false); loadData(); }}
         />
+      )}
+
+      {/* OTA Progress Modal */}
+      {otaNode && (
+        <>
+          <div onClick={otaStep === 'done' || otaStep === 'error' ? closeOtaModal : undefined} style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+          }}>
+            <div onClick={e => e.stopPropagation()} style={{
+              background: 'var(--bg-secondary)', borderRadius: 12,
+              border: '1px solid var(--border)', maxWidth: 520, width: '100%',
+              maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+            }}>
+              {/* Header */}
+              <div style={{
+                padding: '16px 20px', borderBottom: '1px solid var(--border)',
+                display: 'flex', alignItems: 'center', gap: 12,
+              }}>
+                <div style={{ flex: 1 }}>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
+                    OTA Update: {otaNode.name}
+                  </h3>
+                  <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
+                    {otaNode.hardwareType} &middot; {otaNode.id}
+                  </p>
+                </div>
+                {(otaStep === 'done' || otaStep === 'error') && (
+                  <button onClick={closeOtaModal} style={{
+                    background: 'var(--bg-tertiary)', border: '1px solid var(--border)',
+                    borderRadius: 8, width: 36, height: 36, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 18, color: 'var(--text-muted)',
+                  }}>&times;</button>
+                )}
+              </div>
+
+              {/* Progress Steps */}
+              <div style={{ padding: '16px 20px', display: 'flex', gap: 8, borderBottom: '1px solid var(--border)' }}>
+                {(['building', 'triggering', 'waiting', 'done'] as const).map((step, i) => {
+                  const labels = ['Firmware bauen', 'OTA auslösen', 'Warte auf ESP', 'Fertig'];
+                  const icons = ['1', '2', '3', '\u2713'];
+                  const isActive = otaStep === step;
+                  const isPast = ['building', 'triggering', 'waiting', 'done'].indexOf(otaStep) > i;
+                  const isError = otaStep === 'error' && ['building', 'triggering', 'waiting', 'done'].indexOf(step) >= ['building', 'triggering', 'waiting', 'done'].indexOf(
+                    otaLog.some(l => l.includes('Build erfolgreich')) ? 'triggering' :
+                    otaLog.some(l => l.includes('OTA ausgelöst') || l.includes('OTA-Update wird')) ? 'waiting' : 'building'
+                  );
+                  return (
+                    <div key={step} style={{ flex: 1, textAlign: 'center' }}>
+                      <div style={{
+                        width: 28, height: 28, borderRadius: '50%', margin: '0 auto 4px',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 12, fontWeight: 700,
+                        background: isPast || (isActive && step === 'done') ? '#22c55e'
+                          : isActive ? '#3b82f6'
+                          : isError ? '#ef4444'
+                          : 'var(--bg-tertiary)',
+                        color: isPast || isActive ? '#fff' : 'var(--text-muted)',
+                        border: `2px solid ${isPast || (isActive && step === 'done') ? '#22c55e' : isActive ? '#3b82f6' : isError ? '#ef4444' : 'var(--border)'}`,
+                      }}>
+                        {isPast ? '\u2713' : isError ? '!' : icons[i]}
+                      </div>
+                      <span style={{ fontSize: 10, color: isActive ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                        {labels[i]}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Log output */}
+              <div style={{
+                flex: 1, overflow: 'auto', padding: '12px 20px',
+                fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6,
+                background: 'var(--bg-primary)', minHeight: 150, maxHeight: 300,
+              }}>
+                {otaLog.map((line, i) => (
+                  <div key={i} style={{
+                    color: line.includes('erfolgreich') || line.includes('Erfolgreich') ? '#22c55e'
+                      : line.includes('fehlgeschlagen') || line.includes('Fehler') || line.includes('Timeout') ? '#ef4444'
+                      : line.startsWith('[build]') ? '#94a3b8'
+                      : line.startsWith('[warte]') ? '#eab308'
+                      : 'var(--text-secondary)',
+                  }}>
+                    {line}
+                  </div>
+                ))}
+                {(otaStep === 'building' || otaStep === 'triggering' || otaStep === 'waiting') && (
+                  <div style={{ color: '#3b82f6' }}>
+                    {otaStep === 'building' ? '\u25CF Firmware wird kompiliert...' :
+                     otaStep === 'triggering' ? '\u25CF OTA wird ausgelöst...' :
+                     '\u25CF Warte auf ESP-Heartbeat...'}
+                  </div>
+                )}
+                <div ref={otaLogEndRef} />
+              </div>
+
+              {/* Error */}
+              {otaError && (
+                <div style={{
+                  padding: '10px 20px', background: 'rgba(239,68,68,0.1)',
+                  borderTop: '1px solid rgba(239,68,68,0.3)',
+                  color: '#ef4444', fontSize: 12,
+                }}>
+                  Fehler: {otaError}
+                </div>
+              )}
+
+              {/* Footer */}
+              <div style={{
+                padding: '12px 20px', borderTop: '1px solid var(--border)',
+                display: 'flex', justifyContent: 'flex-end', gap: 8,
+              }}>
+                {(otaStep === 'done' || otaStep === 'error') && (
+                  <button onClick={closeOtaModal} style={{
+                    padding: '8px 20px', background: 'var(--accent)',
+                    border: 'none', borderRadius: 8, color: '#fff',
+                    cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                  }}>
+                    Schließen
+                  </button>
+                )}
+                {otaStep === 'waiting' && (
+                  <button onClick={async () => {
+                    try {
+                      await cancelOtaUpdate(otaNode.id);
+                      addOtaLog('OTA abgebrochen.');
+                      setOtaStep('done');
+                      if (otaPollRef.current) { clearInterval(otaPollRef.current); otaPollRef.current = null; }
+                      setOtaLoadingId(null);
+                    } catch { /* ignore */ }
+                  }} style={{
+                    padding: '8px 16px', background: 'rgba(239,68,68,0.1)',
+                    border: '1px solid #ef4444', borderRadius: 8, color: '#ef4444',
+                    cursor: 'pointer', fontSize: 13,
+                  }}>
+                    Abbrechen
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

@@ -58,7 +58,7 @@ def create_receiver():
     db.session.add(node)
     db.session.commit()
 
-    logger.info("Created receiver %s (%s) for tenant %s", node.id, hardware_type, g.tenant_id)
+    logger.info("Created receiver %s (%s) for tenant %s", node.id, hardware_type, g.tenant_id, extra={"tenant_id": g.tenant_id})
     return jsonify(node.to_dict(include_key=True)), 201
 
 
@@ -92,7 +92,7 @@ def update_receiver(node_id: str):
         node.is_active = bool(data["is_active"])
 
     db.session.commit()
-    logger.info("Updated receiver %s: name=%s active=%s", node.id, node.name, node.is_active)
+    logger.info("Updated receiver %s: name=%s active=%s", node.id, node.name, node.is_active, extra={"tenant_id": g.tenant_id})
     return jsonify(node.to_dict())
 
 
@@ -140,7 +140,7 @@ def delete_receiver(node_id: str):
     if os.path.isfile(stored_fw):
         os.remove(stored_fw)
         logger.info("Removed firmware file %s", stored_fw)
-    logger.info("Deleted receiver %s from tenant %s", node_id, g.tenant_id)
+    logger.info("Deleted receiver %s from tenant %s", node_id, g.tenant_id, extra={"tenant_id": g.tenant_id})
     return jsonify({"ok": True})
 
 
@@ -682,7 +682,7 @@ def build_firmware():
             env[f"WIFI_SSID{suffix}"] = ""
             env[f"WIFI_PASS{suffix}"] = ""
     env["NODE_NAME"] = sanitize_node_name(node.name[:20])
-    build_version = f"1.0.{int(time.time()) % 100000}"
+    build_version = f"1.1.{int(time.time()) % 100000}"
     env["FIRMWARE_VERSION"] = build_version
     env["NODE_ID"] = node.id
 
@@ -743,6 +743,7 @@ def build_firmware():
         node.last_build_size = fw_info["size"]
         node.last_build_sha256 = fw_info.get("sha256", "")
         node.last_build_version = build_version
+        node.last_build_config = {"backend_url": backend_url, "wifi_networks": wifi_networks}
         # Create merged binary (bootloader + partitions + app)
         merged_size = _create_merged_binary(node.id, hw, env_name)
         node.last_build_merged_size = merged_size
@@ -834,7 +835,7 @@ def build_firmware_stream():
             build_env[f"WIFI_SSID{suffix}"] = ""
             build_env[f"WIFI_PASS{suffix}"] = ""
     build_env["NODE_NAME"] = sanitize_node_name(node.name[:20])
-    build_version = f"1.0.{int(time.time()) % 100000}"
+    build_version = f"1.1.{int(time.time()) % 100000}"
     build_env["FIRMWARE_VERSION"] = build_version
     build_env["NODE_ID"] = node.id
 
@@ -915,6 +916,7 @@ def build_firmware_stream():
                     n.last_build_size = fw_info["size"]
                     n.last_build_sha256 = fw_info.get("sha256", "")
                     n.last_build_version = build_version
+                    n.last_build_config = {"backend_url": backend_url, "wifi_networks": wifi_networks}
                     merged_size = _create_merged_binary(n.id, hw, env_name)
                     n.last_build_merged_size = merged_size
                     db.session.commit()
@@ -1032,7 +1034,7 @@ def build_firmware_async():
             build_env[f"WIFI_SSID{suffix}"] = ""
             build_env[f"WIFI_PASS{suffix}"] = ""
     build_env["NODE_NAME"] = sanitize_node_name(node_name[:20])
-    build_version = f"1.0.{int(time.time()) % 100000}"
+    build_version = f"1.1.{int(time.time()) % 100000}"
     build_env["FIRMWARE_VERSION"] = build_version
     build_env["NODE_ID"] = node_id
 
@@ -1100,6 +1102,7 @@ def build_firmware_async():
                     n.last_build_size = fw_info["size"]
                     n.last_build_sha256 = fw_info.get("sha256", "")
                     n.last_build_version = build_version
+                    n.last_build_config = {"backend_url": backend_url, "wifi_networks": wifi_networks}
                     merged_size = _create_merged_binary(n.id, hw, env_name)
                     n.last_build_merged_size = merged_size
                     db.session.commit()

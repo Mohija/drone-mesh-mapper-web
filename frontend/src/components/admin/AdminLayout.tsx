@@ -10,6 +10,7 @@ const navItems = [
   { to: '/admin/receivers', label: 'Empfänger' },
   { to: '/admin/settings', label: 'Einstellungen' },
   { to: '/admin/simulation', label: 'Simulation' },
+  { to: '/admin/logs', label: 'Logs' },
 ];
 
 export default function AdminLayout() {

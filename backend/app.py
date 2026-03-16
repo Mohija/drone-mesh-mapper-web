@@ -24,10 +24,14 @@ from routes import register_blueprints
 
 # Logging setup
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,  # Root=DEBUG so DB handler can capture debug logs; console handler filters below
     format="[%(asctime)s] %(levelname)s - %(name)s - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
+# Keep console output at INFO to avoid spam
+for h in logging.getLogger().handlers:
+    if isinstance(h, logging.StreamHandler):
+        h.setLevel(logging.INFO)
 logger = logging.getLogger("app")
 
 # Paths
@@ -134,6 +138,30 @@ with app.app_context():
             pass  # Column already exists
     db.session.commit()
 
+    # Migration: add log_level column to tenant_settings
+    for col_stmt in [
+        "ALTER TABLE tenant_settings ADD COLUMN log_level VARCHAR(10)",
+        "ALTER TABLE receiver_nodes ADD COLUMN last_build_config TEXT",
+    ]:
+        try:
+            db.session.execute(db.text(col_stmt))
+        except Exception:
+            pass  # Column already exists
+    db.session.commit()
+
+# Attach database logging handler
+from services.db_logger import DatabaseLogHandler
+db_handler = DatabaseLogHandler(app)
+logging.getLogger().addHandler(db_handler)
+app.config["_db_handler"] = db_handler
+
+# Load per-tenant log levels from DB
+with app.app_context():
+    from models import TenantSettings as _TS
+    for ts in _TS.query.all():
+        if ts.log_level:
+            db_handler.set_tenant_level(ts.tenant_id, ts.log_level)
+
 # Register blueprints (auth, admin)
 register_blueprints(app)
 
@@ -162,6 +190,27 @@ archive = TrailArchiveManager(app=app, tenant_id=DEFAULT_TENANT_ID)
 archive.bind(app, DEFAULT_TENANT_ID)
 
 zones = FlightZoneManager(app=app, tenant_id=DEFAULT_TENANT_ID)
+
+
+# ─── Request logging (auto-log every request with tenant context) ─────
+
+_request_log = logging.getLogger("request")
+
+@app.after_request
+def _log_request(response):
+    """Auto-log every authenticated request for the tenant log viewer."""
+    tid = getattr(g, "tenant_id", None)
+    if not tid:
+        return response
+    # Skip high-frequency polling endpoints at info level (log at debug)
+    path = request.path
+    skip_paths = ("/api/drones", "/api/receivers/ingest", "/api/receivers/heartbeat",
+                  "/api/admin/logs", "/health")
+    is_poll = any(path.startswith(p) for p in skip_paths)
+    level = logging.DEBUG if is_poll else logging.INFO
+    _request_log.log(level, "%s %s → %d", request.method, path, response.status_code,
+                     extra={"tenant_id": tid})
+    return response
 
 
 # ─── Violation check throttle (per-tenant, 2s minimum between checks) ─────
@@ -200,7 +249,7 @@ def get_drones():
     radius = request.args.get("radius", type=float, default=tenant_settings.get("radius") or DEFAULT_RADIUS)
 
     enabled = settings.get_enabled_sources(tenant_id=tid)
-    logger.debug("GET /api/drones tenant=%s lat=%.4f lon=%.4f radius=%.0f sources=%s", tid, lat, lon, radius, enabled)
+    logger.debug("GET /api/drones tenant=%s lat=%.4f lon=%.4f radius=%.0f sources=%s", tid, lat, lon, radius, enabled, extra={"tenant_id": tid})
 
     drones = registry.get_all_drones(lat, lon, radius, enabled, tenant_id=tid)
 
@@ -256,7 +305,7 @@ def set_fleet_center():
         logger.warning("POST /api/fleet/center - missing lat/lon in request body")
         return jsonify({"error": "lat and lon required"}), 400
     tid = g.tenant_id or DEFAULT_TENANT_ID
-    logger.info("POST /api/fleet/center tenant=%s - recentering to lat=%.6f lon=%.6f", tid, data["lat"], data["lon"])
+    logger.info("POST /api/fleet/center tenant=%s - recentering to lat=%.6f lon=%.6f", tid, data["lat"], data["lon"], extra={"tenant_id": tid})
     settings.update({"center_lat": data["lat"], "center_lon": data["lon"]}, tenant_id=tid)
     return jsonify({"status": "ok", "center": {"lat": data["lat"], "lon": data["lon"]}})
 
@@ -790,7 +839,7 @@ def create_zone():
         return jsonify({"error": "Request body required"}), 400
     try:
         zone = zones.create_zone(data, tenant_id=g.tenant_id)
-        zone_logger.info("POST /api/zones - created %s: %s", zone["id"], zone["name"])
+        zone_logger.info("POST /api/zones - created %s: %s", zone["id"], zone["name"], extra={"tenant_id": g.tenant_id})
         return jsonify(zone), 201
     except ValueError as e:
         zone_logger.warning("Zone creation rejected: %s", e)
@@ -948,7 +997,7 @@ def update_violation_comments(record_id: str):
 def delete_violation(record_id: str):
     """Delete a single violation record."""
     if zones.delete_violation(record_id, tenant_id=g.tenant_id):
-        zone_logger.info("DELETE /api/violations/%s - deleted", record_id)
+        zone_logger.info("DELETE /api/violations/%s - deleted", record_id, extra={"tenant_id": g.tenant_id})
         return jsonify({"status": "deleted"})
     return jsonify({"error": "Record not found"}), 404
 
@@ -959,7 +1008,7 @@ def delete_violation(record_id: str):
 def clear_violations():
     """Clear all violation records for the current tenant."""
     count = zones.clear_violations(tenant_id=g.tenant_id)
-    zone_logger.info("DELETE /api/violations - cleared %d records", count)
+    zone_logger.info("DELETE /api/violations - cleared %d records", count, extra={"tenant_id": g.tenant_id})
     return jsonify({"status": "cleared", "count": count})
 
 
@@ -985,7 +1034,7 @@ def update_zone(zone_id: str):
         zone = zones.update_zone(zone_id, data, tenant_id=g.tenant_id)
         if not zone:
             return jsonify({"error": "Zone not found"}), 404
-        zone_logger.info("PUT /api/zones/%s - updated", zone_id)
+        zone_logger.info("PUT /api/zones/%s - updated", zone_id, extra={"tenant_id": g.tenant_id})
         return jsonify(zone)
     except ValueError as e:
         zone_logger.warning("Zone update rejected: %s", e)
@@ -998,7 +1047,7 @@ def update_zone(zone_id: str):
 def delete_zone(zone_id: str):
     """Delete a flight zone."""
     if zones.delete_zone(zone_id, tenant_id=g.tenant_id):
-        zone_logger.info("DELETE /api/zones/%s - deleted", zone_id)
+        zone_logger.info("DELETE /api/zones/%s - deleted", zone_id, extra={"tenant_id": g.tenant_id})
         return jsonify({"status": "deleted"})
     return jsonify({"error": "Zone not found"}), 404
 

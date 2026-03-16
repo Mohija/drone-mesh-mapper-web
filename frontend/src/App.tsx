@@ -13,6 +13,7 @@ import UserList from './components/admin/UserList';
 import ReceiverList from './components/admin/ReceiverList';
 import SimulationTab from './components/admin/SimulationTab';
 import SettingsTab from './components/admin/SettingsTab';
+import LogViewerTab from './components/admin/LogViewerTab';
 
 export default function App() {
   return (
@@ -30,6 +31,7 @@ export default function App() {
         <Route path="receivers" element={<ReceiverList />} />
         <Route path="settings" element={<SettingsTab />} />
         <Route path="simulation" element={<SimulationTab />} />
+        <Route path="logs" element={<LogViewerTab />} />
       </Route>
     </Routes>
   );

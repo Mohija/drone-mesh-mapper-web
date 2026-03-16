@@ -210,7 +210,7 @@ def create_user():
 
     # Permission checks
     if g.current_user.role != "super_admin":
-        if role == "super_admin":
+        if role in ("super_admin", "tenant_admin"):
             return jsonify({"error": "Keine Berechtigung für diese Rolle"}), 403
         if tenant_id != g.tenant_id:
             return jsonify({"error": "Keine Berechtigung für diesen Mandanten"}), 403

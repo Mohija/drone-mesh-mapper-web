@@ -101,7 +101,7 @@ class FlightZoneManager:
             result = zone.to_dict()
 
         self._bump_version(tid)
-        logger.info("Created zone %s: name=%s points=%d", result["id"], name, len(polygon))
+        logger.info("Created zone %s: name=%s points=%d", result["id"], name, len(polygon), extra={"tenant_id": tid})
         return result
 
     def update_zone(self, zone_id: str, data: dict, tenant_id=None) -> dict | None:
@@ -438,7 +438,7 @@ class FlightZoneManager:
             db.session.commit()
         if count > 0:
             self._bump_violation_version(tid)
-        logger.info("Cleared %d violation records for tenant %s", count, tid)
+        logger.info("Cleared %d violation records for tenant %s", count, tid, extra={"tenant_id": tid})
         return count
 
 

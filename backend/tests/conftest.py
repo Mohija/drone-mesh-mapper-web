@@ -45,10 +45,11 @@ def setup_test_db():
 
     # Clean up test data after each test
     with flask_app.app_context():
-        from models import FlightZone, TrailArchive as TrailArchiveModel, User, Tenant, TenantSettings
-        # Delete zones and archives for default tenant
+        from models import FlightZone, TrailArchive as TrailArchiveModel, User, Tenant, TenantSettings, SystemLog
+        # Delete zones, archives, and logs for default tenant
         FlightZone.query.delete()
         TrailArchiveModel.query.delete()
+        SystemLog.query.delete()
         # Clean up non-admin users (keep only the seeded admin)
         User.query.filter(User.username != "admin").delete()
         db.session.flush()
@@ -60,7 +61,7 @@ def setup_test_db():
 
 @pytest.fixture(autouse=True)
 def reset_settings_to_simulator_only():
-    """Ensure only simulator is enabled before each test."""
+    """Ensure only simulator is enabled and center matches fleet location before each test."""
     from app import settings as app_settings
     app_settings.update({
         "sources": {
@@ -69,7 +70,10 @@ def reset_settings_to_simulator_only():
             "adsbfi": {"enabled": False},
             "adsblol": {"enabled": False},
             "ogn": {"enabled": False},
-        }
+        },
+        "center_lat": 52.0302,
+        "center_lon": 8.5325,
+        "radius": 50000.0,
     })
     yield
 

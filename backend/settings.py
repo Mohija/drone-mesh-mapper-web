@@ -109,6 +109,7 @@ class SettingsManager:
                 "mission_zone_color": ts.mission_zone_color,
                 "mission_zone_min_alt_agl": ts.mission_zone_min_alt_agl,
                 "mission_zone_max_alt_agl": ts.mission_zone_max_alt_agl,
+                "log_level": ts.log_level or "info",
             }
         return {"sources": _deep_copy(DEFAULT_SOURCES)}
 
@@ -201,6 +202,8 @@ class SettingsManager:
                 ts.mission_zone_min_alt_agl = updates["mission_zone_min_alt_agl"]
             if "mission_zone_max_alt_agl" in updates:
                 ts.mission_zone_max_alt_agl = updates["mission_zone_max_alt_agl"]
+            if "log_level" in updates:
+                ts.log_level = updates["log_level"]
             db.session.commit()
 
     def get_mission_zone_defaults(self, tenant_id=None) -> dict:

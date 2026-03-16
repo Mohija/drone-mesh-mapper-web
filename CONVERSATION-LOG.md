@@ -2,7 +2,7 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-16 (v1.6.0: Mobile UX, Admin Tooltips, HelpPage, Einsatz-Zonen Einstellungen)
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-16 (v1.6.1: Event-basierte Datenübertragung, Logging-System, Mobile E2E, Handbuch)
 - **Typ:** Projekt | **Status:** Development
 
 ## Offene Aufgaben
@@ -14,12 +14,29 @@
 - [x] ESP Hardware-Empfänger Phase 4: Flash-Wizard
 - [x] ESP Hardware-Empfänger Phase 6: Tests
 - [x] Umfassende E2E-Tests für Receiver-System (60 Tests, alle bestanden)
-- [ ] Empfänger-Datenübertragung prüfen: Ziel ist es, dass Empfänger Drohnen-Daten sofort bei Erkennung senden (nicht im Batch alle 2s), damit die Karte Live-Informationen in Echtzeit darstellen kann. Aktuelles Ingest-Intervall analysieren, ggf. auf Event-basierte Übermittlung umstellen.
-- [ ] Logging-System überarbeiten: Prüfen ob Logging überall richtig implementiert ist. Mandanten-weises Log-System mit konfigurierbaren Log-Levels (debug/info/warn/error). Best Practices recherchieren. Neuer Admin-Tab "Log-Viewer" pro Mandant mit Filterung, Suche und Level-Auswahl.
-- [ ] E2E-Tests für Mobile-Ansichten: Alle neuen Mobile-Layouts (Kartenansicht, Admin-Drawer, Empfänger-Karten, UserList-Karten, FlightReport stacked, ViolationTable) brauchen Playwright E2E-Tests mit Mobile-Viewport.
-- [ ] Benutzerhandbuch aktualisieren: Mobile-Ansichten dokumentieren, Einsatz-Zonen Einstellungen (Admin-Tab), Adress-Prüfung bei Zonen-Erstellung, neue Admin-Tooltips, Tablet-Erkennung.
+- [x] Empfänger-Datenübertragung: Event-basiert statt 2s-Batch. Firmware v1.1.0, min 100ms zwischen Sends.
+- [x] Logging-System: Per-Mandant DB-Logging mit konfigurierbaren Levels. Admin-Tab "Logs" mit Filterung, Suche, Auto-Refresh.
+- [x] E2E-Tests für Mobile-Ansichten: 28 Playwright-Tests mit Mobile-Viewport (375x667) für alle Mobile-Layouts.
+- [x] Benutzerhandbuch: Mobile-Ansichten, Einsatz-Zonen Einstellungen, Adress-Prüfung, Log-Viewer dokumentiert.
+- [ ] WebSocket-Integration für echte Push-Updates statt Polling
+- [ ] ESP 8266 MicroPython-Anpassung
+- [ ] Integration mit echtem drone-mesh-mapper Hardware-Setup
+- [ ] Docker Deployment Package
 
 ## Änderungshistorie
+
+### 2026-03-16 - v1.6.1: Event-basierte Datenübertragung, Logging-System, Mobile E2E-Tests, Handbuch
+- **Event-basierte Datenübertragung**: Firmware v1.1.0 sendet Detections sofort bei Erkennung (min 100ms zwischen Sends statt fixer 2s-Batch). Simulation (0.5s) und Dummy-Receiver synchron angepasst.
+- **Bug-Fix**: tenant_admin konnte andere tenant_admin erstellen (Berechtigungsprüfung in admin_routes.py)
+- **Bug-Fix**: Backend-Tests schlugen fehl weil Center-Koordinaten in DB (München) nicht zur Fleet-Position (Bielefeld) passten
+- **Logging-System**: SystemLog DB-Modell, DatabaseLogHandler mit Buffering (2s Flush), per-Mandant Log-Levels, Auto-Prune (10k Einträge max)
+- **Admin Log-Viewer**: Neuer Tab "Logs" mit Level/Modul/Freitext-Filter, Auto-Refresh (5s), Pagination, Löschen
+- **Log API**: GET/DELETE /api/admin/logs, GET/POST /api/admin/logs/levels, GET /api/admin/logs/modules
+- **Mobile E2E-Tests**: 28 neue Tests (mobile.spec.ts) mit 375x667 Viewport: Map Page, Admin Drawer, Receiver Cards, UserList, Login, Settings, Log Viewer, Logs API
+- **Benutzerhandbuch**: Mobile-Ansichten, Einsatz-Zonen Einstellungen, Adress-Prüfung, Log-Viewer dokumentiert
+- **OTA-Workflow verbessert**: OTA-Button baut jetzt automatisch Firmware vor dem Senden (Build→Trigger→Monitor). Progress-Modal mit 4-Schritt-Anzeige und Live-Log. WiFi-Credentials werden in `last_build_config` gespeichert und bei OTA-Rebuilds wiederverwendet.
+- **Auto-Request-Logging**: Flask `after_request`-Hook loggt automatisch alle authentifizierten Requests. Root-Logger auf DEBUG, Console auf INFO (kein Spam). Tenant-ID wird aus Flask `g`-Context aufgelöst.
+- **Dateien:** firmware/src/config.h, firmware/src/main.cpp, firmware/inject_build_flags.py, backend/models.py, backend/settings.py, backend/services/db_logger.py (neu), backend/routes/log_routes.py (neu), backend/routes/admin_routes.py, backend/routes/receiver_routes.py, backend/services/simulation_manager.py, backend/tests/conftest.py, backend/app.py, examples/dummy_receiver.py, frontend/src/api.ts, frontend/src/App.tsx, frontend/src/components/admin/AdminLayout.tsx, frontend/src/components/admin/LogViewerTab.tsx (neu), frontend/src/components/admin/ReceiverList.tsx, frontend/src/components/HelpPage.tsx, frontend/e2e/mobile.spec.ts (neu)
 
 ### 2026-03-16 - v1.6.0: Mobile UX, Admin Tooltips, HelpPage UX, Einsatz-Zonen Einstellungen
 - **Admin Tooltips**: Zweistufiges Tooltip-System (0,3s Kurz-Info + 2s Detail-Tooltip) für alle Admin-Buttons

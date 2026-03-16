@@ -42,7 +42,7 @@
 #endif
 
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION "1.0.0"
+#define FIRMWARE_VERSION "1.1.0"
 #endif
 
 #ifndef HARDWARE_TYPE
@@ -59,7 +59,8 @@
 
 // ─── Runtime constants ──────────────────────────────────────
 
-#define INGEST_INTERVAL_MS      2000    // Send detections every 2 seconds
+#define INGEST_MIN_INTERVAL_MS  100     // Min 100ms between ingest sends (event-based)
+#define INGEST_MAX_INTERVAL_MS  2000    // Max 2s — heartbeat-like fallback (unused if no detections)
 #define HEARTBEAT_INTERVAL_MS   30000   // Send heartbeat every 30 seconds
 #define WIFI_RECONNECT_MS       10000   // Retry WiFi every 10 seconds
 #define WIFI_SCAN_INTERVAL_MS   60000   // Scan for networks every 60 seconds

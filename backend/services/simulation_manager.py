@@ -2,7 +2,7 @@
 SimulationManager — Manages in-process dummy receiver instances.
 
 Each simulator runs as a daemon thread that periodically:
-  - Calls ReceiverProvider.ingest() every 2s (same as firmware INGEST_INTERVAL_MS)
+  - Calls ReceiverProvider.ingest() every 0.5s (event-based, matching firmware v1.1.0)
   - Updates ReceiverNode heartbeat fields every 30s (same as firmware HEARTBEAT_INTERVAL_MS)
 
 Simulators are ephemeral (in-memory only). On server restart they are gone,
@@ -25,9 +25,9 @@ import uuid
 logger = logging.getLogger("simulation")
 
 # ─── Constants (matching firmware config.h) ────────────────────
-INGEST_INTERVAL_S = 2
+INGEST_INTERVAL_S = 0.5       # Event-based: send every 0.5s (firmware sends on detection, min 100ms)
 HEARTBEAT_INTERVAL_S = 30
-FIRMWARE_VERSION = "1.0.0-sim"
+FIRMWARE_VERSION = "1.1.0-sim"
 
 
 # ─── Simulated Drone ──────────────────────────────────────────
@@ -487,7 +487,7 @@ class SimulationManager:
         while not instance._stop_event.is_set():
             now = time.time()
 
-            # Update drone positions
+            # Update drone positions (dt matches ingest interval)
             for drone in instance._drones:
                 drone.update(INGEST_INTERVAL_S)
 

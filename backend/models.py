@@ -35,6 +35,7 @@ class Tenant(db.Model):
     trail_archives = db.relationship("TrailArchive", backref="tenant", cascade="all, delete-orphan", lazy=True)
     violation_records = db.relationship("ViolationRecord", backref="tenant", cascade="all, delete-orphan", lazy=True)
     receiver_nodes = db.relationship("ReceiverNode", backref="tenant", cascade="all, delete-orphan", lazy=True)
+    system_logs = db.relationship("SystemLog", backref="tenant", cascade="all, delete-orphan", lazy=True)
 
     def to_dict(self):
         return {
@@ -149,6 +150,7 @@ class TenantSettings(db.Model):
     mission_zone_color = db.Column(db.String(20), nullable=True)
     mission_zone_min_alt_agl = db.Column(db.Float, nullable=True)
     mission_zone_max_alt_agl = db.Column(db.Float, nullable=True)
+    log_level = db.Column(db.String(10), nullable=True)
     created_at = db.Column(db.Float, default=_now, nullable=False)
     updated_at = db.Column(db.Float, default=_now, onupdate=_now, nullable=False)
 
@@ -164,6 +166,7 @@ class TenantSettings(db.Model):
             "mission_zone_color": self.mission_zone_color,
             "mission_zone_min_alt_agl": self.mission_zone_min_alt_agl,
             "mission_zone_max_alt_agl": self.mission_zone_max_alt_agl,
+            "log_level": self.log_level or "info",
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
@@ -307,6 +310,7 @@ class ReceiverNode(db.Model):
     last_build_sha256 = db.Column(db.String(64), nullable=True)
     last_build_version = db.Column(db.String(20), nullable=True)
     last_build_merged_size = db.Column(db.Integer, nullable=True)
+    last_build_config = db.Column(JSON, nullable=True)  # {backend_url, wifi_networks} for OTA rebuilds
 
     # OTA update control
     ota_update_pending = db.Column(db.Boolean, default=False, nullable=False)
@@ -355,6 +359,7 @@ class ReceiverNode(db.Model):
             "lastBuildSha256": self.last_build_sha256,
             "lastBuildVersion": self.last_build_version,
             "lastBuildMergedSize": self.last_build_merged_size,
+            "lastBuildConfig": self.last_build_config,
             "otaUpdatePending": self.ota_update_pending,
             "otaLastAttempt": self.ota_last_attempt,
             "otaLastResult": self.ota_last_result,
@@ -362,3 +367,27 @@ class ReceiverNode(db.Model):
         if include_key:
             result["apiKey"] = self.api_key
         return result
+
+
+class SystemLog(db.Model):
+    """Persistent system log entries per tenant."""
+    __tablename__ = "system_logs"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    tenant_id = db.Column(db.String(8), db.ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    timestamp = db.Column(db.Float, nullable=False, default=_now)
+    level = db.Column(db.String(10), nullable=False)  # debug, info, warning, error
+    module = db.Column(db.String(50), nullable=False)  # logger name
+    message = db.Column(db.Text, nullable=False)
+    details = db.Column(JSON, nullable=True)  # extra context data
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "tenant_id": self.tenant_id,
+            "timestamp": self.timestamp,
+            "level": self.level,
+            "module": self.module,
+            "message": self.message,
+            "details": self.details,
+        }

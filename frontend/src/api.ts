@@ -1036,3 +1036,72 @@ export async function stopAllSimulators(): Promise<void> {
   const res = await authFetch(`${API_BASE}/simulation/stop-all`, { method: 'POST' });
   if (!res.ok) throw new Error(`API error: ${res.status}`);
 }
+
+
+// ─── System Logs ──────────────────────────────────────────
+
+export interface SystemLogEntry {
+  id: number;
+  tenant_id: string;
+  timestamp: number;
+  level: string;
+  module: string;
+  message: string;
+  details: Record<string, unknown> | null;
+}
+
+export interface LogsResponse {
+  logs: SystemLogEntry[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export async function fetchLogs(params?: {
+  level?: string;
+  module?: string;
+  search?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<LogsResponse> {
+  const q = new URLSearchParams();
+  if (params?.level) q.set('level', params.level);
+  if (params?.module) q.set('module', params.module);
+  if (params?.search) q.set('search', params.search);
+  if (params?.limit) q.set('limit', String(params.limit));
+  if (params?.offset) q.set('offset', String(params.offset));
+  const res = await authFetch(`${API_BASE}/admin/logs?${q}`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchLogLevel(): Promise<string> {
+  const res = await authFetch(`${API_BASE}/admin/logs/levels`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  const data = await res.json();
+  return data.level;
+}
+
+export async function setLogLevel(level: string): Promise<string> {
+  const res = await authFetch(`${API_BASE}/admin/logs/levels`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ level }),
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  const data = await res.json();
+  return data.level;
+}
+
+export async function clearLogs(): Promise<{ count: number }> {
+  const res = await authFetch(`${API_BASE}/admin/logs`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchLogModules(): Promise<string[]> {
+  const res = await authFetch(`${API_BASE}/admin/logs/modules`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  const data = await res.json();
+  return data.modules;
+}

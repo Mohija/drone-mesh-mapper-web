@@ -30,6 +30,7 @@ const SECTION_SUBS: Record<string, SubMeta[]> = {
   flightzones: [
     { id: 'zonen-panel', title: 'Zonen-Panel öffnen' },
     { id: 'zone-erstellen', title: 'Zone erstellen' },
+    { id: 'adress-pruefung', title: 'Adress-Prüfung bei Zonen-Erstellung' },
     { id: 'zone-bearbeiten', title: 'Zone bearbeiten' },
     { id: 'drohnen-zuweisung', title: 'Drohnen-Zuweisung' },
   ],
@@ -58,6 +59,8 @@ const SECTION_SUBS: Record<string, SubMeta[]> = {
     { id: 'mandanten-verwaltung', title: 'Mandanten-Verwaltung (nur Super-Admin)' },
     { id: 'benutzer-verwaltung', title: 'Benutzer-Verwaltung' },
     { id: 'erweiterte-tooltips', title: 'Erweiterte Tooltips' },
+    { id: 'zonen-einstellungen', title: 'Einsatz-Zonen Einstellungen' },
+    { id: 'log-viewer', title: 'Log-Viewer' },
   ],
   receivers: [
     { id: 'statistik-leiste', title: 'Statistik-Leiste' },
@@ -99,6 +102,7 @@ const SECTION_SUBS: Record<string, SubMeta[]> = {
     { id: 'empfaenger-platzierung', title: 'Empfänger-Platzierung' },
     { id: 'tastenkuerzel', title: 'Tastenkürzel' },
     { id: 'browser-empfehlung', title: 'Browser-Empfehlung' },
+    { id: 'mobile-ansichten', title: 'Mobile-Ansichten' },
   ],
 };
 
@@ -565,6 +569,19 @@ function SectionFlightZones() {
             <li>Klicke auf <strong>„Speichern"</strong>.</li>
           </ol>
       </div>
+      <div id="adress-pruefung">
+        <h3>Adress-Prüfung bei Zonen-Erstellung</h3>
+          <p>
+            Beim Erstellen einer Einsatz-Zone steht eine <strong>2-Schritt-Adressprüfung</strong> zur Verfügung:
+          </p>
+          <ol>
+            <li><strong>Schritt 1:</strong> Adresse eingeben — per Geocoding werden die Koordinaten gesucht.</li>
+            <li><strong>Schritt 2:</strong> Das Ergebnis auf der Karte prüfen und bestätigen.</li>
+          </ol>
+          <p>
+            Alternativ können Koordinaten auch direkt eingegeben werden, statt die aktuelle Kartenmitte zu verwenden.
+          </p>
+      </div>
       <div id="zone-bearbeiten">
         <h3>Zone bearbeiten</h3>
           <p>
@@ -811,6 +828,37 @@ function SectionAdmin() {
             Besonders hilfreich bei den verschiedenen Firmware-Optionen der Empfänger (App-Firmware vs. Full-Flash vs. OTA),
             um den Unterschied zwischen den Download-/Flash-Arten zu verstehen.
           </p>
+      </div>
+      <div id="zonen-einstellungen">
+        <h3>Einsatz-Zonen Einstellungen</h3>
+          <p>
+            Unter <strong>Administration → Einstellungen</strong> können mandantenspezifische Voreinstellungen
+            für Einsatz-Zonen konfiguriert werden:
+          </p>
+          <ul>
+            <li><strong>Standard-Radius</strong> — Wird beim Erstellen neuer Zonen voreingestellt</li>
+            <li><strong>Farbe</strong> — Standard-Farbe für neue Zonen</li>
+            <li><strong>Mindesthöhe AGL</strong> — Voreinstellung für die minimale Höhe über Grund</li>
+            <li><strong>Maximalhöhe AGL</strong> — Voreinstellung für die maximale Höhe über Grund</li>
+          </ul>
+          <p>
+            Änderungen gelten nur für den aktuell ausgewählten Mandanten und werden als
+            Voreinstellung beim Erstellen neuer Einsatz-Zonen verwendet.
+          </p>
+      </div>
+      <div id="log-viewer">
+        <h3>Log-Viewer</h3>
+          <p>
+            Unter <strong>Administration → Logs</strong> werden System-Logeinträge pro Mandant angezeigt.
+          </p>
+          <ul>
+            <li><strong>Log-Level</strong> — Konfigurierbar (Debug, Info, Warning, Error). Debug zeigt alle Details, Error nur Fehler.</li>
+            <li><strong>Filter</strong> — Nach Level, Modul und Freitextsuche filterbar</li>
+            <li><strong>Auto-Refresh</strong> — Logs werden alle 5 Sekunden automatisch aktualisiert (abschaltbar)</li>
+            <li><strong>Pagination</strong> — Bei vielen Einträgen seitenweise Navigation</li>
+            <li><strong>Löschen</strong> — Alle Logs des Mandanten können mit einem Klick gelöscht werden</li>
+            <li><strong>Details</strong> — Einträge mit zusätzlichen Kontextdaten können aufgeklappt werden</li>
+          </ul>
       </div>
     </div>
   );
@@ -1580,6 +1628,19 @@ function SectionTips() {
             Chrome oder Edge für beste Kompatibilität (insb. Web Serial für ESP-Flash).
             Firefox funktioniert für alle Features außer Web Serial.
           </p>
+      </div>
+      <div id="mobile-ansichten">
+        <h3>Mobile-Ansichten</h3>
+          <p>
+            FlightArc erkennt automatisch Smartphones und Tablets (iPad, Android-Tablets, Samsung-Tablets)
+            und passt die Oberfläche entsprechend an.
+          </p>
+          <ul>
+            <li><strong>Kartenansicht</strong> — Kompakte Top-Bar, Controls als Drawer, Panels als Bottom-Sheets, Zoom-Controls ausgeblendet (Pinch-to-Zoom)</li>
+            <li><strong>Admin-Bereich</strong> — Hamburger-Menü öffnet Sidebar-Drawer, Empfänger und Benutzer werden als Karten-Layout statt Tabelle angezeigt</li>
+            <li><strong>Touch-Targets</strong> — Alle Schaltflächen sind mindestens 44px groß für komfortable Bedienung</li>
+            <li><strong>Weitere Seiten</strong> — DroneDetailPage, FlightReport und Einstellungen sind ebenfalls vollständig responsive</li>
+          </ul>
       </div>
     </div>
   );
