@@ -95,6 +95,8 @@ void WiFiManager::loop() {
         _staConnectAttempts = 0;
         Serial.printf("[WiFi] STA connected! IP: %s (SSID: %s, RSSI: %d)\n",
                       getStaIp().c_str(), getConnectedSsid().c_str(), getRssi());
+        // Persist active credentials to NVS — survives OTA updates
+        _saveCredentials();
     }
 
     // ── STA just disconnected ────────────────────────────────
