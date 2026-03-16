@@ -6,6 +6,7 @@ import base64
 import hashlib
 import json
 import logging
+import math
 import os
 import secrets
 import struct
@@ -21,6 +22,120 @@ from models import ReceiverNode
 logger = logging.getLogger("receivers")
 
 receiver_bp = Blueprint("receivers", __name__, url_prefix="/api/receivers")
+
+
+# ─── Geometry helpers for placement planner ────────────────────
+
+
+def _hex_grid_cover(polygon, radius_m):
+    """Generate hexagonal grid positions that cover the polygon.
+    Uses hex grid spacing for optimal coverage:
+      dx (column spacing) = radius * sqrt(3)
+      dy (row spacing)    = radius * 1.5
+      Odd rows shifted by dx/2
+    This ensures every point in the plane is within `radius` of at least one grid point.
+    Returns list of [lat, lon] positions.
+    """
+    lats = [p[0] for p in polygon]
+    lons = [p[1] for p in polygon]
+    min_lat, max_lat = min(lats), max(lats)
+    min_lon, max_lon = min(lons), max(lons)
+
+    # Convert radius to degrees (approximate)
+    lat_center = (min_lat + max_lat) / 2
+    m_per_deg_lat = 111320.0
+    m_per_deg_lon = 111320.0 * math.cos(math.radians(lat_center))
+
+    # Hex grid spacing
+    dx_m = radius_m * math.sqrt(3)       # column spacing in meters
+    dy_m = radius_m * 1.5                 # row spacing in meters
+    dx_lon = dx_m / m_per_deg_lon         # column spacing in degrees lon
+    dy_lat = dy_m / m_per_deg_lat         # row spacing in degrees lat
+    row_offset_lon = dx_lon / 2           # hex offset for odd rows
+
+    # Expand bounding box by radius to cover edges
+    pad_lat = radius_m / m_per_deg_lat
+    pad_lon = radius_m / m_per_deg_lon
+
+    positions = []
+    row = 0
+    lat = min_lat - pad_lat
+    while lat <= max_lat + pad_lat:
+        lon_start = min_lon - pad_lon
+        if row % 2 == 1:
+            lon_start += row_offset_lon
+        lon = lon_start
+        while lon <= max_lon + pad_lon:
+            if _point_near_polygon(lat, lon, polygon, radius_m, m_per_deg_lat, m_per_deg_lon):
+                positions.append([round(lat, 7), round(lon, 7)])
+            lon += dx_lon
+        lat += dy_lat
+        row += 1
+
+    return positions
+
+
+def _point_near_polygon(lat, lon, polygon, radius_m, m_per_deg_lat, m_per_deg_lon):
+    """Check if a point is inside the polygon or within radius_m of any polygon edge."""
+    if _point_in_polygon(lat, lon, polygon):
+        return True
+    for i in range(len(polygon)):
+        j = (i + 1) % len(polygon)
+        dist = _point_to_segment_dist(lat, lon, polygon[i], polygon[j], m_per_deg_lat, m_per_deg_lon)
+        if dist <= radius_m:
+            return True
+    return False
+
+
+def _point_in_polygon(lat, lon, polygon):
+    """Ray casting point-in-polygon test."""
+    n = len(polygon)
+    inside = False
+    j = n - 1
+    for i in range(n):
+        yi, xi = polygon[i]
+        yj, xj = polygon[j]
+        if ((yi > lon) != (yj > lon)) and (lat < (xj - xi) * (lon - yi) / (yj - yi) + xi):
+            inside = not inside
+        j = i
+    return inside
+
+
+def _point_to_segment_dist(lat, lon, p1, p2, m_per_deg_lat, m_per_deg_lon):
+    """Distance in meters from point to line segment."""
+    dx = (p2[1] - p1[1]) * m_per_deg_lon
+    dy = (p2[0] - p1[0]) * m_per_deg_lat
+    px = (lon - p1[1]) * m_per_deg_lon
+    py = (lat - p1[0]) * m_per_deg_lat
+
+    seg_len_sq = dx * dx + dy * dy
+    if seg_len_sq == 0:
+        return math.sqrt(px * px + py * py)
+
+    t = max(0, min(1, (px * dx + py * dy) / seg_len_sq))
+    proj_x = t * dx
+    proj_y = t * dy
+    return math.sqrt((px - proj_x) ** 2 + (py - proj_y) ** 2)
+
+
+def _polygon_area_km2(polygon):
+    """Calculate polygon area in km² using the shoelace formula."""
+    n = len(polygon)
+    if n < 3:
+        return 0
+    lat_center = sum(p[0] for p in polygon) / n
+    m_per_deg_lat = 111320.0
+    m_per_deg_lon = 111320.0 * math.cos(math.radians(lat_center))
+
+    area = 0
+    for i in range(n):
+        j = (i + 1) % n
+        xi = polygon[i][1] * m_per_deg_lon
+        yi = polygon[i][0] * m_per_deg_lat
+        xj = polygon[j][1] * m_per_deg_lon
+        yj = polygon[j][0] * m_per_deg_lat
+        area += xi * yj - xj * yi
+    return abs(area) / 2.0 / 1e6  # m² to km²
 
 
 # ─── Admin CRUD (JWT auth, tenant_admin+) ──────────────────────
@@ -205,6 +320,83 @@ def get_receiver_coverage():
                 "hardwareType": n.hardware_type,
             })
     return jsonify(result)
+
+
+# ─── Placement Planner (JWT auth, tenant_admin+) ──────────────
+
+
+@receiver_bp.route("/plan-coverage", methods=["POST"])
+@login_required
+@role_required("tenant_admin")
+def plan_coverage():
+    """Calculate optimal receiver positions for full coverage of a polygon area.
+    Uses hexagonal grid covering (mathematically optimal).
+    Body: { polygon: [[lat,lon]...], radius: number (meters) }
+    """
+    data = request.get_json(silent=True) or {}
+    polygon = data.get("polygon", [])
+    radius = data.get("radius", 1000)
+
+    if len(polygon) < 3:
+        return jsonify({"error": "Polygon muss mindestens 3 Punkte haben"}), 400
+    if radius < 50 or radius > 50000:
+        return jsonify({"error": "Radius muss zwischen 50m und 50km liegen"}), 400
+
+    positions = _hex_grid_cover(polygon, radius)
+
+    # Calculate area of polygon in km²
+    area = _polygon_area_km2(polygon)
+
+    return jsonify({
+        "positions": [{"lat": p[0], "lon": p[1]} for p in positions],
+        "count": len(positions),
+        "area_km2": round(area, 2),
+        "radius": radius,
+    })
+
+
+@receiver_bp.route("/batch-create", methods=["POST"])
+@login_required
+@role_required("tenant_admin")
+def batch_create():
+    """Create multiple receiver nodes at planned positions.
+    Body: { positions: [{lat, lon}...], antenna_type: string,
+            coverage_radius: number, name_prefix: string }
+    """
+    data = request.get_json(silent=True) or {}
+    positions = data.get("positions", [])
+    antenna_type = data.get("antenna_type", "pcb")
+    coverage_radius = data.get("coverage_radius", 1000)
+    name_prefix = (data.get("name_prefix") or "Empfänger").strip()
+
+    if not positions:
+        return jsonify({"error": "Keine Positionen angegeben"}), 400
+    if len(positions) > 100:
+        return jsonify({"error": "Maximal 100 Empfänger auf einmal"}), 400
+
+    created = []
+    for i, pos in enumerate(positions, 1):
+        node = ReceiverNode(
+            tenant_id=g.tenant_id,
+            name=f"{name_prefix} {i:02d}",
+            hardware_type="esp32-s3",
+            last_latitude=pos.get("lat"),
+            last_longitude=pos.get("lon"),
+            last_location_accuracy=10.0,
+            antenna_type=antenna_type,
+            coverage_radius=coverage_radius,
+        )
+        db.session.add(node)
+        created.append(node)
+
+    db.session.commit()
+    logger.info("Batch-created %d receivers for tenant %s", len(created), g.tenant_id,
+                extra={"tenant_id": g.tenant_id})
+
+    return jsonify({
+        "created": [n.to_dict(include_key=True) for n in created],
+        "count": len(created),
+    }), 201
 
 
 # ─── Node Endpoints (X-Node-Key auth) ─────────────────────────

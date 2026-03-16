@@ -1134,3 +1134,53 @@ export async function fetchLogModules(): Promise<string[]> {
   const data = await res.json();
   return data.modules;
 }
+
+// ─── Receiver Planning ────────────────────────────────────
+
+export interface PlannedPosition {
+  lat: number;
+  lon: number;
+}
+
+export interface PlanCoverageResult {
+  positions: PlannedPosition[];
+  count: number;
+  area_km2: number;
+  radius: number;
+}
+
+export async function planCoverage(polygon: [number, number][], radius: number): Promise<PlanCoverageResult> {
+  const res = await authFetch(`${API_BASE}/receivers/plan-coverage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ polygon, radius }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Planung fehlgeschlagen' }));
+    throw new Error(err.error || `API error: ${res.status}`);
+  }
+  return res.json();
+}
+
+export interface BatchCreateResult {
+  created: ReceiverNode[];
+  count: number;
+}
+
+export async function batchCreateReceivers(data: {
+  positions: PlannedPosition[];
+  antenna_type: string;
+  coverage_radius: number;
+  name_prefix: string;
+}): Promise<BatchCreateResult> {
+  const res = await authFetch(`${API_BASE}/receivers/batch-create`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Erstellen fehlgeschlagen' }));
+    throw new Error(err.error || `API error: ${res.status}`);
+  }
+  return res.json();
+}
