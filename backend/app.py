@@ -151,6 +151,17 @@ with app.app_context():
             pass  # Column already exists
     db.session.commit()
 
+    # Migration: add coverage_radius and antenna_type to receiver_nodes
+    for col_stmt in [
+        "ALTER TABLE receiver_nodes ADD COLUMN coverage_radius INTEGER",
+        "ALTER TABLE receiver_nodes ADD COLUMN antenna_type VARCHAR(30)",
+    ]:
+        try:
+            db.session.execute(db.text(col_stmt))
+        except Exception:
+            pass  # Column already exists
+    db.session.commit()
+
 # Attach database logging handler
 from services.db_logger import DatabaseLogHandler
 db_handler = DatabaseLogHandler(app)

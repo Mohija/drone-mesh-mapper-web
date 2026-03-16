@@ -716,6 +716,8 @@ export interface ReceiverNode {
   uptimeSeconds: number | null;
   totalDetections: number;
   detectionsSinceBoot: number;
+  coverageRadius: number | null;
+  antennaType: string | null;
   status: 'online' | 'stale' | 'offline';
   createdAt: number;
   updatedAt: number;
@@ -789,6 +791,33 @@ export async function setReceiverLocation(id: string, latitude: number, longitud
 export async function regenerateReceiverKey(id: string): Promise<ReceiverNode> {
   const res = await authFetch(`${API_BASE}/receivers/${encodeURIComponent(id)}/regenerate-key`, {
     method: 'POST',
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export interface ReceiverCoverage {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  coverageRadius: number;
+  antennaType: string;
+  status: string;
+  hardwareType: string;
+}
+
+export async function fetchReceiverCoverage(): Promise<ReceiverCoverage[]> {
+  const res = await authFetch(`${API_BASE}/receivers/coverage`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function updateReceiverCoverage(id: string, data: { coverage_radius?: number; antenna_type?: string }): Promise<ReceiverNode> {
+  const res = await authFetch(`${API_BASE}/receivers/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();

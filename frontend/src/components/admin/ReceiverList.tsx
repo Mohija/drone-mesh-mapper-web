@@ -14,6 +14,7 @@ import {
   cancelOtaUpdate,
   startBuildAsync,
   pollBuildStatus,
+  updateReceiverCoverage,
 } from '../../api';
 import type { ReceiverNode, ReceiverStats, ConnectionLogEntry } from '../../api';
 import ReceiverFlashWizard from './ReceiverFlashWizard';
@@ -25,6 +26,14 @@ const HARDWARE_TYPES = [
   { value: 'esp32-c3', label: 'ESP32-C3', desc: 'BLE + WiFi ODID, HTTPS | QIO 4MB' },
   { value: 'esp8266', label: 'ESP8266', desc: 'Nur WiFi-Beacon ODID, kein BLE, kein HTTPS', limited: true },
 ];
+
+const ANTENNA_PRESETS = [
+  { value: 'pcb', label: 'PCB-Antenne (eingebaut)', defaultRadius: 1000 },
+  { value: 'dipole_5dbi', label: 'Externe Dipol 5dBi', defaultRadius: 2000 },
+  { value: 'omni_9dbi', label: 'Externe Omni 9dBi', defaultRadius: 3000 },
+  { value: 'panel_12dbi', label: 'Panel 12dBi (gerichtet)', defaultRadius: 5000 },
+  { value: 'yagi_15dbi', label: 'Yagi 15-18dBi (gerichtet)', defaultRadius: 10000 },
+] as const;
 
 interface ShoppingItem {
   name: string;
@@ -274,6 +283,23 @@ export default function ReceiverList() {
   const [logReceiverId, setLogReceiverId] = useState<string | null>(null); // null = all
   const isMobile = useIsMobile();
   const [showLog, setShowLog] = useState(false);
+
+  // Coverage editing
+  const [editAntennaType, setEditAntennaType] = useState<string>('pcb');
+  const [editCoverageRadius, setEditCoverageRadius] = useState<string>('1000');
+  const [coverageSaving, setCoverageSaving] = useState(false);
+  const [coverageMsg, setCoverageMsg] = useState<string | null>(null);
+
+  // Sync coverage fields when expanded row changes
+  useEffect(() => {
+    if (!expandedId) return;
+    const node = receivers.find(r => r.id === expandedId);
+    if (node) {
+      setEditAntennaType(node.antennaType || 'pcb');
+      setEditCoverageRadius(String(node.coverageRadius || ANTENNA_PRESETS.find(a => a.value === (node.antennaType || 'pcb'))?.defaultRadius || 1000));
+      setCoverageMsg(null);
+    }
+  }, [expandedId, receivers]);
 
   const loadData = useCallback(async () => {
     try {
@@ -1184,6 +1210,96 @@ export default function ReceiverList() {
                             )}
                           </div>
                         )}
+                        {/* Coverage / Antenna Configuration */}
+                        <div data-testid={`receiver-coverage-${node.id}`} style={{
+                          marginTop: 10, padding: '10px 12px',
+                          background: 'rgba(20,184,166,0.05)', border: '1px solid rgba(20,184,166,0.15)',
+                          borderRadius: 6, display: 'flex', gap: 12, alignItems: 'flex-end',
+                          flexWrap: 'wrap', fontSize: 12,
+                        }}>
+                          <div style={{ minWidth: 160 }}>
+                            <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Antennen-Typ</label>
+                            <select
+                              data-testid={`receiver-antenna-${node.id}`}
+                              value={editAntennaType}
+                              onChange={e => {
+                                const val = e.target.value;
+                                setEditAntennaType(val);
+                                const preset = ANTENNA_PRESETS.find(a => a.value === val);
+                                if (preset) setEditCoverageRadius(String(preset.defaultRadius));
+                              }}
+                              style={{
+                                width: '100%', padding: '5px 8px',
+                                background: 'var(--bg-primary)', border: '1px solid var(--border)',
+                                borderRadius: 4, color: 'var(--text-primary)', fontSize: 12,
+                              }}
+                            >
+                              {ANTENNA_PRESETS.map(a => (
+                                <option key={a.value} value={a.value}>{a.label}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div style={{ minWidth: 120 }}>
+                            <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Reichweite (m)</label>
+                            <input
+                              data-testid={`receiver-radius-${node.id}`}
+                              type="number"
+                              min={100}
+                              max={50000}
+                              value={editCoverageRadius}
+                              onChange={e => setEditCoverageRadius(e.target.value)}
+                              style={{
+                                width: '100%', padding: '5px 8px',
+                                background: 'var(--bg-primary)', border: '1px solid var(--border)',
+                                borderRadius: 4, color: 'var(--text-primary)', fontSize: 12,
+                                boxSizing: 'border-box',
+                              }}
+                            />
+                          </div>
+                          <button
+                            data-testid={`receiver-coverage-save-${node.id}`}
+                            disabled={coverageSaving}
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              setCoverageSaving(true);
+                              setCoverageMsg(null);
+                              try {
+                                await updateReceiverCoverage(node.id, {
+                                  coverage_radius: parseInt(editCoverageRadius, 10) || 1000,
+                                  antenna_type: editAntennaType,
+                                });
+                                setCoverageMsg('Gespeichert');
+                                await loadData();
+                              } catch (err: unknown) {
+                                setCoverageMsg(err instanceof Error ? err.message : 'Fehler');
+                              } finally {
+                                setCoverageSaving(false);
+                              }
+                            }}
+                            style={{
+                              padding: '5px 14px',
+                              background: '#14b8a6',
+                              border: 'none',
+                              borderRadius: 4,
+                              color: '#fff',
+                              cursor: coverageSaving ? 'wait' : 'pointer',
+                              fontSize: 11,
+                              fontWeight: 600,
+                              opacity: coverageSaving ? 0.6 : 1,
+                            }}
+                          >
+                            {coverageSaving ? 'Speichern...' : 'Abdeckung speichern'}
+                          </button>
+                          {coverageMsg && (
+                            <span style={{
+                              fontSize: 11,
+                              color: coverageMsg === 'Gespeichert' ? '#22c55e' : '#ef4444',
+                            }}>
+                              {coverageMsg}
+                            </span>
+                          )}
+                        </div>
+
                         <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                           {/* OTA Update */}
                           {node.status !== 'offline' && node.hardwareType !== 'esp8266' && (

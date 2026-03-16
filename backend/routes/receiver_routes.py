@@ -90,6 +90,11 @@ def update_receiver(node_id: str):
         node.name = name
     if "is_active" in data:
         node.is_active = bool(data["is_active"])
+    if "coverage_radius" in data:
+        val = data["coverage_radius"]
+        node.coverage_radius = int(val) if val is not None else None
+    if "antenna_type" in data:
+        node.antenna_type = data["antenna_type"] or None
 
     db.session.commit()
     logger.info("Updated receiver %s: name=%s active=%s", node.id, node.name, node.is_active, extra={"tenant_id": g.tenant_id})
@@ -179,6 +184,27 @@ def receiver_stats():
         "offline": offline,
         "totalDetections": total_detections,
     })
+
+
+@receiver_bp.route("/coverage", methods=["GET"])
+@login_required
+def get_receiver_coverage():
+    """Return receiver locations and coverage radii for map overlay."""
+    nodes = ReceiverNode.query.filter_by(tenant_id=g.tenant_id, is_active=True).all()
+    result = []
+    for n in nodes:
+        if n.last_latitude and n.last_longitude:
+            result.append({
+                "id": n.id,
+                "name": n.name,
+                "latitude": n.last_latitude,
+                "longitude": n.last_longitude,
+                "coverageRadius": n.coverage_radius or 1000,
+                "antennaType": n.antenna_type or "pcb",
+                "status": n.status,
+                "hardwareType": n.hardware_type,
+            })
+    return jsonify(result)
 
 
 # ─── Node Endpoints (X-Node-Key auth) ─────────────────────────

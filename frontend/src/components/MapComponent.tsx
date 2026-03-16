@@ -6,6 +6,7 @@ import { DIPUL_WMS_URL, getWmsLayerString, NFZ_LAYERS } from '../config/noFlyZon
 import { useTheme } from '../ThemeContext';
 import type { TrailData } from '../useTracking';
 import type { FlightZone } from '../types/drone';
+import type { ReceiverCoverage } from '../api';
 
 // Persist map view across remounts (route navigation)
 let savedCenter: [number, number] = [52.0302, 8.5325]; // Bielefeld
@@ -284,6 +285,8 @@ interface Props {
   snappable?: boolean;
   onMapClickForZone?: (lat: number, lon: number) => boolean | void;
   focusPosition?: { lat: number; lon: number } | null;
+  receiverCoverage?: ReceiverCoverage[];
+  showReceiverCoverage?: boolean;
 }
 
 // Store drone data for map event handlers (avoids stale closures)
@@ -299,7 +302,7 @@ const TILE_URLS = {
   light: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
 };
 
-export default function MapComponent({ drones, selectedDrone, userLocation, onDroneClick, activeNoFlyLayers, nfzBounds, nfzRadiusCenter, nfzRadiusMeters, droneRadiusCenter, droneRadiusMeters, trails = [], flightZones = [], drawingMode = false, pendingPoints = [], snappable = false, onMapClickForZone, focusPosition }: Props) {
+export default function MapComponent({ drones, selectedDrone, userLocation, onDroneClick, activeNoFlyLayers, nfzBounds, nfzRadiusCenter, nfzRadiusMeters, droneRadiusCenter, droneRadiusMeters, trails = [], flightZones = [], drawingMode = false, pendingPoints = [], snappable = false, onMapClickForZone, focusPosition, receiverCoverage = [], showReceiverCoverage = false }: Props) {
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
@@ -319,6 +322,8 @@ export default function MapComponent({ drones, selectedDrone, userLocation, onDr
   const zoneLabelsRef = useRef<Map<string, L.Tooltip>>(new Map());
   const drawingPolylineRef = useRef<L.Polyline | null>(null);
   const drawingMarkersRef = useRef<L.CircleMarker[]>([]);
+  const rcCoverageCirclesRef = useRef<Map<string, L.Circle>>(new Map());
+  const rcCoverageMarkersRef = useRef<Map<string, L.CircleMarker>>(new Map());
   const navigate = useNavigate();
   const { theme } = useTheme();
 
@@ -966,6 +971,97 @@ export default function MapComponent({ drones, selectedDrone, userLocation, onDr
       }
     }
   }, [flightZones]);
+
+  // Render receiver coverage circles and center markers
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const RECEIVER_STATUS_COLORS: Record<string, string> = {
+      online: '#22c55e',
+      stale: '#eab308',
+      offline: '#64748b',
+    };
+
+    if (!showReceiverCoverage || receiverCoverage.length === 0) {
+      // Remove all coverage visuals
+      rcCoverageCirclesRef.current.forEach(c => c.remove());
+      rcCoverageCirclesRef.current.clear();
+      rcCoverageMarkersRef.current.forEach(m => m.remove());
+      rcCoverageMarkersRef.current.clear();
+      return;
+    }
+
+    const currentIds = new Set(receiverCoverage.map(r => r.id));
+
+    // Remove circles/markers for receivers no longer in the list
+    rcCoverageCirclesRef.current.forEach((circle, id) => {
+      if (!currentIds.has(id)) {
+        circle.remove();
+        rcCoverageCirclesRef.current.delete(id);
+      }
+    });
+    rcCoverageMarkersRef.current.forEach((marker, id) => {
+      if (!currentIds.has(id)) {
+        marker.remove();
+        rcCoverageMarkersRef.current.delete(id);
+      }
+    });
+
+    // Update or create coverage visuals
+    for (const rc of receiverCoverage) {
+      const color = RECEIVER_STATUS_COLORS[rc.status] || '#64748b';
+      const pos: L.LatLngExpression = [rc.latitude, rc.longitude];
+      const tooltipContent = `<div style="font-family:sans-serif;font-size:12px;min-width:120px;"><strong>${rc.name}</strong><br/><span style="color:${color};">&#9679;</span> ${rc.status}<br/>Radius: ${rc.coverageRadius >= 1000 ? `${(rc.coverageRadius / 1000).toFixed(1)} km` : `${rc.coverageRadius} m`}<br/>Antenne: ${rc.antennaType.replace(/_/g, ' ')}<br/>Hardware: ${rc.hardwareType}</div>`;
+
+      // Coverage circle
+      const existingCircle = rcCoverageCirclesRef.current.get(rc.id);
+      if (existingCircle) {
+        existingCircle.setLatLng(pos);
+        existingCircle.setRadius(rc.coverageRadius);
+        existingCircle.setStyle({
+          color: color,
+          fillColor: color,
+        });
+        existingCircle.unbindTooltip();
+        existingCircle.bindTooltip(tooltipContent, { sticky: true, direction: 'top' });
+      } else {
+        const circle = L.circle(pos, {
+          radius: rc.coverageRadius,
+          color: color,
+          weight: 2,
+          opacity: 0.6,
+          fillColor: color,
+          fillOpacity: 0.08,
+          dashArray: '6, 4',
+          interactive: true,
+        }).addTo(map);
+        circle.bindTooltip(tooltipContent, { sticky: true, direction: 'top' });
+        circle.bringToBack();
+        rcCoverageCirclesRef.current.set(rc.id, circle);
+      }
+
+      // Center dot marker
+      const existingMarker = rcCoverageMarkersRef.current.get(rc.id);
+      if (existingMarker) {
+        existingMarker.setLatLng(pos);
+        existingMarker.setStyle({
+          fillColor: color,
+          color: '#fff',
+        });
+      } else {
+        const marker = L.circleMarker(pos, {
+          radius: 5,
+          fillColor: color,
+          color: '#fff',
+          weight: 2,
+          fillOpacity: 1,
+          opacity: 0.9,
+        }).addTo(map);
+        rcCoverageMarkersRef.current.set(rc.id, marker);
+      }
+    }
+  }, [receiverCoverage, showReceiverCoverage]);
 
   return (
     <div

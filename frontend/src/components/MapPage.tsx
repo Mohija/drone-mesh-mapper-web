@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import type { Drone, UserLocation } from '../types/drone';
-import { fetchDrones, setFleetCenter, fetchMissionZoneDefaults, type MissionZoneDefaults } from '../api';
+import { fetchDrones, setFleetCenter, fetchMissionZoneDefaults, fetchReceiverCoverage, type MissionZoneDefaults, type ReceiverCoverage } from '../api';
 import { useAuth } from '../AuthContext';
 import { buildGrid } from '../elevationGrid';
 import MapComponent from './MapComponent';
@@ -72,6 +72,27 @@ export default function MapPage() {
   useEffect(() => {
     fetchMissionZoneDefaults().then(setMzDefaults).catch(() => {});
   }, []);
+  const [showReceiverCoverage, setShowReceiverCoverage] = useState(false);
+  const [receiverCoverage, setReceiverCoverage] = useState<ReceiverCoverage[]>([]);
+
+  // Poll receiver coverage when toggle is enabled
+  useEffect(() => {
+    if (!showReceiverCoverage) {
+      setReceiverCoverage([]);
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const data = await fetchReceiverCoverage();
+        if (!cancelled) setReceiverCoverage(data);
+      } catch { /* silent */ }
+    };
+    load();
+    const interval = setInterval(load, 30000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [showReceiverCoverage]);
+
   const [mobileZoneMinAGL, setMobileZoneMinAGL] = useState('');
   const [mobileZoneMaxAGL, setMobileZoneMaxAGL] = useState('');
   const [nfzRadiusEnabled, setNfzRadiusEnabled] = useState(false);
@@ -325,6 +346,8 @@ export default function MapPage() {
         snappable={flightZones.snappable}
         onMapClickForZone={flightZones.addPoint}
         focusPosition={focusPosition}
+        receiverCoverage={receiverCoverage}
+        showReceiverCoverage={showReceiverCoverage}
       />
 
       {/* ═══ Mobile: Compact top bar ═══ */}
@@ -457,6 +480,13 @@ export default function MapPage() {
               <span style={{ fontSize: 16 }}>&#9634;</span>
               <span style={{ flex: 1 }}>Flugzonen</span>
               {flightZones.zones.length > 0 && <span style={{ ...mobileBadge, background: 'var(--accent)' }}>{flightZones.zones.length}</span>}
+            </button>
+
+            {/* Receiver Coverage */}
+            <button onClick={() => { setShowReceiverCoverage(prev => !prev); setMobileDrawerOpen(false); }} data-testid="receiver-coverage-toggle-mobile" style={mobileNavBtnStyle}>
+              <span style={{ fontSize: 16 }}>&#128225;</span>
+              <span style={{ flex: 1 }}>Empfänger-Abdeckung</span>
+              {showReceiverCoverage && <span style={{ ...mobileBadge, background: '#14b8a6' }}>{receiverCoverage.length || '...'}</span>}
             </button>
 
             <div style={{ height: 1, background: 'var(--border)' }} />
@@ -969,6 +999,45 @@ export default function MapPage() {
               missionZoneDefaults={mzDefaults ? { radius: mzDefaults.radius, color: mzDefaults.color } : undefined}
             />
           )}
+        </div>
+
+        {/* Receiver Coverage toggle */}
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => setShowReceiverCoverage(prev => !prev)}
+            title="Empfänger-Abdeckung"
+            data-testid="receiver-coverage-toggle"
+            style={{
+              background: showReceiverCoverage ? 'rgba(20, 184, 166, 0.15)' : 'var(--bg-secondary)',
+              border: `1px solid ${showReceiverCoverage ? '#14b8a6' : 'var(--border)'}`,
+              borderRadius: 8,
+              padding: '8px 12px',
+              cursor: 'pointer',
+              color: showReceiverCoverage ? '#14b8a6' : 'var(--text-secondary)',
+              fontSize: 14,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <span style={{ fontSize: 14 }}>&#128225;</span>
+            <span>Empfänger</span>
+            {showReceiverCoverage && receiverCoverage.length > 0 && (
+              <span style={{
+                background: '#14b8a6',
+                color: '#fff',
+                borderRadius: 8,
+                padding: '0 5px',
+                fontSize: 10,
+                fontWeight: 700,
+                minWidth: 16,
+                textAlign: 'center',
+              }}>
+                {receiverCoverage.length}
+              </span>
+            )}
+          </button>
         </div>
 
         {/* Settings button */}

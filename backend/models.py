@@ -318,6 +318,10 @@ class ReceiverNode(db.Model):
     last_build_merged_size = db.Column(db.Integer, nullable=True)
     last_build_config = db.Column(JSON, nullable=True)  # {backend_url, wifi_networks} for OTA rebuilds
 
+    # Coverage / antenna
+    coverage_radius = db.Column(db.Integer, nullable=True)  # meters, theoretical detection radius
+    antenna_type = db.Column(db.String(30), nullable=True)   # pcb, dipole_5dbi, omni_9dbi, panel_12dbi, yagi_15dbi
+
     # OTA update control
     ota_update_pending = db.Column(db.Boolean, default=False, nullable=False)
     ota_last_attempt = db.Column(db.Float, nullable=True)
@@ -366,6 +370,8 @@ class ReceiverNode(db.Model):
             "lastBuildVersion": self.last_build_version,
             "lastBuildMergedSize": self.last_build_merged_size,
             "lastBuildConfig": self.last_build_config,
+            "coverageRadius": self.coverage_radius,
+            "antennaType": self.antenna_type,
             "otaUpdatePending": self.ota_update_pending,
             "otaLastAttempt": self.ota_last_attempt,
             "otaLastResult": self.ota_last_result,
