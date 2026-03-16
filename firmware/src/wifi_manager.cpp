@@ -220,12 +220,17 @@ void WiFiManager::loop() {
     }
 
     // ── STA reconnect attempts ───────────────────────────────
-    // NEVER call WiFi.begin() while AP is active — it disrupts the entire WiFi
-    // stack (DNS stops responding, HTTP requests drop) causing 30-45s delays
-    // before iOS/Android shows the captive portal popup.
-    // The AP is only active because STA failed, so reconnecting is pointless.
-    // The user will provide new credentials via the portal → setStaCredentials().
-    if (_apActive) return;
+    // Do NOT call WiFi.begin() while a client is connected to the AP —
+    // it disrupts the WiFi stack and breaks the captive portal.
+    // But if no clients are connected, we MUST try to reconnect to known networks.
+    if (_apActive) {
+#ifdef ESP32
+        int apClients = WiFi.softAPgetStationNum();
+#else
+        int apClients = wifi_softap_get_station_num();
+#endif
+        if (apClients > 0) return;  // Someone is using the portal — don't disrupt
+    }
 
     if (_staConfigured && !connected && (now - _lastReconnectAttempt > WIFI_RECONNECT_MS)) {
         _lastReconnectAttempt = now;
