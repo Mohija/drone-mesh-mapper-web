@@ -87,14 +87,17 @@ def _point_near_polygon(lat, lon, polygon, radius_m, m_per_deg_lat, m_per_deg_lo
 
 
 def _point_in_polygon(lat, lon, polygon):
-    """Ray casting point-in-polygon test."""
+    """Ray casting point-in-polygon test.
+    polygon = [[lat, lon], ...], test point = (lat, lon).
+    Axis mapping: y=lat, x=lon.
+    """
     n = len(polygon)
     inside = False
     j = n - 1
     for i in range(n):
-        yi, xi = polygon[i]
-        yj, xj = polygon[j]
-        if ((yi > lon) != (yj > lon)) and (lat < (xj - xi) * (lon - yi) / (yj - yi) + xi):
+        yi, xi = polygon[i]   # yi=lat_i, xi=lon_i
+        yj, xj = polygon[j]   # yj=lat_j, xj=lon_j
+        if ((yi > lat) != (yj > lat)) and (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi):
             inside = not inside
         j = i
     return inside
