@@ -61,6 +61,8 @@ const SECTION_SUBS: Record<string, SubMeta[]> = {
     { id: 'erweiterte-tooltips', title: 'Erweiterte Tooltips' },
     { id: 'zonen-einstellungen', title: 'Einsatz-Zonen Einstellungen' },
     { id: 'log-viewer', title: 'Log-Viewer' },
+    { id: 'sicherheits-audit', title: 'Sicherheits-Audit' },
+    { id: 'wifi-netzwerk-verwaltung', title: 'WiFi-Netzwerk-Verwaltung' },
   ],
   receivers: [
     { id: 'statistik-leiste', title: 'Statistik-Leiste' },
@@ -866,6 +868,77 @@ function SectionAdmin() {
             <li><strong>Details</strong> — Einträge mit zusätzlichen Kontextdaten können aufgeklappt werden</li>
           </ul>
       </div>
+      <div id="sicherheits-audit">
+        <h3>Sicherheits-Audit</h3>
+          <p>
+            Unter <strong>Administration → Sicherheit</strong> befindet sich das Audit-Log, das sicherheitsrelevante
+            Benutzeraktionen protokolliert.
+          </p>
+          <h4>Aktivierung</h4>
+          <p>
+            Das Audit-Log kann pro Mandant in den <strong>Einstellungen</strong> aktiviert oder deaktiviert werden.
+            Standardmäßig ist es deaktiviert.
+          </p>
+          <h4>Protokollierte Aktionen</h4>
+          <ul>
+            <li><strong>Authentifizierung</strong> — Login (erfolgreich und fehlgeschlagen)</li>
+            <li><strong>Zonen</strong> — Erstellen, Bearbeiten, Löschen von Einsatz-Zonen</li>
+            <li><strong>Empfänger</strong> — Erstellen, Bearbeiten, Löschen, Aktivieren/Deaktivieren von Empfängern</li>
+            <li><strong>OTA-Updates</strong> — Auslösen und Abbrechen von Over-the-Air Updates</li>
+            <li><strong>Firmware-Builds</strong> — Erstellen neuer Firmware-Builds</li>
+            <li><strong>Benutzerverwaltung</strong> — Erstellen, Bearbeiten, Löschen, Passwort-Reset von Benutzern</li>
+            <li><strong>Einstellungen</strong> — Änderungen an Mandanten-Einstellungen</li>
+          </ul>
+          <h4>Speicher &amp; Export</h4>
+          <ul>
+            <li><strong>48h Ringspeicher</strong> — Einträge werden automatisch nach 48 Stunden gelöscht</li>
+            <li><strong>CSV-Export</strong> — Gefilterte oder alle Einträge als CSV-Datei herunterladen</li>
+            <li><strong>JSON-Export</strong> — Gefilterte oder alle Einträge als JSON-Datei herunterladen</li>
+          </ul>
+          <h4>Filter</h4>
+          <ul>
+            <li><strong>Aktion</strong> — Nach Aktionstyp filtern (z.B. nur Login-Versuche)</li>
+            <li><strong>Ressourcentyp</strong> — Nach betroffener Ressource filtern (Zone, Empfänger, Benutzer, ...)</li>
+            <li><strong>Benutzer</strong> — Nach ausführendem Benutzer filtern</li>
+            <li><strong>Freitextsuche</strong> — Durchsucht alle Felder</li>
+          </ul>
+          <h4>Zugriff</h4>
+          <p>
+            <strong>Mandanten-Admins</strong> sehen das Audit-Log ihres eigenen Mandanten.
+            <strong>Super-Admins</strong> können über den Mandanten-Switcher zwischen den Mandanten wechseln
+            und deren Audit-Logs einsehen.
+          </p>
+      </div>
+      <div id="wifi-netzwerk-verwaltung">
+        <h3>WiFi-Netzwerk-Verwaltung</h3>
+          <p>
+            Unter <strong>Administration → Einstellungen</strong> können pro Mandant bis zu <strong>3 WiFi-Netzwerke</strong> hinterlegt
+            werden. Die Passwörter werden serverseitig gespeichert und nie an das Frontend übertragen.
+          </p>
+          <h4>Mandant-WiFi im Flash-Wizard</h4>
+          <p>
+            Beim Erstellen eines neuen Empfängers im <strong>Flash-Wizard</strong> werden die hinterlegten Mandant-WiFi-Netzwerke
+            automatisch vorausgefüllt und mit einem <strong>„MANDANT"-Badge</strong> gekennzeichnet. Der Benutzer kann diese
+            übernehmen oder pro Empfänger individuelle WiFi-Daten eingeben.
+          </p>
+          <h4>Empfänger-spezifische Überschreibungen</h4>
+          <p>
+            Jeder Empfänger kann eigene WiFi-Zugangsdaten haben, die die Mandant-Defaults überschreiben.
+            Beim Firmware-Build gilt folgende <strong>Merge-Logik</strong>: Empfänger-spezifische Netzwerke haben Vorrang,
+            die verbleibenden Slots werden mit Mandant-Defaults aufgefüllt (maximal 3 Netzwerke insgesamt).
+          </p>
+          <h4>WiFi-Update per OTA</h4>
+          <p>
+            Beim Auslösen eines OTA-Updates kann optional die WiFi-Konfiguration mitaktualisiert werden.
+            Ein Konfigurationsschritt vor dem Build erlaubt es, neue WiFi-Zugangsdaten in die Firmware einzubetten,
+            die beim nächsten OTA-Update an den Empfänger übertragen werden.
+          </p>
+          <InfoBox type="info">
+            <strong>2,4 GHz Hinweis:</strong> Der ESP32 unterstützt ausschließlich 2,4 GHz WiFi-Netzwerke.
+            5 GHz-Netzwerke werden nicht erkannt. Bei iPhone-Hotspots muss unter Einstellungen → Persönlicher Hotspot
+            die Option <strong>„Kompatibilität maximieren"</strong> aktiviert sein.
+          </InfoBox>
+      </div>
     </div>
   );
 }
@@ -925,7 +998,7 @@ function SectionReceivers() {
             <li><strong>„App-Firmware" herunterladen</strong> — Lädt die gespeicherte Firmware erneut herunter (kein Rebuild nötig)</li>
             <li><strong>„Full-Flash (Merged)" herunterladen</strong> — Lädt das Merged Binary herunter (Bootloader + Partitions + Firmware in einer Datei, nur ESP32). Siehe Abschnitt <em>OTA-Updates & Merged Binary</em>.</li>
             <li><strong>„OTA Update senden"</strong> — Sendet ein Over-the-Air Update an den Empfänger (nur ESP32-S3/C3, nicht ESP8266). Das Update wird beim nächsten Heartbeat übermittelt. Siehe Abschnitt <em>OTA-Updates & Merged Binary</em>.</li>
-            <li><strong>„Neu bauen (neuer Key)"</strong> — Baut Firmware komplett neu mit frischem API-Key (alter Key wird ungültig, alter ESP muss neu geflasht werden)</li>
+            <li><strong>„Firmware erstellen"</strong> — Baut Firmware komplett neu. Optional mit neuem API-Key (Checkbox „Neuen API-Key generieren" — alter Key wird dann ungültig, alter ESP muss neu geflasht werden)</li>
             <li><strong>„Kommunikations-Log"</strong> — Zeigt Log-Einträge nur für diesen Empfänger (muss zuerst aktiviert werden)</li>
             <li><strong>„Deakt."</strong> — Deaktiviert den Empfänger (kann sich nicht mehr authentifizieren)</li>
             <li><strong>„Löschen"</strong> — Entfernt den Empfänger dauerhaft inkl. gespeicherter Firmware</li>
@@ -1033,7 +1106,7 @@ function SectionReceivers() {
             <li>Firmware-Quellcode in <code>firmware/src/</code> anpassen</li>
             <li>Neuen Eintrag in <code>firmware/changelog.json</code> hinzufügen (Version, Datum, Hardware, Änderungen)</li>
             <li>Alle betroffenen Empfänger zeigen automatisch das ⚠️-Badge</li>
-            <li>Pro Empfänger „Neu bauen" und dann „OTA Update" oder manuell flashen</li>
+            <li>Pro Empfänger „Firmware erstellen" und dann „OTA Update" oder manuell flashen</li>
           </ol>
         </div>
       </details>
@@ -1339,11 +1412,11 @@ esptool.py --chip esp8266 --port /dev/ttyUSB0 \\
 
       <h4>Erstinbetriebnahme</h4>
       <ol>
-        <li><strong>Strom anschließen</strong> — LED blinkt schnell (WLAN-Suche, ~15 Sekunden).</li>
+        <li><strong>Strom anschließen</strong> — LED blinkt schnell (WLAN-Suche, ~8 Sekunden).</li>
         <li><strong>WiFi-Verbindung</strong> —
           <ul>
             <li>Wenn WiFi-Daten in der Firmware eingebettet: Verbindet sich automatisch. LED wechselt zu Doppelblinken (Backend-Suche), dann dauerhaft an.</li>
-            <li>Wenn kein WiFi konfiguriert oder das Netzwerk nicht erreichbar: Nach 15 Sekunden startet der ESP
+            <li>Wenn kein WiFi konfiguriert oder das Netzwerk nicht erreichbar: Nach 8 Sekunden startet der ESP
               automatisch einen Hotspot <strong>„FlightArc-XXXX"</strong> (LED: langsames Pulsieren).</li>
           </ul>
         </li>
@@ -1370,6 +1443,7 @@ esptool.py --chip esp8266 --port /dev/ttyUSB0 \\
         </li>
         <li><strong>Automatische Wiederherstellung</strong> — Falls das WiFi ausfällt, startet der ESP nach 2 gescheiterten Versuchen (~20s)
           den Hotspot erneut (LED: langsames Pulsieren). Sobald das Netzwerk wieder da ist, verbindet er sich automatisch und der Hotspot geht aus.
+          <br />Bei mehreren konfigurierten Netzwerken probiert der ESP beim Start alle verfügbaren Netzwerke der Reihe nach (stärkstes Signal zuerst). Schlägt ein Netzwerk fehl (z.B. falsches Passwort), wird automatisch das nächste probiert (5 Sekunden Timeout pro Netzwerk).
           <br /><em>Hinweis: Während der Hotspot aktiv ist, pausiert der WiFi-Scanner (ODID-Erkennung). Dies ist eine Hardware-Einschränkung — der ESP kann nicht gleichzeitig als Access Point und im Promiscuous Mode scannen.</em></li>
         <li><strong>Online</strong> — LED leuchtet dauerhaft. Der Empfänger sendet Heartbeats (alle 30s) und Erkennungen (alle 2s).</li>
       </ol>

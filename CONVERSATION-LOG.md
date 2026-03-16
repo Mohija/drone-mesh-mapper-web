@@ -2,7 +2,7 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-16 (v1.7.0: Firmware Changelog, Versionsverwaltung, Update-Erkennung, nginx Receiver-Proxy)
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-16 (v1.8.0: Sicherheits-Audit, WiFi-Verwaltung, Captive Portal Optimierung)
 - **Typ:** Projekt | **Status:** Development
 
 ## Offene Aufgaben
@@ -24,6 +24,21 @@
 - [ ] Docker Deployment Package
 
 ## Änderungshistorie
+
+### 2026-03-16 - Sicherheits-Audit, WiFi-Verwaltung, Captive Portal Optimierung
+- **Sicherheits-Audit**: Neuer Admin-Tab "Sicherheit" mit Audit-Log für alle Benutzeraktionen (21 Audit-Punkte: Login, Zonen-CRUD, Empfänger-CRUD, OTA, Firmware-Build, Benutzer-CRUD, Einstellungen)
+- **Audit Toggle**: Pro Mandant ein/ausschaltbar in den Einstellungen. 48h-Ringspeicher, CSV/JSON-Export
+- **Mandant-WiFi-Verwaltung**: WiFi-Netzwerke pro Mandant in Einstellungen (max 3), automatische Vorausfüllung im Flash-Wizard mit "MANDANT"-Badge
+- **OTA WiFi-Update**: Optionale WiFi-Credential-Aktualisierung beim OTA-Update (Config-Schritt vor dem Build)
+- **Captive Portal**: 302-Redirects für alle OS, kein "Success" im HTML (iOS CNA Fix), DNS TTL=0, Erfolgsbildschirm mit Countdown
+- **WiFi-Manager**: Boot-Scan probiert alle konfigurierten Netzwerke (stärkstes zuerst, 5s Timeout pro Netzwerk). Reconnect auch bei aktivem AP wenn kein Portal-Client verbunden
+- **AP-Optimierung**: Timeout 8s (war 15s), kein WiFi.begin() bei Portal-Clients, Hotspot bleibt max 20s nach STA-Connect
+- **2,4-GHz-Hinweise**: Dokumentation und UI-Warnungen für 5GHz-Inkompatibilität, iPhone-Hotspot "Kompatibilität maximieren" Anleitung
+- **UI-Verbesserungen**: "Firmware erstellen" statt "Neu bauen", API-Key-Regeneration als optionale Checkbox
+- **HTTPS Error-Logging**: Firmware loggt HTTPS-Fehler mit HTTP-Statuscodes
+- **OTA Heap-Management**: BLE wird vor OTA gestoppt, 60s Watchdog-Timeout
+- **nginx Receiver-Proxy**: /api/receivers/ direkt an Port 3020 für externe Empfänger-Kommunikation
+- **Dateien**: backend/ (app.py, models.py, routes/, services/audit.py), firmware/src/ (wifi_manager, web_server, http_client, main, config), frontend/src/ (api.ts, HelpPage, ReceiverList, ReceiverFlashWizard, SettingsTab, AuditLogTab, AdminLayout, App.tsx), firmware/changelog.json
 
 ### 2026-03-16 - Firmware Changelog & Versionsverwaltung
 - **Firmware Changelog**: `firmware/changelog.json` mit semantischer Versionierung (1.0.0 → 1.1.0 → 1.2.0), Datum, Hardware-Typen und Änderungsliste pro Version
