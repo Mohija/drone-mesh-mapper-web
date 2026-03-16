@@ -919,7 +919,8 @@ function SectionReceivers() {
           </p>
           <ul>
             <li><strong>Klick auf Zeile</strong> — Erweitert die Detailansicht mit ID, Firmware-Version, IP, WiFi (SSID + dBm + Kanal), Heap, Uptime, Standort, Boot-Erkennungen</li>
-            <li><strong>Firmware-Build Info</strong> — Zeigt Datum, Größe, SHA-256 und Version (1.0.XXXXX) des letzten Builds</li>
+            <li><strong>Firmware-Build Info</strong> — Zeigt Datum, Größe, SHA-256 und Version des letzten Builds. Bei veralteter Firmware erscheint ein ⚠️-Badge mit Hinweis auf die neue Version</li>
+            <li><strong>Firmware-Verlauf</strong> — Chronologische Liste aller Firmware-Versionen mit Datum und Methode (Flash/OTA/Heartbeat)</li>
             <li><strong>„App-Firmware" herunterladen</strong> — Lädt die gespeicherte Firmware erneut herunter (kein Rebuild nötig)</li>
             <li><strong>„Full-Flash (Merged)" herunterladen</strong> — Lädt das Merged Binary herunter (Bootloader + Partitions + Firmware in einer Datei, nur ESP32). Siehe Abschnitt <em>OTA-Updates & Merged Binary</em>.</li>
             <li><strong>„OTA Update senden"</strong> — Sendet ein Over-the-Air Update an den Empfänger (nur ESP32-S3/C3, nicht ESP8266). Das Update wird beim nächsten Heartbeat übermittelt. Siehe Abschnitt <em>OTA-Updates & Merged Binary</em>.</li>
@@ -998,13 +999,41 @@ function SectionReceivers() {
         </div>
       </details>
       <details className="help-sub" id="firmware-versionierung">
-        <summary style={h3SummaryStyle}><span className="help-caret">&#9654;</span> Firmware-Versionierung</summary>
+        <summary style={h3SummaryStyle}><span className="help-caret">&#9654;</span> Firmware-Versionierung & Changelog</summary>
         <div style={subContentStyle}>
           <p>
-            Jeder Firmware-Build erhält eine eindeutige Version (<code>1.0.XXXXX</code>), die in der Empfänger-Detailansicht
-            unter „Firmware" sichtbar ist. Die Version wird vom ESP bei jedem Heartbeat an das Backend gemeldet und dient
-            der Erkennung erfolgreicher OTA-Updates. Details siehe Abschnitt <em>OTA-Updates & Merged Binary</em>.
+            Die Firmware verwendet <strong>semantische Versionierung</strong> (z.B. <code>1.2.0</code>),
+            definiert in <code>firmware/changelog.json</code>. Jeder Build erhält die aktuelle Version aus dem Changelog.
           </p>
+          <h4>Changelog</h4>
+          <p>
+            Der Firmware-Changelog ist in der <strong>Empfänger-Verwaltung</strong> als aufklappbares Element
+            sichtbar und zeigt pro Version: Datum, unterstützte Hardware-Typen und eine Liste der Änderungen.
+          </p>
+          <h4>Automatische Update-Erkennung</h4>
+          <p>
+            Das System vergleicht automatisch die Firmware-Version jedes Empfängers mit der aktuellen Version
+            aus dem Changelog für den jeweiligen Hardware-Typ:
+          </p>
+          <ul>
+            <li><strong>⚠️ Oranges Badge „Neue FW: x.x.x"</strong> — Die Firmware auf dem Empfänger ist veraltet.
+              Hover zeigt den Hinweis zum Updaten. Es muss zuerst neu gebaut und dann per OTA oder Flash aktualisiert werden.</li>
+            <li><strong>Blaues Badge „Update: x.x.x"</strong> — Ein aktueller Build existiert bereits, wurde aber noch
+              nicht auf den Empfänger übertragen. Ein OTA-Update reicht aus.</li>
+          </ul>
+          <h4>Firmware-Verlauf pro Empfänger</h4>
+          <p>
+            Jeder Versionswechsel wird protokolliert (bis zu 50 Einträge). In der erweiterten Empfänger-Ansicht
+            zeigt der <strong>Firmware-Verlauf</strong> alle bisherigen Versionen mit Datum und Methode
+            (Flash, OTA oder Heartbeat-Erkennung).
+          </p>
+          <h4>Neue Firmware-Version veröffentlichen</h4>
+          <ol>
+            <li>Firmware-Quellcode in <code>firmware/src/</code> anpassen</li>
+            <li>Neuen Eintrag in <code>firmware/changelog.json</code> hinzufügen (Version, Datum, Hardware, Änderungen)</li>
+            <li>Alle betroffenen Empfänger zeigen automatisch das ⚠️-Badge</li>
+            <li>Pro Empfänger „Neu bauen" und dann „OTA Update" oder manuell flashen</li>
+          </ol>
         </div>
       </details>
       <details className="help-sub" id="auto-refresh">

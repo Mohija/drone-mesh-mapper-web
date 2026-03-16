@@ -27,7 +27,7 @@ logger = logging.getLogger("simulation")
 # ─── Constants (matching firmware config.h) ────────────────────
 INGEST_INTERVAL_S = 0.5       # Event-based: send every 0.5s (firmware sends on detection, min 100ms)
 HEARTBEAT_INTERVAL_S = 30
-FIRMWARE_VERSION = "1.1.0-sim"
+FIRMWARE_VERSION = "1.2.0-sim"
 
 
 # ─── Simulated Drone ──────────────────────────────────────────

@@ -327,6 +327,8 @@ class ReceiverNode(db.Model):
     ota_last_attempt = db.Column(db.Float, nullable=True)
     ota_last_result = db.Column(db.String(100), nullable=True)
 
+    firmware_history = db.Column(JSON, nullable=True, default=list)
+
     created_at = db.Column(db.Float, default=_now, nullable=False)
     updated_at = db.Column(db.Float, default=_now, onupdate=_now, nullable=False)
 
@@ -375,6 +377,7 @@ class ReceiverNode(db.Model):
             "otaUpdatePending": self.ota_update_pending,
             "otaLastAttempt": self.ota_last_attempt,
             "otaLastResult": self.ota_last_result,
+            "firmwareHistory": self.firmware_history or [],
         }
         if include_key:
             result["apiKey"] = self.api_key

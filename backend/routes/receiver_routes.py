@@ -294,12 +294,22 @@ def receiver_stats():
     offline = sum(1 for n in nodes if n.status == "offline")
     total_detections = sum(n.total_detections for n in nodes)
 
+    # Latest firmware version per hardware type from changelog
+    changelog = _read_firmware_changelog()
+    latest_versions = {}
+    for hw in ["esp32-s3", "esp32-c3", "esp8266"]:
+        for v in changelog:
+            if hw in v.get("hardware", []):
+                latest_versions[hw] = v["version"]
+                break
+
     return jsonify({
         "total": len(nodes),
         "online": online,
         "stale": stale,
         "offline": offline,
         "totalDetections": total_detections,
+        "latestFirmwareVersions": latest_versions,
     })
 
 
@@ -467,7 +477,10 @@ def heartbeat():
     node.last_ip = request.remote_addr
 
     if "firmware_version" in data:
+        old_fw = node.firmware_version
         node.firmware_version = data["firmware_version"]
+        if old_fw != data["firmware_version"]:
+            _record_firmware_history(node, data["firmware_version"], "ota" if node.ota_update_pending else "heartbeat")
     if "wifi_ssid" in data:
         node.wifi_ssid = data["wifi_ssid"]
     if "wifi_rssi" in data:
@@ -600,6 +613,53 @@ def cancel_ota(node_id: str):
 FIRMWARE_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "firmware")
 FIRMWARE_STORE = os.path.join(os.path.dirname(__file__), "..", "data", "firmware")
 VENV_BIN = os.path.join(os.path.dirname(__file__), "..", "venv", "bin")
+
+
+# ─── Firmware changelog helpers ───────────────────────────────
+
+_changelog_cache = None
+_changelog_cache_time = 0
+
+
+def _read_firmware_changelog():
+    """Read firmware/changelog.json with 60s cache."""
+    global _changelog_cache, _changelog_cache_time
+    now = time.time()
+    if _changelog_cache is not None and now - _changelog_cache_time < 60:
+        return _changelog_cache
+    changelog_path = os.path.join(FIRMWARE_DIR, "changelog.json")
+    try:
+        with open(changelog_path, "r") as f:
+            data = json.load(f)
+        _changelog_cache = data.get("versions", [])
+    except (IOError, json.JSONDecodeError):
+        _changelog_cache = []
+    _changelog_cache_time = now
+    return _changelog_cache
+
+
+def _get_latest_version(hardware_type: str):
+    """Get the latest firmware version entry for a hardware type."""
+    for v in _read_firmware_changelog():
+        if hardware_type in v.get("hardware", []):
+            return v
+    return None
+
+
+def _record_firmware_history(node, version, method):
+    """Append a firmware version change to the receiver's history."""
+    if not version:
+        return
+    history = node.firmware_history or []
+    # Don't duplicate consecutive same-version entries
+    if history and history[0].get("version") == version:
+        return
+    history.insert(0, {
+        "version": version,
+        "timestamp": time.time(),
+        "method": method,
+    })
+    node.firmware_history = history[:50]
 
 # boot_app0.bin needed for merged binary
 BOOT_APP0_PATH = os.path.join(
@@ -828,6 +888,15 @@ def verify_firmware_binary(firmware_path, hw_type):
     return info
 
 
+@receiver_bp.route("/firmware/changelog", methods=["GET"])
+@login_required
+@role_required("tenant_admin")
+def firmware_changelog():
+    """Return the firmware changelog."""
+    versions = _read_firmware_changelog()
+    return jsonify({"versions": versions})
+
+
 @receiver_bp.route("/firmware/build", methods=["POST"])
 @login_required
 @role_required("tenant_admin")
@@ -902,7 +971,8 @@ def build_firmware():
             env[f"WIFI_SSID{suffix}"] = ""
             env[f"WIFI_PASS{suffix}"] = ""
     env["NODE_NAME"] = sanitize_node_name(node.name[:20])
-    build_version = f"1.1.{int(time.time()) % 100000}"
+    latest = _get_latest_version(hw)
+    build_version = latest["version"] if latest else "1.0.0"
     env["FIRMWARE_VERSION"] = build_version
     env["NODE_ID"] = node.id
 
@@ -963,6 +1033,7 @@ def build_firmware():
         node.last_build_size = fw_info["size"]
         node.last_build_sha256 = fw_info.get("sha256", "")
         node.last_build_version = build_version
+        _record_firmware_history(node, build_version, "build")
         node.last_build_config = {"backend_url": backend_url, "wifi_networks": wifi_networks}
         # Create merged binary (bootloader + partitions + app)
         merged_size = _create_merged_binary(node.id, hw, env_name)
@@ -1055,7 +1126,8 @@ def build_firmware_stream():
             build_env[f"WIFI_SSID{suffix}"] = ""
             build_env[f"WIFI_PASS{suffix}"] = ""
     build_env["NODE_NAME"] = sanitize_node_name(node.name[:20])
-    build_version = f"1.1.{int(time.time()) % 100000}"
+    latest = _get_latest_version(hw)
+    build_version = latest["version"] if latest else "1.0.0"
     build_env["FIRMWARE_VERSION"] = build_version
     build_env["NODE_ID"] = node.id
 
@@ -1136,6 +1208,7 @@ def build_firmware_stream():
                     n.last_build_size = fw_info["size"]
                     n.last_build_sha256 = fw_info.get("sha256", "")
                     n.last_build_version = build_version
+                    _record_firmware_history(n, build_version, "build")
                     n.last_build_config = {"backend_url": backend_url, "wifi_networks": wifi_networks}
                     merged_size = _create_merged_binary(n.id, hw, env_name)
                     n.last_build_merged_size = merged_size
@@ -1254,7 +1327,8 @@ def build_firmware_async():
             build_env[f"WIFI_SSID{suffix}"] = ""
             build_env[f"WIFI_PASS{suffix}"] = ""
     build_env["NODE_NAME"] = sanitize_node_name(node_name[:20])
-    build_version = f"1.1.{int(time.time()) % 100000}"
+    latest = _get_latest_version(hw)
+    build_version = latest["version"] if latest else "1.0.0"
     build_env["FIRMWARE_VERSION"] = build_version
     build_env["NODE_ID"] = node_id
 
@@ -1322,6 +1396,7 @@ def build_firmware_async():
                     n.last_build_size = fw_info["size"]
                     n.last_build_sha256 = fw_info.get("sha256", "")
                     n.last_build_version = build_version
+                    _record_firmware_history(n, build_version, "build")
                     n.last_build_config = {"backend_url": backend_url, "wifi_networks": wifi_networks}
                     merged_size = _create_merged_binary(n.id, hw, env_name)
                     n.last_build_merged_size = merged_size

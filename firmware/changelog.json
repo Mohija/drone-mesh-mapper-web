@@ -1,0 +1,37 @@
+{
+  "versions": [
+    {
+      "version": "1.2.0",
+      "date": "2026-03-16",
+      "hardware": ["esp32-s3", "esp32-c3", "esp8266"],
+      "changes": [
+        "HTTPS Error-Logging mit HTTP-Statuscodes",
+        "WiFi-Credentials werden im NVS gespeichert",
+        "Verbesserte WiFi-Reconnect-Stabilität"
+      ]
+    },
+    {
+      "version": "1.1.0",
+      "date": "2026-03-14",
+      "hardware": ["esp32-s3", "esp32-c3", "esp8266"],
+      "changes": [
+        "BLE + WiFi ODID Scanning (Open Drone ID)",
+        "OTA-Update Support (nur ESP32)",
+        "Multi-WiFi Support (bis zu 3 Netzwerke)",
+        "Captive Portal für Ersteinrichtung",
+        "LED-Statusanzeige (Boot/NoWiFi/NoBackend/Online)",
+        "Dual-Core Scanning auf ESP32-S3 (WiFi Core 0, BLE Core 1)"
+      ]
+    },
+    {
+      "version": "1.0.0",
+      "date": "2026-03-10",
+      "hardware": ["esp32-s3", "esp32-c3"],
+      "changes": [
+        "Erster Release: WiFi Beacon + NAN Erkennung",
+        "HTTP-Heartbeat und Ingest an FlightArc Backend",
+        "Grundlegende Scanner-Implementierung basierend auf colonelpanichacks/drone-mesh-mapper"
+      ]
+    }
+  ]
+}

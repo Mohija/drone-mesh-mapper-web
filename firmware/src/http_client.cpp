@@ -157,6 +157,12 @@ bool FlightArcClient::_httpPost(const String& path, const String& body) {
         http.end();
         _lastHttpCode = code;
         _lastSuccess = (code >= 200 && code < 300);
+        if (!_lastSuccess) {
+            _retryCount++;
+            Serial.printf("[HTTP] HTTPS POST %s failed: %d (retry %d)\n", path.c_str(), code, _retryCount);
+        } else {
+            _retryCount = 0;
+        }
         return _lastSuccess;
     }
   #endif
@@ -224,6 +230,7 @@ String FlightArcClient::_httpPostWithResponse(const String& path, const String& 
             _retryCount = 0;
         } else {
             _retryCount++;
+            Serial.printf("[HTTP] HTTPS POST %s failed: %d (retry %d)\n", path.c_str(), code, _retryCount);
         }
         http.end();
         return response;

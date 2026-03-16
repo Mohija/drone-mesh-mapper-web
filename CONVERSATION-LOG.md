@@ -2,7 +2,7 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-16 (v1.6.1: Event-basierte Datenübertragung, Logging-System, Mobile E2E, Handbuch)
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-16 (v1.7.0: Firmware Changelog, Versionsverwaltung, Update-Erkennung, nginx Receiver-Proxy)
 - **Typ:** Projekt | **Status:** Development
 
 ## Offene Aufgaben
@@ -24,6 +24,16 @@
 - [ ] Docker Deployment Package
 
 ## Änderungshistorie
+
+### 2026-03-16 - Firmware Changelog & Versionsverwaltung
+- **Firmware Changelog**: `firmware/changelog.json` mit semantischer Versionierung (1.0.0 → 1.1.0 → 1.2.0), Datum, Hardware-Typen und Änderungsliste pro Version
+- **Automatische Update-Erkennung**: Vergleich der Empfänger-Firmware mit aktueller Changelog-Version per Semver. Oranges ⚠️-Badge bei veralteter Firmware, blaues Badge bei vorhandenem aber nicht geflashtem Build
+- **Firmware-Verlauf**: Pro Empfänger wird jeder Versionswechsel protokolliert (Build/OTA/Heartbeat) mit Zeitstempel, sichtbar in der erweiterten Ansicht
+- **Changelog-Viewer**: Aufklappbar in der Empfänger-Verwaltung mit allen Versionen und Änderungen
+- **Build-Versionen aus Changelog**: Builds verwenden jetzt die Version aus dem Changelog statt Timestamp-basierter Versionen
+- **HTTPS Error-Logging**: Firmware loggt jetzt auch HTTPS-Fehler mit HTTP-Statuscodes (war vorher stumm)
+- **nginx Receiver-Proxy**: `/api/receivers/` wird direkt an FlightArc-Backend (Port 3020) geleitet, ermöglicht externe Empfänger-Kommunikation über Cloudflare Tunnel
+- **Dateien**: firmware/changelog.json (neu), backend/routes/receiver_routes.py, backend/models.py, backend/app.py, frontend/src/api.ts, frontend/src/components/admin/ReceiverList.tsx, frontend/src/components/HelpPage.tsx, firmware/src/http_client.cpp, /etc/nginx/sites-available/labcore-hub
 
 ### 2026-03-16 - Empfänger-Planungstool: Automatische Abdeckungsberechnung
 - **Planungstool**: Neuer Admin-Tab "Planung" berechnet optimale Empfänger-Positionen für ein Polygon

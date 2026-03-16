@@ -15,11 +15,22 @@ import {
   startBuildAsync,
   pollBuildStatus,
   updateReceiverCoverage,
+  fetchFirmwareChangelog,
 } from '../../api';
-import type { ReceiverNode, ReceiverStats, ConnectionLogEntry } from '../../api';
+import type { ReceiverNode, ReceiverStats, ConnectionLogEntry, FirmwareChangelogEntry } from '../../api';
 import ReceiverFlashWizard from './ReceiverFlashWizard';
 import AdminTooltip from './AdminTooltip';
 import { useIsMobile } from '../../useIsMobile';
+
+function semverCompare(a: string, b: string): number {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] || 0) < (pb[i] || 0)) return -1;
+    if ((pa[i] || 0) > (pb[i] || 0)) return 1;
+  }
+  return 0;
+}
 
 const HARDWARE_TYPES = [
   { value: 'esp32-s3', label: 'ESP32-S3', desc: 'BLE + WiFi ODID, HTTPS | DIO 8MB', recommended: true },
@@ -245,6 +256,7 @@ function ConnectionLogViewer({ entries, receiverFilter, onClear, onClose, receiv
 export default function ReceiverList() {
   const [receivers, setReceivers] = useState<ReceiverNode[]>([]);
   const [stats, setStats] = useState<ReceiverStats | null>(null);
+  const [changelog, setChangelog] = useState<FirmwareChangelogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -303,9 +315,14 @@ export default function ReceiverList() {
 
   const loadData = useCallback(async () => {
     try {
-      const [r, s] = await Promise.all([fetchReceivers(), fetchReceiverStats()]);
+      const [r, s, cl] = await Promise.all([
+        fetchReceivers(),
+        fetchReceiverStats(),
+        fetchFirmwareChangelog().catch(() => ({ versions: [] as FirmwareChangelogEntry[] })),
+      ]);
       setReceivers(r);
       setStats(s);
+      setChangelog(cl.versions);
       setError(null);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Laden fehlgeschlagen');
@@ -634,6 +651,38 @@ export default function ReceiverList() {
             </div>
           ))}
         </div>
+      )}
+
+      {/* Firmware Changelog */}
+      {changelog.length > 0 && (
+        <details style={{ marginBottom: 16, background: 'var(--bg-secondary)', borderRadius: 8, border: '1px solid var(--border)', overflow: 'hidden' }}>
+          <summary style={{
+            cursor: 'pointer', padding: '10px 14px', fontSize: 13,
+            color: 'var(--text-secondary)', fontWeight: 500,
+            display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            Firmware Changelog
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              (aktuell: {changelog[0]?.version})
+            </span>
+          </summary>
+          <div style={{ padding: '0 14px 14px', maxHeight: 300, overflowY: 'auto' }}>
+            {changelog.map(entry => (
+              <div key={entry.version} style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <strong style={{ fontSize: 13 }}>v{entry.version}</strong>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{entry.date}</span>
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)', background: 'var(--bg-primary)', padding: '1px 4px', borderRadius: 3 }}>
+                    {entry.hardware.join(', ')}
+                  </span>
+                </div>
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: 'var(--text-secondary)' }}>
+                  {entry.changes.map((c, i) => <li key={i} style={{ marginBottom: 2 }}>{c}</li>)}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </details>
       )}
 
       {error && (
@@ -968,6 +1017,36 @@ export default function ReceiverList() {
                 <span>{STATUS_LABELS[node.status]} &middot; {timeAgo(node.lastHeartbeat)}</span>
                 <span style={{ color: '#14b8a6' }}>{node.totalDetections} Erkennungen</span>
                 {node.firmwareVersion && <span>FW: {node.firmwareVersion}</span>}
+                {(() => {
+                  const latestForHw = stats?.latestFirmwareVersions?.[node.hardwareType];
+                  const isOutdated = latestForHw && node.firmwareVersion
+                    && semverCompare(node.firmwareVersion, latestForHw) < 0;
+                  const buildIsLatest = latestForHw && node.lastBuildVersion
+                    && semverCompare(node.lastBuildVersion, latestForHw) >= 0;
+                  const buildNewer = node.lastBuildVersion && node.firmwareVersion
+                    && node.lastBuildVersion !== node.firmwareVersion;
+                  // Orange badge: firmware is outdated (regardless of build state)
+                  if (isOutdated) return (
+                    <span data-testid={`receiver-update-badge-${node.id}`} title="Es gibt eine neue Firmware-Version, bitte updaten!" style={{
+                      background: 'rgba(251,146,60,0.15)', color: '#fb923c',
+                      padding: '1px 6px', borderRadius: 4, fontWeight: 600,
+                      fontSize: 11, whiteSpace: 'nowrap', cursor: 'default',
+                    }}>
+                      ⚠️ Neue FW: {latestForHw}
+                    </span>
+                  );
+                  // Blue badge: build exists that's newer than running firmware (and build is current)
+                  if (buildNewer && buildIsLatest) return (
+                    <span data-testid={`receiver-update-badge-${node.id}`} style={{
+                      background: 'rgba(59,130,246,0.15)', color: '#3b82f6',
+                      padding: '1px 6px', borderRadius: 4, fontWeight: 600,
+                      fontSize: 11, whiteSpace: 'nowrap',
+                    }}>
+                      Update: {node.lastBuildVersion}
+                    </span>
+                  );
+                  return null;
+                })()}
               </div>
 
               {/* Location info */}
@@ -1039,16 +1118,26 @@ export default function ReceiverList() {
                 >
                   {node.lastBuildAt ? 'Neu bauen' : 'Firmware'}
                 </button>
-                {node.status !== 'offline' && node.hardwareType !== 'esp8266' && !node.otaUpdatePending && (
-                  <button
-                    data-testid={`receiver-ota-${node.id}`}
-                    disabled={otaLoadingId === node.id}
-                    onClick={() => handleOtaFlow(node)}
-                    style={{ ...mobileBtnStyle, borderColor: '#3b82f6', color: '#3b82f6', opacity: otaLoadingId === node.id ? 0.6 : 1 }}
-                  >
-                    {otaLoadingId === node.id ? 'OTA...' : 'OTA'}
-                  </button>
-                )}
+                {node.status !== 'offline' && node.hardwareType !== 'esp8266' && !node.otaUpdatePending && (() => {
+                  const latestForHw = stats?.latestFirmwareVersions?.[node.hardwareType];
+                  const hasUpdate = (node.lastBuildVersion && node.firmwareVersion && node.lastBuildVersion !== node.firmwareVersion)
+                    || (latestForHw && node.firmwareVersion && semverCompare(node.firmwareVersion, latestForHw) < 0);
+                  return (
+                    <button
+                      data-testid={`receiver-ota-${node.id}`}
+                      disabled={otaLoadingId === node.id}
+                      onClick={() => handleOtaFlow(node)}
+                      style={{
+                        ...mobileBtnStyle,
+                        borderColor: '#3b82f6', color: '#3b82f6',
+                        opacity: otaLoadingId === node.id ? 0.6 : 1,
+                        ...(hasUpdate ? { background: 'rgba(59,130,246,0.15)', fontWeight: 700 } : {}),
+                      }}
+                    >
+                      {otaLoadingId === node.id ? 'OTA...' : hasUpdate ? 'OTA Update!' : 'OTA'}
+                    </button>
+                  );
+                })()}
                 <button
                   data-testid={`receiver-delete-${node.id}`}
                   onClick={() => handleDelete(node.id)}
@@ -1538,6 +1627,27 @@ export default function ReceiverList() {
                             color: locMsg.includes('Fehler') ? '#ef4444' : '#22c55e',
                           }}>
                             {locMsg}
+                          </div>
+                        )}
+                        {/* Firmware-Verlauf */}
+                        {node.firmwareHistory?.length > 0 && (
+                          <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>Firmware-Verlauf</div>
+                            {node.firmwareHistory.slice(0, 10).map((h, i) => (
+                              <div key={i} style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', gap: 8, marginBottom: 2 }}>
+                                <span style={{ fontFamily: 'monospace' }}>{h.version}</span>
+                                <span style={{ color: 'var(--text-muted)' }}>
+                                  {new Date(h.timestamp * 1000).toLocaleDateString('de-DE')}
+                                </span>
+                                <span style={{
+                                  fontSize: 10, padding: '0 4px', borderRadius: 3,
+                                  background: h.method === 'ota' ? 'rgba(59,130,246,0.1)' : h.method === 'build' ? 'rgba(20,184,166,0.1)' : 'rgba(148,163,184,0.1)',
+                                  color: h.method === 'ota' ? '#3b82f6' : h.method === 'build' ? '#14b8a6' : 'var(--text-muted)',
+                                }}>
+                                  {h.method === 'build' ? 'Flash' : h.method === 'ota' ? 'OTA' : 'Update'}
+                                </span>
+                              </div>
+                            ))}
                           </div>
                         )}
                       </td>

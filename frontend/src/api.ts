@@ -729,6 +729,11 @@ export interface ReceiverNode {
   otaUpdatePending: boolean;
   otaLastAttempt: number | null;
   otaLastResult: string | null;
+  firmwareHistory: Array<{
+    version: string;
+    timestamp: number;
+    method: 'build' | 'ota' | 'heartbeat';
+  }>;
 }
 
 export interface ReceiverStats {
@@ -737,6 +742,20 @@ export interface ReceiverStats {
   stale: number;
   offline: number;
   totalDetections: number;
+  latestFirmwareVersions: Record<string, string>;
+}
+
+export interface FirmwareChangelogEntry {
+  version: string;
+  date: string;
+  hardware: string[];
+  changes: string[];
+}
+
+export async function fetchFirmwareChangelog(): Promise<{ versions: FirmwareChangelogEntry[] }> {
+  const res = await authFetch(`${API_BASE}/receivers/firmware/changelog`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
 }
 
 export async function fetchReceivers(): Promise<ReceiverNode[]> {
