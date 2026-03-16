@@ -25,6 +25,13 @@
 
 ## Änderungshistorie
 
+### 2026-03-16 - DIPUL WMS: Alle 34 Layer integriert
+- **Vollständige DIPUL-Integration**: Alle 34 verfügbaren WMS-Layer jetzt konfiguriert (vorher nur 17)
+- **2 neue Kategorien**: "Gewässer & Schifffahrt" (Binnenwasserstraßen, Seewasserstraßen, Schifffahrtsanlagen) und "Wohn- & Freizeitgebiete" (Wohngrundstücke, Freibäder)
+- **17 neue Layer**: Bahnanlagen, Bundesstraßen, Industrieanlagen, Umspannwerke, Polizei, Behörden, Diplomatische Vertretungen, Internationale Organisationen, Sicherheitsbehörden, BSL-4-Labore, Hängegleiter, Inaktive temporäre Einschränkungen, Binnenwasserstraßen, Seewasserstraßen, Schifffahrtsanlagen, Wohngrundstücke, Freibäder
+- **HelpPage**: NFZ-Kategorien-Tabelle auf 7 Kategorien mit allen Layern aktualisiert
+- **Dateien:** frontend/src/config/noFlyZones.ts, frontend/src/components/NoFlyZonesPanel.tsx, frontend/src/components/HelpPage.tsx, frontend/e2e/nofly-zones.spec.ts
+
 ### 2026-03-16 - v1.6.1: Event-basierte Datenübertragung, Logging-System, Mobile E2E-Tests, Handbuch
 - **Event-basierte Datenübertragung**: Firmware v1.1.0 sendet Detections sofort bei Erkennung (min 100ms zwischen Sends statt fixer 2s-Batch). Simulation (0.5s) und Dummy-Receiver synchron angepasst.
 - **Bug-Fix**: tenant_admin konnte andere tenant_admin erstellen (Berechtigungsprüfung in admin_routes.py)
@@ -1688,7 +1695,7 @@ Phase 2 und Phase 3 können parallel laufen. Phase 4 braucht Phase 2 + 3. Tests 
 - Drohnen-Positionen basierend auf dem drone-mesh-mapper Tester-Format
 - Standard-Zentrum: Bielefeld (52.0302, 8.5325) - kann über Geolocation oder ENV angepasst werden
 - Polling-Intervall: 2s (normal), 5s (>100 Drohnen)
-- DIPUL WMS: 34 Layer gesamt (17 konfiguriert), Daten von DFS Deutsche Flugsicherung, aktualisiert im AIRAC-Zyklus (28 Tage)
+- DIPUL WMS: Alle 34 Layer konfiguriert in 7 Kategorien, Daten von DFS Deutsche Flugsicherung, aktualisiert im AIRAC-Zyklus (28 Tage)
 - DIPUL WMS CORS erlaubt (`Access-Control-Allow-Origin: *`) - GetFeatureInfo direkt vom Frontend moeglich
 - DIPUL WMS rendert in dunklen Farben → CSS `filter: invert(1) hue-rotate(180deg) brightness(1.3)` nur im Dark Theme, Light Theme zeigt Originalfarben
 - Hover-Tooltip: Zeigt Zonenname, Typ, Hoehengrenzen, Rechtsgrundlage. Klick-Popup: Vollstaendige Details inkl. Referenz

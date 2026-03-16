@@ -35,6 +35,8 @@ test.describe('No-Fly Zones UI', () => {
     await expect(panel.locator('[data-testid="nofly-category-infrastructure"]')).toBeVisible();
     await expect(panel.locator('[data-testid="nofly-category-sensitive"]')).toBeVisible();
     await expect(panel.locator('[data-testid="nofly-category-temporary"]')).toBeVisible();
+    await expect(panel.locator('[data-testid="nofly-category-waterways"]')).toBeVisible();
+    await expect(panel.locator('[data-testid="nofly-category-residential"]')).toBeVisible();
   });
 
   test('panel shows individual layers', async ({ page }) => {

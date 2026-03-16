@@ -61,7 +61,7 @@ export default function NoFlyZonesPanel({
         borderRadius: 10,
         padding: 12,
         minWidth: 260,
-        maxHeight: 420,
+        maxHeight: 520,
         overflowY: 'auto',
         zIndex: 2000,
         boxShadow: '0 8px 24px rgba(0,0,0,0.4)',

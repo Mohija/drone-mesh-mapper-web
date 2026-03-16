@@ -610,8 +610,8 @@ function SectionNFZ() {
     <div>
       <h2>Flugverbotszonen (NFZ)</h2>
       <p>
-        FlightArc kann offizielle Flugverbotszonen aus dem DIPUL-WMS-Dienst (Deutsche Informationsplattform
-        für unbemannte Luftfahrt) direkt auf der Karte anzeigen.
+        FlightArc zeigt alle 34 offiziellen DIPUL-Layer (Deutsche Informationsplattform
+        für unbemannte Luftfahrt) in 7 Kategorien direkt auf der Karte an. Daten von DFS Deutsche Flugsicherung.
       </p>
       <div id="nfz-panel">
         <h3>NFZ-Panel öffnen</h3>
@@ -624,11 +624,13 @@ function SectionNFZ() {
               <tr><th style={thStyle}>Kategorie</th><th style={thStyle}>Layer</th></tr>
             </thead>
             <tbody>
-              <tr><td style={tdStyle}><strong>Luftfahrt</strong></td><td style={tdStyle}>Flughäfen, Kontrollzonen, Flugplätze, Hubschrauberlandeplätze, Segelfluggelände</td></tr>
-              <tr><td style={tdStyle}><strong>Natur</strong></td><td style={tdStyle}>Naturschutzgebiete, Nationalparks, Vogelschutzgebiete, FFH-Gebiete</td></tr>
-              <tr><td style={tdStyle}><strong>Infrastruktur</strong></td><td style={tdStyle}>Industrieanlagen, Kraftwerke, Gefängnisse, Krankenhäuser, Bundesfernstraßen</td></tr>
-              <tr><td style={tdStyle}><strong>Sensibel</strong></td><td style={tdStyle}>Botschaften, Polizei/Bundespolizei, Verfassungsorgane, Militär, Behörden</td></tr>
-              <tr><td style={tdStyle}><strong>Temporär</strong></td><td style={tdStyle}>NOTAM (temporäre Flugbeschränkungen), ED-R Gebiete</td></tr>
+              <tr><td style={tdStyle}><strong>Luftfahrt</strong></td><td style={tdStyle}>Flughäfen, Flugplätze, Kontrollzonen, Flugbeschränkungsgebiete, Modellflugplätze, Hängegleiter-Gelände</td></tr>
+              <tr><td style={tdStyle}><strong>Temporär</strong></td><td style={tdStyle}>Temporäre Betriebseinschränkungen (aktiv und inaktiv)</td></tr>
+              <tr><td style={tdStyle}><strong>Naturschutz</strong></td><td style={tdStyle}>Naturschutzgebiete, Nationalparks, Vogelschutzgebiete, FFH-Gebiete</td></tr>
+              <tr><td style={tdStyle}><strong>Infrastruktur</strong></td><td style={tdStyle}>Kraftwerke, Umspannwerke, Stromleitungen, Windkraftanlagen, Industrieanlagen, Bundesautobahnen, Bundesstraßen, Bahnanlagen</td></tr>
+              <tr><td style={tdStyle}><strong>Gewässer &amp; Schifffahrt</strong></td><td style={tdStyle}>Binnenwasserstraßen, Seewasserstraßen, Schifffahrtsanlagen</td></tr>
+              <tr><td style={tdStyle}><strong>Sensible Bereiche</strong></td><td style={tdStyle}>Militär, Polizei, Sicherheitsbehörden, Bundes-/Landesbehörden, Diplomatische Vertretungen, Internationale Organisationen, Krankenhäuser, JVA, Hochsicherheitslabore (BSL-4)</td></tr>
+              <tr><td style={tdStyle}><strong>Wohn- &amp; Freizeit</strong></td><td style={tdStyle}>Wohngrundstücke, Freibäder &amp; Badestrände</td></tr>
             </tbody>
           </table>
       </div>
