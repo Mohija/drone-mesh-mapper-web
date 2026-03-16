@@ -8,6 +8,7 @@ from database import db
 from auth import (
     check_password, generate_tokens, login_required, decode_token, hash_password,
 )
+from services.audit import audit_log
 
 logger = logging.getLogger("auth")
 
@@ -76,6 +77,11 @@ def login():
 
     # Update last_login
     user.last_login = time.time()
+
+    # Set g context for audit_log (not set during login since @login_required is not used)
+    g.current_user = user
+    g.tenant_id = tenant_id
+    audit_log("login", "auth", user.id, user.username)
     db.session.commit()
 
     tokens = generate_tokens(user, tenant_id=tenant_id)
@@ -161,6 +167,8 @@ def switch_tenant():
     user_dict["effective_role"] = effective_role or user.role
 
     logger.info("User %s switched to tenant %s", user.username, tenant_id)
+    audit_log("switch_tenant", "auth", data["tenant_id"])
+    db.session.commit()
 
     return jsonify({
         **tokens,

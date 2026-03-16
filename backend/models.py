@@ -38,6 +38,7 @@ class Tenant(db.Model):
     violation_records = db.relationship("ViolationRecord", backref="tenant", cascade="all, delete-orphan", lazy=True)
     receiver_nodes = db.relationship("ReceiverNode", backref="tenant", cascade="all, delete-orphan", lazy=True)
     system_logs = db.relationship("SystemLog", backref="tenant", cascade="all, delete-orphan", lazy=True)
+    audit_logs = db.relationship("AuditLog", backref="tenant", cascade="all, delete-orphan", lazy=True)
 
     def to_dict(self):
         return {
@@ -154,6 +155,7 @@ class TenantSettings(db.Model):
     mission_zone_max_alt_agl = db.Column(db.Float, nullable=True)
     log_level = db.Column(db.String(10), nullable=True)
     wifi_networks = db.Column(JSON, nullable=True, default=list)  # [{ssid, password}] max 3
+    audit_enabled = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.Float, default=_now, nullable=False)
     updated_at = db.Column(db.Float, default=_now, onupdate=_now, nullable=False)
 
@@ -177,6 +179,7 @@ class TenantSettings(db.Model):
             "mission_zone_max_alt_agl": self.mission_zone_max_alt_agl,
             "log_level": self.log_level or "info",
             "wifi_networks": masked_wifi,
+            "audit_enabled": self.audit_enabled,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
@@ -413,6 +416,38 @@ class SystemLog(db.Model):
             "module": self.module,
             "message": self.message,
             "details": self.details,
+        }
+
+
+class AuditLog(db.Model):
+    """Audit trail for user actions. Immutable — entries are never modified or deleted."""
+    __tablename__ = "audit_logs"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    tenant_id = db.Column(db.String(8), db.ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    timestamp = db.Column(db.Float, nullable=False, default=_now)
+    user_id = db.Column(db.String(8), nullable=False)
+    username = db.Column(db.String(100), nullable=False)
+    action = db.Column(db.String(50), nullable=False)  # create, update, delete, login, logout, switch_tenant
+    resource_type = db.Column(db.String(50), nullable=False)  # zone, receiver, user, settings, tenant, auth
+    resource_id = db.Column(db.String(100), nullable=True)  # ID of affected resource
+    resource_name = db.Column(db.String(200), nullable=True)  # Human-readable name
+    details = db.Column(JSON, nullable=True)  # Changed fields, old/new values
+    ip_address = db.Column(db.String(45), nullable=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "tenantId": self.tenant_id,
+            "timestamp": self.timestamp,
+            "userId": self.user_id,
+            "username": self.username,
+            "action": self.action,
+            "resourceType": self.resource_type,
+            "resourceId": self.resource_id,
+            "resourceName": self.resource_name,
+            "details": self.details,
+            "ipAddress": self.ip_address,
         }
 
 

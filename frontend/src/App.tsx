@@ -15,6 +15,7 @@ import SimulationTab from './components/admin/SimulationTab';
 import SettingsTab from './components/admin/SettingsTab';
 import LogViewerTab from './components/admin/LogViewerTab';
 import PlanningTab from './components/admin/PlanningTab';
+import AuditLogTab from './components/admin/AuditLogTab';
 
 export default function App() {
   return (
@@ -34,6 +35,7 @@ export default function App() {
         <Route path="simulation" element={<SimulationTab />} />
         <Route path="logs" element={<LogViewerTab />} />
         <Route path="planning" element={<PlanningTab />} />
+        <Route path="audit" element={<AuditLogTab />} />
       </Route>
     </Routes>
   );

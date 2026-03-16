@@ -11,6 +11,7 @@ const navItems = [
   { to: '/admin/settings', label: 'Einstellungen' },
   { to: '/admin/simulation', label: 'Simulation' },
   { to: '/admin/logs', label: 'Logs' },
+  { to: '/admin/audit', label: 'Sicherheit' },
   { to: '/admin/planning', label: 'Planung' },
 ];
 

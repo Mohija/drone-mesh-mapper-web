@@ -20,6 +20,7 @@ from providers import ProviderRegistry
 from trail_archive import TrailArchiveManager
 from flight_zones import FlightZoneManager
 from auth import seed_super_admin, login_required, role_required
+from services.audit import audit_log
 from routes import register_blueprints
 
 # Logging setup
@@ -172,15 +173,37 @@ with app.app_context():
             pass  # Column already exists
     db.session.commit()
 
-    # Migration: add wifi_networks to tenant_settings
+    # Migration: add wifi_networks + audit_enabled to tenant_settings
     for col_stmt in [
         "ALTER TABLE tenant_settings ADD COLUMN wifi_networks TEXT",
+        "ALTER TABLE tenant_settings ADD COLUMN audit_enabled BOOLEAN DEFAULT 0",
     ]:
         try:
             db.session.execute(db.text(col_stmt))
         except Exception:
             pass  # Column already exists
     db.session.commit()
+
+    # Migration: audit_logs table
+    try:
+        db.session.execute(db.text("""
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tenant_id VARCHAR(8) NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                timestamp REAL NOT NULL,
+                user_id VARCHAR(8) NOT NULL,
+                username VARCHAR(100) NOT NULL,
+                action VARCHAR(50) NOT NULL,
+                resource_type VARCHAR(50) NOT NULL,
+                resource_id VARCHAR(100),
+                resource_name VARCHAR(200),
+                details TEXT,
+                ip_address VARCHAR(45)
+            )
+        """))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
 
 # Attach database logging handler
 from services.db_logger import DatabaseLogHandler
@@ -340,6 +363,8 @@ def set_fleet_center():
     tid = g.tenant_id or DEFAULT_TENANT_ID
     logger.info("POST /api/fleet/center tenant=%s - recentering to lat=%.6f lon=%.6f", tid, data["lat"], data["lon"], extra={"tenant_id": tid})
     settings.update({"center_lat": data["lat"], "center_lon": data["lon"]}, tenant_id=tid)
+    audit_log("update", "settings", None, "Fleet Center", {"lat": data["lat"], "lon": data["lon"]})
+    db.session.commit()
     return jsonify({"status": "ok", "center": {"lat": data["lat"], "lon": data["lon"]}})
 
 
@@ -361,6 +386,8 @@ def update_settings():
         return jsonify({"error": "Request body required"}), 400
     tid = g.tenant_id or DEFAULT_TENANT_ID
     settings.update(data, tenant_id=tid)
+    audit_log("update", "settings", None, "Data Source Settings")
+    db.session.commit()
     return jsonify(settings.get_all(tenant_id=tid))
 
 
@@ -472,6 +499,7 @@ def update_wifi_networks():
     ts.wifi_networks = resolved
     # Bump settings version for client sync
     settings._bump_version(tid)
+    audit_log("update", "settings", None, "WiFi Networks", {"count": len(resolved)})
     db.session.commit()
 
     masked = [{"ssid": n["ssid"], "has_password": bool(n["password"])} for n in resolved]
@@ -925,6 +953,8 @@ def create_zone():
         username = g.current_user.username if hasattr(g, 'current_user') else None
         zone = zones.create_zone(data, tenant_id=g.tenant_id, created_by=username)
         zone_logger.info("POST /api/zones - created %s: %s by %s", zone["id"], zone["name"], username, extra={"tenant_id": g.tenant_id})
+        audit_log("create", "zone", zone["id"], zone["name"], {"polygon_points": len(data.get("polygon", []))})
+        db.session.commit()
         return jsonify(zone), 201
     except ValueError as e:
         zone_logger.warning("Zone creation rejected: %s", e)
@@ -1027,6 +1057,8 @@ def create_mission_zone():
             "maxAltitudeAGL": mz_defaults["maxAltitudeAGL"],
         }, tenant_id=g.tenant_id, created_by=username)
         zone_logger.info("POST /api/zones/mission - created %s: %s at (%.6f, %.6f) by %s", zone["id"], name, lat, lon, username)
+        audit_log("create", "zone", zone["id"], name, {"type": "mission", "lat": lat, "lon": lon})
+        db.session.commit()
         result = zone
         if resolved_address:
             result["resolved_address"] = resolved_address
@@ -1122,6 +1154,8 @@ def update_zone(zone_id: str):
         if not zone:
             return jsonify({"error": "Zone not found"}), 404
         zone_logger.info("PUT /api/zones/%s - updated by %s", zone_id, username, extra={"tenant_id": g.tenant_id})
+        audit_log("update", "zone", zone_id, data.get("name"), {"changes": list(data.keys())})
+        db.session.commit()
         return jsonify(zone)
     except ValueError as e:
         zone_logger.warning("Zone update rejected: %s", e)
@@ -1133,8 +1167,13 @@ def update_zone(zone_id: str):
 @role_required("tenant_admin")
 def delete_zone(zone_id: str):
     """Delete a flight zone."""
+    # Get zone name before deletion for audit trail
+    zone_info = zones.get_zone(zone_id, tenant_id=g.tenant_id)
+    zone_name = zone_info["name"] if zone_info else None
     if zones.delete_zone(zone_id, tenant_id=g.tenant_id):
         zone_logger.info("DELETE /api/zones/%s - deleted", zone_id, extra={"tenant_id": g.tenant_id})
+        audit_log("delete", "zone", zone_id, zone_name)
+        db.session.commit()
         return jsonify({"status": "deleted"})
     return jsonify({"error": "Zone not found"}), 404
 
@@ -1154,6 +1193,8 @@ def assign_drones_to_zone(zone_id: str):
     if not zone:
         return jsonify({"error": "Zone not found"}), 404
     zone_logger.info("POST /api/zones/%s/assign - %d drone(s)", zone_id, len(drone_ids))
+    audit_log("update", "zone", zone_id, None, {"action": "assign", "drones": drone_ids})
+    db.session.commit()
     return jsonify(zone)
 
 
@@ -1172,6 +1213,8 @@ def unassign_drones_from_zone(zone_id: str):
     if not zone:
         return jsonify({"error": "Zone not found"}), 404
     zone_logger.info("POST /api/zones/%s/unassign - %d drone(s)", zone_id, len(drone_ids))
+    audit_log("update", "zone", zone_id, None, {"action": "unassign", "drones": drone_ids})
+    db.session.commit()
     return jsonify(zone)
 
 

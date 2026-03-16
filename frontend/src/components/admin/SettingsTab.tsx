@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   fetchMissionZoneDefaults, updateMissionZoneDefaults,
   fetchWifiNetworks, updateWifiNetworks,
+  authFetch, API_BASE,
   type MissionZoneDefaults, type TenantWifiNetwork,
 } from '../../api';
 import { useIsMobile } from '../../useIsMobile';
@@ -24,6 +25,10 @@ export default function SettingsTab() {
   const [color, setColor] = useState(DEFAULT_VALUES.color);
   const [minAlt, setMinAlt] = useState('');
   const [maxAlt, setMaxAlt] = useState('');
+
+  // Audit toggle
+  const [auditEnabled, setAuditEnabled] = useState(false);
+  const [auditToggling, setAuditToggling] = useState(false);
 
   // WiFi Networks state
   const [wifiNetworks, setWifiNetworks] = useState<Array<{ ssid: string; password: string; has_password: boolean }>>([]);
@@ -62,10 +67,37 @@ export default function SettingsTab() {
     }
   }, []);
 
+  const loadAuditEnabled = useCallback(async () => {
+    try {
+      const res = await authFetch(`${API_BASE}/admin/audit/enabled`);
+      if (res.ok) {
+        const data = await res.json();
+        setAuditEnabled(data.enabled);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  const toggleAudit = async () => {
+    setAuditToggling(true);
+    try {
+      const res = await authFetch(`${API_BASE}/admin/audit/enabled`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !auditEnabled }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAuditEnabled(data.enabled);
+      }
+    } catch { /* ignore */ }
+    finally { setAuditToggling(false); }
+  };
+
   useEffect(() => {
     loadDefaults();
     loadWifiNetworks();
-  }, [loadDefaults, loadWifiNetworks]);
+    loadAuditEnabled();
+  }, [loadDefaults, loadWifiNetworks, loadAuditEnabled]);
 
   const handleWifiSave = async () => {
     setWifiSaving(true);
@@ -438,6 +470,38 @@ export default function SettingsTab() {
               </button>
             </div>
           </>
+        )}
+      </div>
+
+      {/* Audit Log Toggle */}
+      <div data-testid="audit-settings-section" style={{
+        background: 'var(--bg-secondary)', border: '1px solid var(--border)',
+        borderRadius: 10, padding: 16, marginBottom: 20,
+      }}>
+        <h3 style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 600 }}>
+          Sicherheits-Audit
+        </h3>
+        <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-muted)' }}>
+          Protokolliert alle Benutzeraktionen (Anmeldungen, Änderungen an Zonen, Empfängern, Benutzern und Einstellungen).
+          Einträge werden nach 48 Stunden automatisch gelöscht.
+        </p>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+          <input
+            data-testid="audit-toggle"
+            type="checkbox"
+            checked={auditEnabled}
+            onChange={toggleAudit}
+            disabled={auditToggling}
+            style={{ accentColor: '#22c55e', width: 18, height: 18 }}
+          />
+          <span style={{ fontSize: 13, fontWeight: 600, color: auditEnabled ? '#22c55e' : 'var(--text-muted)' }}>
+            {auditEnabled ? 'Audit-Logging aktiv' : 'Audit-Logging deaktiviert'}
+          </span>
+        </label>
+        {auditEnabled && (
+          <p style={{ margin: '8px 0 0', fontSize: 11, color: 'var(--text-muted)' }}>
+            Audit-Einträge einsehen unter <strong>Admin → Sicherheit</strong>.
+          </p>
         )}
       </div>
 

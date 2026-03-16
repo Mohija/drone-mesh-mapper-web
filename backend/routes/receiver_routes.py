@@ -18,6 +18,7 @@ from flask import Blueprint, Response, g, jsonify, request, send_file
 from database import db
 from auth import login_required, role_required, node_auth_required
 from models import ReceiverNode
+from services.audit import audit_log
 
 logger = logging.getLogger("receivers")
 
@@ -173,6 +174,8 @@ def create_receiver():
         hardware_type=hardware_type,
     )
     db.session.add(node)
+    db.session.flush()
+    audit_log("create", "receiver", node.id, node.name, {"hardware": hardware_type})
     db.session.commit()
 
     logger.info("Created receiver %s (%s) for tenant %s", node.id, hardware_type, g.tenant_id, extra={"tenant_id": g.tenant_id})
@@ -213,6 +216,7 @@ def update_receiver(node_id: str):
     if "antenna_type" in data:
         node.antenna_type = data["antenna_type"] or None
 
+    audit_log("update", "receiver", node_id, node.name, {"changes": list(data.keys())})
     db.session.commit()
     logger.info("Updated receiver %s: name=%s active=%s", node.id, node.name, node.is_active, extra={"tenant_id": g.tenant_id})
     return jsonify(node.to_dict())
@@ -255,6 +259,8 @@ def delete_receiver(node_id: str):
     if not node:
         return jsonify({"error": "Empfänger nicht gefunden"}), 404
 
+    node_name = node.name
+    audit_log("delete", "receiver", node_id, node_name)
     db.session.delete(node)
     db.session.commit()
     # Clean up stored firmware binary
@@ -589,6 +595,7 @@ def trigger_ota(node_id: str):
 
     node.ota_update_pending = True
     node.ota_last_result = None
+    audit_log("update", "receiver", node_id, node.name, {"action": "ota_trigger"})
     db.session.commit()
     logger.info("OTA update triggered for receiver %s", node.id)
     return jsonify({"ok": True, "message": "OTA-Update wird beim nächsten Heartbeat angeboten"})
@@ -1079,6 +1086,7 @@ def build_firmware():
         # Create merged binary (bootloader + partitions + app)
         merged_size = _create_merged_binary(node.id, hw, env_name)
         node.last_build_merged_size = merged_size
+        audit_log("create", "firmware", node.id, node.name, {"version": build_version})
         db.session.commit()
         logger.info("Firmware stored: %s (%d bytes, merged: %s)", stored_path, fw_info["size"],
                      f"{merged_size} bytes" if merged_size else "N/A")

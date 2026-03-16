@@ -7,7 +7,7 @@ function getApiBase(): string {
   return match ? `${match[1]}/api` : '/api';
 }
 
-const API_BASE = getApiBase();
+export const API_BASE = getApiBase();
 
 // ─── Auth Utilities ───────────────────────────────────────
 
@@ -1180,6 +1180,61 @@ export async function fetchLogModules(): Promise<string[]> {
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   const data = await res.json();
   return data.modules;
+}
+
+// ─── Audit Log ───────────────────────────────────────────
+export interface AuditLogEntry {
+  id: number;
+  tenantId: string;
+  timestamp: number;
+  userId: string;
+  username: string;
+  action: string;
+  resourceType: string;
+  resourceId: string | null;
+  resourceName: string | null;
+  details: Record<string, unknown> | null;
+  ipAddress: string | null;
+}
+
+export interface AuditLogResponse {
+  entries: AuditLogEntry[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export async function fetchAuditLogs(params?: {
+  action?: string;
+  resource_type?: string;
+  user?: string;
+  search?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<AuditLogResponse> {
+  const searchParams = new URLSearchParams();
+  if (params?.action) searchParams.set('action', params.action);
+  if (params?.resource_type) searchParams.set('resource_type', params.resource_type);
+  if (params?.user) searchParams.set('user', params.user);
+  if (params?.search) searchParams.set('search', params.search);
+  if (params?.limit) searchParams.set('limit', String(params.limit));
+  if (params?.offset) searchParams.set('offset', String(params.offset));
+  const qs = searchParams.toString();
+  const res = await authFetch(`${API_BASE}/admin/audit${qs ? '?' + qs : ''}`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchAuditActions(): Promise<string[]> {
+  const res = await authFetch(`${API_BASE}/admin/audit/actions`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function fetchAuditResourceTypes(): Promise<string[]> {
+  const res = await authFetch(`${API_BASE}/admin/audit/resource-types`);
+  if (!res.ok) return [];
+  return res.json();
 }
 
 // ─── Receiver Planning ────────────────────────────────────

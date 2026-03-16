@@ -6,6 +6,7 @@ import re
 from flask import Blueprint, jsonify, request, g
 from database import db
 from auth import login_required, role_required, hash_password
+from services.audit import audit_log
 
 logger = logging.getLogger("admin")
 
@@ -247,6 +248,7 @@ def create_user():
         )
         db.session.add(membership)
 
+    audit_log("create", "user", user.id, user.username)
     db.session.commit()
 
     logger.info("User created: %s (role=%s, tenant=%s)", username, role, tenant_id)
@@ -317,6 +319,7 @@ def update_user(user_id):
     if "is_active" in data:
         user.is_active = bool(data["is_active"])
 
+    audit_log("update", "user", user_id, user.username, {"changes": list(data.keys())})
     db.session.commit()
     logger.info("User updated: %s", user_id)
     return jsonify(user.to_dict(include_tenant=True))
@@ -341,6 +344,8 @@ def delete_user(user_id):
         if not user.get_role_for_tenant(g.tenant_id):
             return jsonify({"error": "Keine Berechtigung"}), 403
 
+    username = user.username
+    audit_log("delete", "user", user_id, username)
     db.session.delete(user)
     db.session.commit()
     logger.info("User deleted: %s", user_id)
@@ -369,6 +374,7 @@ def reset_password(user_id):
         return jsonify({"error": "Passwort muss mindestens 8 Zeichen lang sein"}), 400
 
     user.password_hash = hash_password(data["new_password"])
+    audit_log("update", "user", user_id, user.username, {"action": "password_reset"})
     db.session.commit()
     logger.info("Password reset for user: %s", user_id)
     return jsonify({"status": "ok"})
