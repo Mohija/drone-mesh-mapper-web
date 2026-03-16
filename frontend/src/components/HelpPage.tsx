@@ -73,6 +73,7 @@ const SECTION_SUBS: Record<string, SubMeta[]> = {
     { id: 'firmware-versionierung', title: 'Firmware-Versionierung' },
     { id: 'auto-refresh', title: 'Auto-Refresh' },
     { id: 'empfaenger-abdeckung', title: 'Empfänger-Abdeckung (Karten-Layer)' },
+    { id: 'empfaenger-planung', title: 'Empfänger-Planung (Abdeckungstool)' },
   ],
   simulation: [
     { id: 'simulator-erstellen', title: 'Simulator erstellen' },
@@ -1049,6 +1050,37 @@ function SectionReceivers() {
             Die Abdeckungskreise müssen im realen Einsatzumfeld durch eigene Tests validiert und die Radien
             entsprechend angepasst werden. Verlassen Sie sich nicht blind auf die dargestellte Abdeckung —
             sie dient als Planungshilfe, nicht als Garantie.
+          </InfoBox>
+        </div>
+      </details>
+
+      <details className="help-sub" id="empfaenger-planung">
+        <summary style={h3SummaryStyle}><span className="help-caret">&#9654;</span> Empfänger-Planung (Abdeckungstool)</summary>
+        <div style={subContentStyle}>
+          <p>
+            Unter <strong>Admin → Planung</strong> befindet sich das automatische Empfänger-Planungstool.
+            Es berechnet die optimale Platzierung von Empfängern für eine lückenlose Abdeckung eines
+            definierten Gebiets — mit so wenigen Empfängern wie nötig.
+          </p>
+          <h4>Ablauf</h4>
+          <ol>
+            <li><strong>Zone definieren</strong> — Polygon auf der Karte zeichnen (Klick-für-Punkt) oder eine bestehende Flugzone auswählen</li>
+            <li><strong>Konfigurieren</strong> — Antennentyp wählen (bestimmt den Abdeckungsradius), optional Radius manuell anpassen, Namens-Prefix festlegen</li>
+            <li><strong>Berechnen</strong> — Algorithmus berechnet optimale Positionen (Hexagonal-Grid)</li>
+            <li><strong>Ergebnis prüfen</strong> — Karte zeigt geplante Positionen mit Abdeckungskreisen, Statistik (Anzahl, Fläche)</li>
+            <li><strong>Empfänger erstellen</strong> — Alle geplanten Positionen werden als Empfänger in der Datenbank angelegt</li>
+          </ol>
+          <h4>Algorithmus</h4>
+          <p>
+            Das Tool verwendet ein <strong>hexagonales Gitter</strong> (mathematisch optimale Lösung für
+            Kreisabdeckung). Empfänger werden <strong>nur innerhalb</strong> des Polygons platziert. Die
+            Abdeckungskreise ragen minimal über die Kanten hinaus — gerade genug für lückenlose Abdeckung
+            der Innenfläche, ohne ungeplante Bereiche zu überwachen.
+          </p>
+          <InfoBox type="info">
+            <strong>Tipp:</strong> Starten Sie mit der günstigsten Antenne (PCB) und prüfen Sie die benötigte
+            Anzahl. Wechseln Sie zu einer stärkeren Antenne, wenn weniger Empfänger wirtschaftlicher sind.
+            Beispiel: Ein 10&nbsp;km² Gebiet braucht ~4 Empfänger mit Omni 9dBi, aber ~12 mit PCB-Antenne.
           </InfoBox>
         </div>
       </details>

@@ -25,6 +25,15 @@
 
 ## Änderungshistorie
 
+### 2026-03-16 - Empfänger-Planungstool: Automatische Abdeckungsberechnung
+- **Planungstool**: Neuer Admin-Tab "Planung" berechnet optimale Empfänger-Positionen für ein Polygon
+- **Hex-Grid-Algorithmus**: Mathematisch optimale Kreisabdeckung mit minimaler Empfänger-Anzahl. Empfänger werden nur innerhalb des Polygons platziert.
+- **4-Schritt-Wizard**: Zone zeichnen/wählen → Antenne konfigurieren → Berechnen → Empfänger erstellen
+- **Batch-Create**: Erstellt bis zu 100 Empfänger auf einmal mit API-Keys und GPS-Positionen
+- **APIs**: POST /api/receivers/plan-coverage (Berechnung), POST /api/receivers/batch-create (Erstellung)
+- **Shared Antenna Presets**: Gemeinsame Konfiguration in antennaPresets.ts
+- **Dateien:** backend/routes/receiver_routes.py, frontend/src/config/antennaPresets.ts (neu), frontend/src/components/admin/PlanningTab.tsx (neu), frontend/src/api.ts, frontend/src/App.tsx, frontend/src/components/admin/AdminLayout.tsx
+
 ### 2026-03-16 - Empfänger-Abdeckung: Karten-Layer mit Antennen-Presets
 - **Receiver Coverage Layer**: Neuer 📡-Toggle in der Kopfleiste zeigt Empfänger-Positionen und Erkennungsradius auf der Karte
 - **Antennen-Presets**: 5 Typen (PCB 1km, Dipol 5dBi 2km, Omni 9dBi 3km, Panel 12dBi 5km, Yagi 15dBi 10km) mit konfigurierbarem Radius
