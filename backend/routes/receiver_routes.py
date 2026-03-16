@@ -28,12 +28,14 @@ receiver_bp = Blueprint("receivers", __name__, url_prefix="/api/receivers")
 
 
 def _hex_grid_cover(polygon, radius_m):
-    """Generate hexagonal grid positions that cover the polygon.
+    """Generate hexagonal grid positions INSIDE the polygon.
+    Receivers are only placed within the polygon boundary.
+    Coverage circles will extend slightly beyond the edges — this is intended
+    so the polygon interior is fully covered without monitoring unplanned areas.
     Uses hex grid spacing for optimal coverage:
       dx (column spacing) = radius * sqrt(3)
       dy (row spacing)    = radius * 1.5
       Odd rows shifted by dx/2
-    This ensures every point in the plane is within `radius` of at least one grid point.
     Returns list of [lat, lon] positions.
     """
     lats = [p[0] for p in polygon]
@@ -53,20 +55,17 @@ def _hex_grid_cover(polygon, radius_m):
     dy_lat = dy_m / m_per_deg_lat         # row spacing in degrees lat
     row_offset_lon = dx_lon / 2           # hex offset for odd rows
 
-    # Expand bounding box by radius to cover edges
-    pad_lat = radius_m / m_per_deg_lat
-    pad_lon = radius_m / m_per_deg_lon
-
+    # No bounding box expansion — receivers stay inside the polygon
     positions = []
     row = 0
-    lat = min_lat - pad_lat
-    while lat <= max_lat + pad_lat:
-        lon_start = min_lon - pad_lon
+    lat = min_lat
+    while lat <= max_lat:
+        lon_start = min_lon
         if row % 2 == 1:
             lon_start += row_offset_lon
         lon = lon_start
-        while lon <= max_lon + pad_lon:
-            if _point_near_polygon(lat, lon, polygon, radius_m, m_per_deg_lat, m_per_deg_lon):
+        while lon <= max_lon:
+            if _point_in_polygon(lat, lon, polygon):
                 positions.append([round(lat, 7), round(lon, 7)])
             lon += dx_lon
         lat += dy_lat
