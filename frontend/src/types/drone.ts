@@ -155,6 +155,8 @@ export interface FlightZone {
   minAltitudeAGL: number | null; // meters above ground level
   maxAltitudeAGL: number | null; // meters above ground level
   assignedDrones: string[];
+  createdBy: string | null;
+  updatedBy: string | null;
   createdAt: number;
   updatedAt: number;
 }

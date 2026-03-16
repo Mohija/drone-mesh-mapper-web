@@ -68,6 +68,8 @@ export function createMockFlightZone(overrides: Partial<FlightZone> = {}): Fligh
     minAltitudeAGL: null,
     maxAltitudeAGL: null,
     assignedDrones: [],
+    createdBy: null,
+    updatedBy: null,
     createdAt: Date.now() / 1000,
     updatedAt: Date.now() / 1000,
     ...overrides,

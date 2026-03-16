@@ -73,7 +73,7 @@ class FlightZoneManager:
                 return None
             return zone.to_dict()
 
-    def create_zone(self, data: dict, tenant_id=None) -> dict:
+    def create_zone(self, data: dict, tenant_id=None, created_by: str | None = None) -> dict:
         from models import FlightZone as FZModel
         from database import db
 
@@ -95,16 +95,17 @@ class FlightZoneManager:
                 min_altitude_agl=data.get("minAltitudeAGL"),
                 max_altitude_agl=data.get("maxAltitudeAGL"),
                 assigned_drones=data.get("assignedDrones", []),
+                created_by=created_by,
             )
             db.session.add(zone)
             db.session.commit()
             result = zone.to_dict()
 
         self._bump_version(tid)
-        logger.info("Created zone %s: name=%s points=%d", result["id"], name, len(polygon), extra={"tenant_id": tid})
+        logger.info("Created zone %s: name=%s by=%s points=%d", result["id"], name, created_by or "?", len(polygon), extra={"tenant_id": tid})
         return result
 
-    def update_zone(self, zone_id: str, data: dict, tenant_id=None) -> dict | None:
+    def update_zone(self, zone_id: str, data: dict, tenant_id=None, updated_by: str | None = None) -> dict | None:
         from models import FlightZone as FZModel
         from database import db
 
@@ -131,6 +132,7 @@ class FlightZoneManager:
                 zone.min_altitude_agl = data["minAltitudeAGL"]
             if "maxAltitudeAGL" in data:
                 zone.max_altitude_agl = data["maxAltitudeAGL"]
+            zone.updated_by = updated_by
             zone.updated_at = time.time()
 
             db.session.commit()

@@ -138,10 +138,12 @@ with app.app_context():
             pass  # Column already exists
     db.session.commit()
 
-    # Migration: add log_level column to tenant_settings
+    # Migration: add log_level, build_config, zone created_by/updated_by
     for col_stmt in [
         "ALTER TABLE tenant_settings ADD COLUMN log_level VARCHAR(10)",
         "ALTER TABLE receiver_nodes ADD COLUMN last_build_config TEXT",
+        "ALTER TABLE flight_zones ADD COLUMN created_by VARCHAR(100)",
+        "ALTER TABLE flight_zones ADD COLUMN updated_by VARCHAR(100)",
     ]:
         try:
             db.session.execute(db.text(col_stmt))
@@ -838,8 +840,9 @@ def create_zone():
     if not data:
         return jsonify({"error": "Request body required"}), 400
     try:
-        zone = zones.create_zone(data, tenant_id=g.tenant_id)
-        zone_logger.info("POST /api/zones - created %s: %s", zone["id"], zone["name"], extra={"tenant_id": g.tenant_id})
+        username = g.current_user.username if hasattr(g, 'current_user') else None
+        zone = zones.create_zone(data, tenant_id=g.tenant_id, created_by=username)
+        zone_logger.info("POST /api/zones - created %s: %s by %s", zone["id"], zone["name"], username, extra={"tenant_id": g.tenant_id})
         return jsonify(zone), 201
     except ValueError as e:
         zone_logger.warning("Zone creation rejected: %s", e)
@@ -933,14 +936,15 @@ def create_mission_zone():
     polygon = circle_polygon(lat, lon, radius_m=mz_defaults["radius"], num_points=36)
 
     try:
+        username = g.current_user.username if hasattr(g, 'current_user') else None
         zone = zones.create_zone({
             "name": name,
             "color": mz_defaults["color"],
             "polygon": polygon,
             "minAltitudeAGL": mz_defaults["minAltitudeAGL"],
             "maxAltitudeAGL": mz_defaults["maxAltitudeAGL"],
-        }, tenant_id=g.tenant_id)
-        zone_logger.info("POST /api/zones/mission - created %s: %s at (%.6f, %.6f)", zone["id"], name, lat, lon)
+        }, tenant_id=g.tenant_id, created_by=username)
+        zone_logger.info("POST /api/zones/mission - created %s: %s at (%.6f, %.6f) by %s", zone["id"], name, lat, lon, username)
         result = zone
         if resolved_address:
             result["resolved_address"] = resolved_address
@@ -1031,10 +1035,11 @@ def update_zone(zone_id: str):
     if not data:
         return jsonify({"error": "Request body required"}), 400
     try:
-        zone = zones.update_zone(zone_id, data, tenant_id=g.tenant_id)
+        username = g.current_user.username if hasattr(g, 'current_user') else None
+        zone = zones.update_zone(zone_id, data, tenant_id=g.tenant_id, updated_by=username)
         if not zone:
             return jsonify({"error": "Zone not found"}), 404
-        zone_logger.info("PUT /api/zones/%s - updated", zone_id, extra={"tenant_id": g.tenant_id})
+        zone_logger.info("PUT /api/zones/%s - updated by %s", zone_id, username, extra={"tenant_id": g.tenant_id})
         return jsonify(zone)
     except ValueError as e:
         zone_logger.warning("Zone update rejected: %s", e)

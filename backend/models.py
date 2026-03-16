@@ -185,6 +185,8 @@ class FlightZone(db.Model):
     min_altitude_agl = db.Column(db.Float, nullable=True)
     max_altitude_agl = db.Column(db.Float, nullable=True)
     assigned_drones = db.Column(JSON, nullable=False, default=list)
+    created_by = db.Column(db.String(100), nullable=True)   # username of creator
+    updated_by = db.Column(db.String(100), nullable=True)   # username of last editor
     created_at = db.Column(db.Float, default=_now, nullable=False)
     updated_at = db.Column(db.Float, default=_now, onupdate=_now, nullable=False)
 
@@ -198,6 +200,8 @@ class FlightZone(db.Model):
             "minAltitudeAGL": self.min_altitude_agl,
             "maxAltitudeAGL": self.max_altitude_agl,
             "assignedDrones": self.assigned_drones or [],
+            "createdBy": self.created_by,
+            "updatedBy": self.updated_by,
             "createdAt": self.created_at,
             "updatedAt": self.updated_at,
         }

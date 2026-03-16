@@ -595,6 +595,12 @@ export default function FlightZonesPanel({
                 </span>
               )}
             </div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+              {zone.createdBy && <span>Erstellt von {zone.createdBy}</span>}
+              {zone.updatedBy && zone.updatedBy !== zone.createdBy && (
+                <span>{zone.createdBy ? ' · ' : ''}Bearbeitet von {zone.updatedBy}</span>
+              )}
+            </div>
           </div>
         ))}
       </div>
