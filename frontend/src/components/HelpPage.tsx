@@ -1483,14 +1483,25 @@ function SectionOta() {
           <ul>
             <li><strong>Nur ESP32-S3 und ESP32-C3</strong> — ESP8266 unterstützt kein OTA</li>
             <li>Der Empfänger muss <strong>online</strong> sein (grüne LED, Heartbeat aktiv)</li>
-            <li>Eine aktuelle Firmware muss <strong>bereits gebaut</strong> sein (Build über Flash-Wizard)</li>
           </ul>
+          <h4>Automatischer Build</h4>
+          <p>
+            Der OTA-Button baut automatisch die neueste Firmware, bevor er das Update auslöst. Ein <strong>Progress-Modal</strong> zeigt
+            den gesamten Ablauf: <strong>Build → OTA-Trigger → Warten auf ESP</strong>. Du musst die Firmware nicht vorab manuell bauen.
+          </p>
+          <h4>WiFi-Sicherung (NVS)</h4>
+          <p>
+            Der ESP speichert bei jeder erfolgreichen WiFi-Verbindung die Zugangsdaten im <strong>Non-Volatile Storage (NVS)</strong>.
+            Dieser Speicher überlebt OTA-Updates. Nach einem OTA-Reboot verbindet sich der ESP automatisch mit dem letzten
+            bekannten WiFi — auch wenn die neue Firmware ohne WiFi-Credentials gebaut wurde.
+          </p>
           <h4>OTA-Update auslösen</h4>
           <ol>
             <li>Gehe zu <strong>Administration → Empfänger</strong></li>
             <li>Klappe den gewünschten Empfänger auf (Klick auf die Zeile)</li>
             <li>Klicke auf <strong>„OTA Update senden"</strong></li>
-            <li>Der Status wechselt zu <strong>„OTA ausstehend..."</strong></li>
+            <li>Das Progress-Modal öffnet sich und zeigt den Build-Fortschritt</li>
+            <li>Nach erfolgreichem Build wird das OTA-Update automatisch ausgelöst</li>
             <li>Beim nächsten Heartbeat (alle 30 Sekunden) erhält der ESP das Update-Signal</li>
             <li>Der ESP lädt die neue Firmware herunter, schreibt sie in den inaktiven OTA-Slot und startet neu</li>
             <li>Nach dem Neustart sendet der ESP die neue Firmware-Version im Heartbeat — das Backend erkennt das Update als erfolgreich und setzt das OTA-Flag zurück</li>

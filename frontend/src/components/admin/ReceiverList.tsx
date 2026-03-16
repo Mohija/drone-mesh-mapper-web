@@ -1214,7 +1214,7 @@ export default function ReceiverList() {
                             ) : (
                               <AdminTooltip
                                 brief="Firmware drahtlos aktualisieren (OTA)"
-                                detail={"Sendet die zuletzt gebaute Firmware per Over-the-Air Update an den ESP.\nDer Empfänger lädt die neue Firmware beim nächsten Heartbeat herunter, verifiziert die Integrität (SHA-256) und startet automatisch neu.\nKein physischer Zugriff auf den ESP nötig!\nVoraussetzungen:\n- Empfänger muss online sein\n- Firmware muss vorher gebaut worden sein\n- Nur ESP32-S3 und ESP32-C3 (nicht ESP8266)\nBei Fehler wird automatisch auf die vorherige Firmware zurückgerollt (Rollback)."}
+                                detail={"Baut automatisch die neueste Firmware und sendet sie per Over-the-Air Update an den ESP.\n\nAblauf:\n1. Automatischer Firmware-Build (WiFi-Credentials werden aus dem letzten Build übernommen)\n2. OTA-Trigger an den Empfänger\n3. ESP lädt Firmware herunter, verifiziert SHA-256 und startet neu\n\nEin Progress-Modal zeigt Build-Log, OTA-Status und ESP-Antwort in Echtzeit.\n\nWiFi-Persistenz: Falls keine gespeicherten Build-Credentials vorhanden sind, nutzt der ESP die im NVS (Non-Volatile Storage) gespeicherten WiFi-Daten vom letzten erfolgreichen Login. NVS überlebt OTA-Updates.\n\nKein physischer Zugriff nötig! Nur ESP32-S3/C3 (nicht ESP8266).\nBei Fehler: Automatischer Rollback auf die vorherige Firmware."}
                               >
                                 <button
                                   data-testid={`receiver-ota-${node.id}`}

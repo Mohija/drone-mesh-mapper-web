@@ -35,6 +35,7 @@
 - **Mobile E2E-Tests**: 28 neue Tests (mobile.spec.ts) mit 375x667 Viewport: Map Page, Admin Drawer, Receiver Cards, UserList, Login, Settings, Log Viewer, Logs API
 - **Benutzerhandbuch**: Mobile-Ansichten, Einsatz-Zonen Einstellungen, Adress-Prüfung, Log-Viewer dokumentiert
 - **OTA-Workflow verbessert**: OTA-Button baut jetzt automatisch Firmware vor dem Senden (Build→Trigger→Monitor). Progress-Modal mit 4-Schritt-Anzeige und Live-Log. WiFi-Credentials werden in `last_build_config` gespeichert und bei OTA-Rebuilds wiederverwendet.
+- **WiFi NVS-Persistenz**: ESP speichert WiFi-Credentials bei erfolgreicher Verbindung im NVS. Überlebt OTA-Updates — ESP verbindet sich immer mit dem letzten bekannten WiFi.
 - **Auto-Request-Logging**: Flask `after_request`-Hook loggt automatisch alle authentifizierten Requests. Root-Logger auf DEBUG, Console auf INFO (kein Spam). Tenant-ID wird aus Flask `g`-Context aufgelöst.
 - **Dateien:** firmware/src/config.h, firmware/src/main.cpp, firmware/inject_build_flags.py, backend/models.py, backend/settings.py, backend/services/db_logger.py (neu), backend/routes/log_routes.py (neu), backend/routes/admin_routes.py, backend/routes/receiver_routes.py, backend/services/simulation_manager.py, backend/tests/conftest.py, backend/app.py, examples/dummy_receiver.py, frontend/src/api.ts, frontend/src/App.tsx, frontend/src/components/admin/AdminLayout.tsx, frontend/src/components/admin/LogViewerTab.tsx (neu), frontend/src/components/admin/ReceiverList.tsx, frontend/src/components/HelpPage.tsx, frontend/e2e/mobile.spec.ts (neu)
 
