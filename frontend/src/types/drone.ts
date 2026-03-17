@@ -29,6 +29,7 @@ export interface Drone {
   ogn_aircraft_type_label?: string;
   receiver_count?: number;
   receiver_nodes?: string[];
+  address_book_name?: string;
 }
 
 export interface FAAData {
@@ -68,6 +69,7 @@ export interface DronesResponse {
   violation_version?: number;
   settings_version?: number;
   receiver_version?: number;
+  addressbook_version?: number;
 }
 
 export interface AircraftLookup {
@@ -96,6 +98,25 @@ export interface AircraftLookup {
   destination?: { name?: string; icao?: string; iata?: string; city?: string };
   ogn_cn?: string;
   ogn_device_type?: string;
+}
+
+// ─── Address Book ─────────────────────────────────────────
+
+export interface AddressBookEntry {
+  id: string;
+  tenantId: string;
+  identifier: string;
+  customName: string;
+  notes: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface AddressBookSuggestion {
+  identifier: string;
+  currentName: string;
+  source: string;
+  sourceLabel: string;
 }
 
 export interface DataSourceConfig {

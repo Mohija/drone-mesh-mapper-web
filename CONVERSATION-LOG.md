@@ -2,7 +2,7 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-16 (v1.8.0: Sicherheits-Audit, WiFi-Verwaltung, Captive Portal Optimierung)
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-17 (Drohnen-Adressbuch)
 - **Typ:** Projekt | **Status:** Development
 
 ## Offene Aufgaben
@@ -24,6 +24,21 @@
 - [ ] Docker Deployment Package
 
 ## Änderungshistorie
+
+### 2026-03-17 - Drohnen-Adressbuch (pro Mandant)
+- **Adressbuch-Feature**: Drohnen-Kennungen (basic_id/ICAO) auf benutzerdefinierte Namen mappen
+- **Backend**: Neues `DroneAddressBookEntry` Model, CRUD-API + Suggestions-Endpoint, Version-Counter
+- **Frontend**: Neuer Admin-Tab "Adressbuch" mit Tabelle/Karten (Desktop/Mobile), Add/Edit-Dialog mit Vorschlägen aus gescannten Drohnen
+- **Zone-Integration**: Adressbuch-Drohnen erscheinen in der Zonen-Zuweisung auch wenn offline, mit Online/Offline-Badge
+- **Name-Resolution**: `/api/drones` liefert `address_book_name` Feld für Drohnen aus dem Adressbuch
+- **Dateien:** `backend/models.py`, `backend/routes/addressbook_routes.py` (neu), `backend/routes/__init__.py`, `backend/app.py`, `frontend/src/types/drone.ts`, `frontend/src/api.ts`, `frontend/src/components/admin/DroneAddressBook.tsx` (neu), `frontend/src/components/ZoneAssignPanel.tsx`, `frontend/src/App.tsx`, `frontend/src/components/admin/AdminLayout.tsx`, `frontend/src/components/HelpPage.tsx`
+
+### 2026-03-17 - Firmware 1.5.0: WiFi-IP im Heartbeat + Boot-Optimierung
+- **WiFi-IP Fix:** Empfänger sendet jetzt `wifi_ip` im Heartbeat (behebt 127.0.0.1 bei Proxy/Localhost)
+- **Backend**: `receiver_routes.py` bevorzugt `wifi_ip` aus Payload, Fallback auf `remote_addr`
+- **Simulation**: Realistische IPs (`192.168.1.1xx`) statt 127.0.0.1
+- **Boot-Optimierung**: WiFi-Scan 200ms/Kanal (war 500ms, ~2.6s statt ~6.5s), Connect-Timeout 3s (war 5s), blockierender Scan bei AP-Start übersprungen wenn Credentials vorhanden, Stabilisierungs-Delay 100ms (war 500ms)
+- **Dateien:** `firmware/src/http_client.cpp`, `firmware/src/http_client.h`, `firmware/src/main.cpp`, `firmware/src/config.h`, `firmware/src/wifi_manager.cpp`, `firmware/changelog.json`, `backend/routes/receiver_routes.py`, `backend/services/simulation_manager.py`, `examples/dummy_receiver.py`
 
 ### 2026-03-16 - Sicherheits-Audit, WiFi-Verwaltung, Captive Portal Optimierung
 - **Sicherheits-Audit**: Neuer Admin-Tab "Sicherheit" mit Audit-Log für alle Benutzeraktionen (21 Audit-Punkte: Login, Zonen-CRUD, Empfänger-CRUD, OTA, Firmware-Build, Benutzer-CRUD, Einstellungen)

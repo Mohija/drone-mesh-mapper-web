@@ -21,6 +21,7 @@ from trail_archive import TrailArchiveManager
 from flight_zones import FlightZoneManager
 from auth import seed_super_admin, login_required, role_required
 from services.audit import audit_log
+from models import DroneAddressBookEntry
 from routes import register_blueprints
 
 # Logging setup
@@ -291,6 +292,11 @@ def _maybe_check_violations(tenant_id: str, enabled_sources: list[str]):
 # ─── API Routes ────────────────────────────────────────────
 
 
+def _get_addressbook_version(tenant_id):
+    from routes.addressbook_routes import get_version
+    return get_version(tenant_id)
+
+
 @app.route("/api/drones", methods=["GET"])
 @login_required
 def get_drones():
@@ -309,6 +315,14 @@ def get_drones():
 
     drones = registry.get_all_drones(lat, lon, radius, enabled, tenant_id=tid)
 
+    # Resolve custom names from address book
+    ab_entries = DroneAddressBookEntry.query.filter_by(tenant_id=tid).all()
+    ab_name_map = {e.identifier: e.custom_name for e in ab_entries}
+    for d in drones:
+        bid = d.get("basic_id", "")
+        if bid and bid in ab_name_map:
+            d["address_book_name"] = ab_name_map[bid]
+
     # Side-effect: update shared violation records (throttled per tenant)
     _maybe_check_violations(tid, enabled)
 
@@ -324,6 +338,7 @@ def get_drones():
         "violation_version": zones.get_violation_version(tenant_id=tid),
         "settings_version": settings.get_version(tenant_id=tid),
         "receiver_version": registry.receiver_provider.get_version(tid),
+        "addressbook_version": _get_addressbook_version(tid),
     })
 
 

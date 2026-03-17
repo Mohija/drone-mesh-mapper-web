@@ -90,7 +90,8 @@ OtaInfo FlightArcClient::sendHeartbeat(const char* fwVersion, const char* hwType
                                      const char* wifiSsid, int wifiRssi, int wifiChannel,
                                      int freeHeap, int uptimeSeconds,
                                      int detectionsSinceBoot, bool apActive,
-                                     float lat, float lon, float accuracy) {
+                                     float lat, float lon, float accuracy,
+                                     const char* wifiIp) {
     JsonDocument doc;
     doc["firmware_version"] = fwVersion;
     doc["hardware_type"] = hwType;
@@ -101,6 +102,9 @@ OtaInfo FlightArcClient::sendHeartbeat(const char* fwVersion, const char* hwType
     doc["uptime_seconds"] = uptimeSeconds;
     doc["detections_since_boot"] = detectionsSinceBoot;
     doc["ap_active"] = apActive;
+    if (wifiIp && wifiIp[0] != '\0') {
+        doc["wifi_ip"] = wifiIp;
+    }
 
     // Error stats
     if (_retryCount > 0) {

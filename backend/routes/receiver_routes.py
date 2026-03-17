@@ -446,8 +446,8 @@ def ingest():
         if data.get("node_accuracy") is not None:
             node.last_location_accuracy = data["node_accuracy"]
 
-    # Update IP and heartbeat
-    node.last_ip = request.remote_addr
+    # Update IP and heartbeat — prefer wifi_ip from payload over remote_addr
+    node.last_ip = data.get("wifi_ip") or request.remote_addr
     node.last_heartbeat = time.time()
     node.detections_since_boot = node.detections_since_boot + len(detections)
     node.total_detections = node.total_detections + len(detections)
@@ -480,7 +480,7 @@ def heartbeat():
     data = request.get_json(silent=True) or {}
 
     node.last_heartbeat = time.time()
-    node.last_ip = request.remote_addr
+    node.last_ip = data.get("wifi_ip") or request.remote_addr
 
     if "firmware_version" in data:
         old_fw = node.firmware_version
@@ -657,7 +657,7 @@ def _record_firmware_history(node, version, method):
     """Append a firmware version change to the receiver's history."""
     if not version:
         return
-    history = node.firmware_history or []
+    history = list(node.firmware_history or [])  # copy! avoid in-place mutation
     # Don't duplicate consecutive same-version entries
     if history and history[0].get("version") == version:
         return

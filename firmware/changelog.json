@@ -1,6 +1,32 @@
 {
   "versions": [
     {
+      "version": "1.5.2",
+      "date": "2026-03-17",
+      "hardware": ["esp32-s3", "esp32-c3", "esp8266"],
+      "changes": [
+        "WiFi: Boot-Scan läuft IMMER (auch bei 1 Netzwerk oder NVS-Credentials) — Captive Portal zeigt verfügbare Netzwerke",
+        "WiFi: Boot-Connect-Timeout von 3s auf 5s erhöht (manche Boards brauchen länger)",
+        "WiFi: NVS-Credentials werden zuerst mit Timeout versucht, dann Fallback auf Build-Netzwerke",
+        "Captive Portal: Robusterer Fallback-Scan bei AP-Start (500ms Stabilisierung)",
+        "OTA: BLE-Task wird sauber beendet vor NimBLE deinit (behebt Guru Meditation Crash auf ESP32-S3)",
+        "Captive Portal: Verbindungs-Timeout von 15s auf 30s erhöht (behebt falschen Fehler bei langsamen Verbindungen)"
+      ]
+    },
+    {
+      "version": "1.5.0",
+      "date": "2026-03-17",
+      "hardware": ["esp32-s3", "esp32-c3", "esp8266"],
+      "changes": [
+        "WiFi-IP wird im Heartbeat mitgesendet (behebt 127.0.0.1 Anzeige bei Proxy/Localhost)",
+        "Backend bevorzugt gemeldete wifi_ip gegenüber request.remote_addr",
+        "Boot-Optimierung: WiFi-Scan 200ms/Kanal statt 500ms (~2.6s statt ~6.5s)",
+        "Boot-Optimierung: Connect-Timeout 3s statt 5s bei Multi-Network-Auswahl",
+        "Boot-Optimierung: Blocking-Scan bei AP-Start übersprungen wenn Credentials vorhanden",
+        "Boot-Optimierung: Stabilisierungs-Delay 100ms statt 500ms"
+      ]
+    },
+    {
       "version": "1.4.0",
       "date": "2026-03-16",
       "hardware": ["esp32-s3", "esp32-c3", "esp8266"],

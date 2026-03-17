@@ -8,6 +8,7 @@ const navItems = [
   { to: '/admin/tenants', label: 'Mandanten', superAdminOnly: true },
   { to: '/admin/users', label: 'Benutzer' },
   { to: '/admin/receivers', label: 'Empfänger' },
+  { to: '/admin/addressbook', label: 'Adressbuch' },
   { to: '/admin/settings', label: 'Einstellungen' },
   { to: '/admin/simulation', label: 'Simulation' },
   { to: '/admin/logs', label: 'Logs' },

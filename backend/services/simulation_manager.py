@@ -27,7 +27,7 @@ logger = logging.getLogger("simulation")
 # ─── Constants (matching firmware config.h) ────────────────────
 INGEST_INTERVAL_S = 0.5       # Event-based: send every 0.5s (firmware sends on detection, min 100ms)
 HEARTBEAT_INTERVAL_S = 30
-FIRMWARE_VERSION = "1.2.0-sim"
+FIRMWARE_VERSION = "1.5.0-sim"
 
 
 # ─── Simulated Drone ──────────────────────────────────────────
@@ -528,7 +528,7 @@ class SimulationManager:
                             node.free_heap = random.randint(120000, 180000)
                             node.uptime_seconds = uptime
                             node.detections_since_boot = instance.detections_sent
-                            node.last_ip = "127.0.0.1"
+                            node.last_ip = f"192.168.1.{100 + (hash(instance.id) % 150)}"
                             db.session.commit()
                 except Exception as e:
                     logger.error("Simulator %s heartbeat error: %s", instance.id, e)

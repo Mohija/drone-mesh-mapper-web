@@ -1697,7 +1697,7 @@ export default function ReceiverList() {
                               <div key={i} style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', gap: 8, marginBottom: 2 }}>
                                 <span style={{ fontFamily: 'monospace' }}>{h.version}</span>
                                 <span style={{ color: 'var(--text-muted)' }}>
-                                  {new Date(h.timestamp * 1000).toLocaleDateString('de-DE')}
+                                  {new Date(h.timestamp * 1000).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                 </span>
                                 <span style={{
                                   fontSize: 10, padding: '0 4px', borderRadius: 3,

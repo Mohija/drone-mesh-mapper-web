@@ -69,6 +69,9 @@ private:
 
 #if HAS_BLE
     void _startBleScan();
+public:
+    void stopBleForOta();  // Kill BLE task + deinit for safe OTA
+private:
 #endif
 
     // Promiscuous mode callback needs static access

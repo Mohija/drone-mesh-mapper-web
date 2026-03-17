@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react';
-import type { Drone, FlightZone } from '../types/drone';
+import { useState, useMemo, useEffect } from 'react';
+import type { Drone, FlightZone, AddressBookEntry } from '../types/drone';
+import { fetchAddressBook } from '../api';
 
 interface Props {
   zone: FlightZone;
@@ -9,9 +10,24 @@ interface Props {
   onClose: () => void;
 }
 
+/** Unified item for the drone assignment list */
+interface AssignListItem {
+  /** The key used for assignment (basic_id for addressbook, drone.id for online-only) */
+  assignKey: string;
+  name: string;
+  subtitle: string;
+  online: boolean;
+  fromAddressBook: boolean;
+}
+
 export default function ZoneAssignPanel({ zone, drones, onSave, onUpdateZone, onClose }: Props) {
   const [selected, setSelected] = useState<Set<string>>(() => new Set(zone.assignedDrones));
   const [filter, setFilter] = useState('');
+  const [addressBook, setAddressBook] = useState<AddressBookEntry[]>([]);
+
+  useEffect(() => {
+    fetchAddressBook().then(setAddressBook).catch(() => {});
+  }, []);
 
   // Editable zone properties
   const [editName, setEditName] = useState(zone.name);
@@ -20,15 +36,53 @@ export default function ZoneAssignPanel({ zone, drones, onSave, onUpdateZone, on
   const [editMaxAGL, setEditMaxAGL] = useState(zone.maxAltitudeAGL != null ? String(zone.maxAltitudeAGL) : '');
   const [saving, setSaving] = useState(false);
 
-  const filteredDrones = useMemo(() => {
+  // Build combined list: address book entries + online-only drones
+  const combinedItems = useMemo(() => {
+    const items: AssignListItem[] = [];
+    const onlineByBasicId = new Map<string, Drone>();
+    for (const d of drones) {
+      if (d.basic_id) onlineByBasicId.set(d.basic_id, d);
+    }
+
+    // 1. Address book entries (always shown, with online status)
+    const abIds = new Set<string>();
+    for (const ab of addressBook) {
+      abIds.add(ab.identifier);
+      const onlineDrone = onlineByBasicId.get(ab.identifier);
+      items.push({
+        assignKey: ab.identifier,
+        name: ab.customName,
+        subtitle: ab.identifier + (onlineDrone ? ` (${onlineDrone.source_label || 'online'})` : ''),
+        online: !!onlineDrone,
+        fromAddressBook: true,
+      });
+    }
+
+    // 2. Online drones NOT in address book
+    for (const d of drones) {
+      const bid = d.basic_id || d.id;
+      if (abIds.has(bid)) continue;
+      items.push({
+        assignKey: bid,
+        name: d.address_book_name || d.name,
+        subtitle: `${d.id} ${d.source_label ? `(${d.source_label})` : ''}`,
+        online: true,
+        fromAddressBook: false,
+      });
+    }
+
+    return items;
+  }, [drones, addressBook]);
+
+  const filteredItems = useMemo(() => {
     const q = filter.toLowerCase();
-    if (!q) return drones;
-    return drones.filter(d =>
-      d.name.toLowerCase().includes(q) ||
-      d.id.toLowerCase().includes(q) ||
-      d.basic_id.toLowerCase().includes(q)
+    if (!q) return combinedItems;
+    return combinedItems.filter(item =>
+      item.name.toLowerCase().includes(q) ||
+      item.assignKey.toLowerCase().includes(q) ||
+      item.subtitle.toLowerCase().includes(q)
     );
-  }, [drones, filter]);
+  }, [combinedItems, filter]);
 
   const handleToggle = (droneId: string) => {
     setSelected(prev => {
@@ -246,15 +300,15 @@ export default function ZoneAssignPanel({ zone, drones, onSave, onUpdateZone, on
 
         {/* Drone list */}
         <div style={{ flex: 1, overflow: 'auto', padding: '0 16px' }}>
-          {filteredDrones.length === 0 ? (
+          {filteredItems.length === 0 ? (
             <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: '16px 0' }}>
               Keine Drohnen gefunden
             </div>
           ) : (
-            filteredDrones.map(drone => (
+            filteredItems.map(item => (
               <label
-                key={drone.id}
-                data-testid={`drone-assign-${drone.id}`}
+                key={item.assignKey}
+                data-testid={`drone-assign-${item.assignKey}`}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -267,16 +321,25 @@ export default function ZoneAssignPanel({ zone, drones, onSave, onUpdateZone, on
               >
                 <input
                   type="checkbox"
-                  checked={selected.has(drone.id)}
-                  onChange={() => handleToggle(drone.id)}
+                  checked={selected.has(item.assignKey)}
+                  onChange={() => handleToggle(item.assignKey)}
                   style={{ flexShrink: 0 }}
                 />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {drone.name}
+                  <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    {item.name}
+                    {item.fromAddressBook && (
+                      <span style={{
+                        fontSize: 9, padding: '1px 4px', borderRadius: 3, fontWeight: 400,
+                        background: item.online ? 'rgba(34,197,94,0.15)' : 'rgba(148,163,184,0.1)',
+                        color: item.online ? '#22c55e' : 'var(--text-muted)',
+                      }}>
+                        {item.online ? 'Online' : 'Offline'}
+                      </span>
+                    )}
                   </div>
                   <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-                    {drone.id} {drone.source_label ? `(${drone.source_label})` : ''}
+                    {item.subtitle}
                   </div>
                 </div>
               </label>

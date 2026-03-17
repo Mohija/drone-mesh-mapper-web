@@ -41,7 +41,7 @@ except ImportError:
 INGEST_INTERVAL_S = 0.5     # Event-based: send every 0.5s (firmware sends on detection, min 100ms)
 HEARTBEAT_INTERVAL_S = 30   # Send heartbeat every 30 seconds
 MAX_DETECTIONS = 50         # Ring buffer size
-FIRMWARE_VERSION = "1.1.0-dummy"
+FIRMWARE_VERSION = "1.5.0-dummy"
 AP_SSID_PREFIX = "FlightArc-"
 
 # Pre-configured dummy API key (matching the "Dummy Simulator" receiver in the DB)
@@ -357,7 +357,8 @@ class FlightArcClient:
                        free_heap: int, uptime_seconds: int,
                        detections_since_boot: int, ap_active: bool,
                        lat: float = 0.0, lon: float = 0.0,
-                       accuracy: float = 0.0) -> bool:
+                       accuracy: float = 0.0,
+                       wifi_ip: str = "") -> bool:
         """POST /api/receivers/heartbeat — matching firmware sendHeartbeat()."""
         payload = {
             "firmware_version": fw_version,
@@ -370,6 +371,9 @@ class FlightArcClient:
             "detections_since_boot": detections_since_boot,
             "ap_active": ap_active,
         }
+
+        if wifi_ip:
+            payload["wifi_ip"] = wifi_ip
 
         # Error stats (matching firmware)
         if self._retry_count > 0:
@@ -615,6 +619,16 @@ Beispiele:
                 wifi_rssi = random.randint(-65, -35)
                 wifi_channel = random.choice([1, 6, 11])
 
+                # Get local IP for reporting
+                import socket
+                try:
+                    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    s.connect(("8.8.8.8", 80))
+                    local_ip = s.getsockname()[0]
+                    s.close()
+                except Exception:
+                    local_ip = ""
+
                 ok = client.send_heartbeat(
                     fw_version=FIRMWARE_VERSION,
                     hw_type=args.hardware,
@@ -628,6 +642,7 @@ Beispiele:
                     lat=node_lat,
                     lon=node_lon,
                     accuracy=10.0,
+                    wifi_ip=local_ip,
                 )
                 if ok:
                     print(f"  [Heartbeat] uptime={int(uptime)}s detections={detections_since_boot} "

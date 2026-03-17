@@ -39,6 +39,7 @@ class Tenant(db.Model):
     receiver_nodes = db.relationship("ReceiverNode", backref="tenant", cascade="all, delete-orphan", lazy=True)
     system_logs = db.relationship("SystemLog", backref="tenant", cascade="all, delete-orphan", lazy=True)
     audit_logs = db.relationship("AuditLog", backref="tenant", cascade="all, delete-orphan", lazy=True)
+    address_book = db.relationship("DroneAddressBookEntry", backref="tenant", cascade="all, delete-orphan", lazy=True)
 
     def to_dict(self):
         return {
@@ -393,6 +394,34 @@ class ReceiverNode(db.Model):
         if include_key:
             result["apiKey"] = self.api_key
         return result
+
+
+class DroneAddressBookEntry(db.Model):
+    """Per-tenant drone address book — maps drone identifiers to custom names."""
+    __tablename__ = "drone_address_book"
+
+    id = db.Column(db.String(8), primary_key=True, default=_uuid8)
+    tenant_id = db.Column(db.String(8), db.ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    identifier = db.Column(db.String(100), nullable=False)  # basic_id or ICAO hex
+    custom_name = db.Column(db.String(200), nullable=False)
+    notes = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.Float, default=_now, nullable=False)
+    updated_at = db.Column(db.Float, default=_now, onupdate=_now, nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint("tenant_id", "identifier", name="uq_tenant_drone_identifier"),
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "tenantId": self.tenant_id,
+            "identifier": self.identifier,
+            "customName": self.custom_name,
+            "notes": self.notes,
+            "createdAt": self.created_at,
+            "updatedAt": self.updated_at,
+        }
 
 
 class SystemLog(db.Model):

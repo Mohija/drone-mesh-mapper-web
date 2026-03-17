@@ -16,6 +16,7 @@ import SettingsTab from './components/admin/SettingsTab';
 import LogViewerTab from './components/admin/LogViewerTab';
 import PlanningTab from './components/admin/PlanningTab';
 import AuditLogTab from './components/admin/AuditLogTab';
+import DroneAddressBook from './components/admin/DroneAddressBook';
 
 export default function App() {
   return (
@@ -36,6 +37,7 @@ export default function App() {
         <Route path="logs" element={<LogViewerTab />} />
         <Route path="planning" element={<PlanningTab />} />
         <Route path="audit" element={<AuditLogTab />} />
+        <Route path="addressbook" element={<DroneAddressBook />} />
       </Route>
     </Routes>
   );

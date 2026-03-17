@@ -823,6 +823,25 @@ function SectionAdmin() {
             Mandanten wechseln über den Mandanten-Switcher in der Sidebar.
           </InfoBox>
       </div>
+      <div id="drohnen-adressbuch">
+        <h3>Drohnen-Adressbuch</h3>
+          <p>
+            Im Admin-Bereich unter <strong>Adressbuch</strong> können bekannte Drohnen mit benutzerdefinierten
+            Namen versehen werden. Das Adressbuch ist pro Mandant.
+          </p>
+          <ul>
+            <li><strong>Kennung</strong> — Die technische Drohnen-ID (Basic ID, ICAO Hex). Beim Hinzufügen werden aktuell
+            gescannte Drohnen aller Online-Empfänger als Vorschläge angezeigt.</li>
+            <li><strong>Name</strong> — Frei wählbarer Anzeigename (z.B. &quot;DJI Mini 3 - Pilot Müller&quot;)</li>
+            <li><strong>Notizen</strong> — Optionale Zusatzinformationen</li>
+            <li><strong>Zonen-Zuweisung</strong> — Adressbuch-Drohnen erscheinen in der Zonen-Zuweisung auch wenn sie
+            gerade offline sind, mit Online/Offline-Status-Badge</li>
+          </ul>
+          <InfoBox type="info">
+            Drohnen aus dem Adressbuch werden auf der Karte mit ihrem benutzerdefinierten Namen angezeigt,
+            sobald sie von einem Empfänger erkannt werden.
+          </InfoBox>
+      </div>
       <div id="erweiterte-tooltips">
         <h3>Erweiterte Tooltips</h3>
           <p>

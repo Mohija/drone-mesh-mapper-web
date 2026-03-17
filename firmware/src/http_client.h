@@ -23,7 +23,8 @@ public:
                        const char* wifiSsid, int wifiRssi, int wifiChannel,
                        int freeHeap, int uptimeSeconds,
                        int detectionsSinceBoot, bool apActive,
-                       float lat, float lon, float accuracy);
+                       float lat, float lon, float accuracy,
+                       const char* wifiIp = "");
 
     // Perform OTA firmware update (ESP32 only)
     bool performOtaUpdate(const String& otaUrl);

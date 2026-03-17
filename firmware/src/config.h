@@ -42,7 +42,7 @@
 #endif
 
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION "1.1.0"
+#define FIRMWARE_VERSION "1.5.0"
 #endif
 
 #ifndef HARDWARE_TYPE

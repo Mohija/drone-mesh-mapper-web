@@ -204,7 +204,7 @@ function doManual(){
             showDone(d.wifi_ssid);
           }
         }).catch(function(){});
-        if(checks>=3&&connecting){
+        if(checks>=6&&connecting){
           $('man-msg').innerHTML='<div class="s err" style="margin:0">Verbindung fehlgeschlagen. Passwort pruefen.</div>';
           connecting=false;clearInterval(checkTimer);checkTimer=null;
         }
@@ -221,13 +221,13 @@ function doConnect(){
 
   fetch('/connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ssid:sel,password:p})})
     .then(function(r){return r.json()}).then(function(d){
-      // Start polling for connection result
+      // Start polling for connection result (6 checks x 5s = 30s timeout)
       var checks=0;
       checkTimer=setInterval(function(){
         checks++;
         loadStatus();
-        if(checks>=3 && connecting){
-          // Still not connected after 15s
+        if(checks>=6 && connecting){
+          // Still not connected after 30s
           $('msg').innerHTML='<div class="s err" style="margin:0">Verbindung fehlgeschlagen. Passwort pruefen und erneut versuchen.</div>';
           connecting=false;
           $('con-btn').disabled=false;

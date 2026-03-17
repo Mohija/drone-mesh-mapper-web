@@ -1,4 +1,4 @@
-import type { DronesResponse, Drone, DroneHistoryEntry, DataSourceSettings, AircraftLookup, ArchivedTrailSummary, ArchivedTrail, TrailPoint, FlightZone, ZoneViolation } from './types/drone';
+import type { DronesResponse, Drone, DroneHistoryEntry, DataSourceSettings, AircraftLookup, ArchivedTrailSummary, ArchivedTrail, TrailPoint, FlightZone, ZoneViolation, AddressBookEntry, AddressBookSuggestion } from './types/drone';
 import type { User, LoginResponse, TenantInfo } from './types/auth';
 
 function getApiBase(): string {
@@ -1284,5 +1284,50 @@ export async function batchCreateReceivers(data: {
     const err = await res.json().catch(() => ({ error: 'Erstellen fehlgeschlagen' }));
     throw new Error(err.error || `API error: ${res.status}`);
   }
+  return res.json();
+}
+
+// ─── Address Book ──────────────────────────────────────────
+
+export async function fetchAddressBook(): Promise<AddressBookEntry[]> {
+  const res = await authFetch(`${API_BASE}/addressbook`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function createAddressBookEntry(data: { identifier: string; customName: string; notes?: string }): Promise<AddressBookEntry> {
+  const res = await authFetch(`${API_BASE}/addressbook`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `API error: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function updateAddressBookEntry(id: string, data: Partial<{ identifier: string; customName: string; notes: string }>): Promise<AddressBookEntry> {
+  const res = await authFetch(`${API_BASE}/addressbook/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `API error: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function deleteAddressBookEntry(id: string): Promise<void> {
+  const res = await authFetch(`${API_BASE}/addressbook/${id}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+}
+
+export async function fetchAddressBookSuggestions(): Promise<AddressBookSuggestion[]> {
+  const res = await authFetch(`${API_BASE}/addressbook/suggestions`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }

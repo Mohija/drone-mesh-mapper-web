@@ -9,6 +9,7 @@ def register_blueprints(app):
     from routes.simulation_routes import simulation_bp
     from routes.log_routes import log_bp
     from routes.audit_routes import audit_bp
+    from routes.addressbook_routes import addressbook_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
@@ -16,3 +17,4 @@ def register_blueprints(app):
     app.register_blueprint(simulation_bp)
     app.register_blueprint(log_bp)
     app.register_blueprint(audit_bp)
+    app.register_blueprint(addressbook_bp)

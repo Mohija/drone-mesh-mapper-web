@@ -486,13 +486,19 @@ static OdidBleCallbacks* bleCallbacks = nullptr;
 
 #if USE_DUAL_CORE
 // BLE scan task runs on core 1
+static TaskHandle_t bleTaskHandle = nullptr;
+static volatile bool bleTaskRunning = true;
+
 static void bleScanTask(void* param) {
     NimBLEScan* scan = NimBLEDevice::getScan();
-    for (;;) {
+    while (bleTaskRunning) {
         scan->start(1, false);
         scan->clearResults();
         delay(100);
     }
+    // Task exits cleanly
+    bleTaskHandle = nullptr;
+    vTaskDelete(NULL);
 }
 #endif
 
@@ -507,12 +513,40 @@ void OdidScanner::_startBleScan() {
 
 #if USE_DUAL_CORE
     // Run BLE scan on core 1 (WiFi runs on core 0)
-    xTaskCreatePinnedToCore(bleScanTask, "BLEScanTask", 8192, nullptr, 1, nullptr, 1);
+    bleTaskRunning = true;
+    xTaskCreatePinnedToCore(bleScanTask, "BLEScanTask", 8192, nullptr, 1, &bleTaskHandle, 1);
     Serial.println("[Scanner] BLE scan task started on core 1");
 #else
     scan->start(0, nullptr, false); // Continuous scan
     Serial.println("[Scanner] BLE scan started (single core)");
 #endif
+}
+
+void OdidScanner::stopBleForOta() {
+    // Stop BLE scan
+    NimBLEDevice::getScan()->stop();
+    delay(100);
+
+#if USE_DUAL_CORE
+    // Signal BLE task to exit and wait for it
+    bleTaskRunning = false;
+    int waitMs = 0;
+    while (bleTaskHandle != nullptr && waitMs < 3000) {
+        delay(100);
+        waitMs += 100;
+    }
+    if (bleTaskHandle != nullptr) {
+        // Force kill if it didn't exit
+        vTaskDelete(bleTaskHandle);
+        bleTaskHandle = nullptr;
+    }
+    Serial.printf("[Scanner] BLE task stopped (%dms)\n", waitMs);
+#endif
+
+    // Now safe to deinit NimBLE
+    NimBLEDevice::deinit(false);
+    delay(200);
+    Serial.printf("[Scanner] BLE deinit done. Free heap: %d\n", ESP.getFreeHeap());
 }
 
 #endif // HAS_BLE

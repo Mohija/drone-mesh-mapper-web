@@ -149,7 +149,8 @@ void loop() {
             now / 1000,
             detectionsSinceBoot,
             wifiMgr.isApActive(),
-            lat, lon, acc
+            lat, lon, acc,
+            wifiMgr.getStaIp().c_str()
         );
 
         // OTA update available?
@@ -157,12 +158,11 @@ void loop() {
             Serial.printf("[Main] OTA update available: %s (%d bytes)\n",
                           ota.version.c_str(), ota.size);
 
-            // Free as much heap as possible before HTTPS OTA download
+            // Free as much heap as possible before OTA download
             scanner.pauseWifiScan();
 #if HAS_BLE
-            // Stop BLE completely to free ~30KB heap for TLS
-            NimBLEDevice::deinit(true);
-            delay(100);
+            // Safely stop BLE task + deinit (avoids heap corruption on ESP32-S3)
+            scanner.stopBleForOta();
             Serial.printf("[Main] BLE stopped for OTA. Free heap: %d\n", ESP.getFreeHeap());
 #endif
             led.setState(LED_BOOT);  // Blink during OTA
