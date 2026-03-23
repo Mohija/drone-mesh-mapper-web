@@ -103,6 +103,13 @@ const SECTION_SUBS: Record<string, SubMeta[]> = {
     { id: 'merged-binary', title: 'Merged Binary (Full-Flash)' },
     { id: 'vergleich', title: 'Vergleich: App-Firmware vs. Merged Binary vs. OTA' },
   ],
+  installation: [
+    { id: 'voraussetzungen', title: 'Voraussetzungen' },
+    { id: 'neuinstallation', title: 'Neuinstallation' },
+    { id: 'update', title: 'Update (bestehende Installation)' },
+    { id: 'deinstallation', title: 'Deinstallation' },
+    { id: 'skript-referenz', title: 'Skript-Referenz' },
+  ],
   tips: [
     { id: 'performance', title: 'Performance' },
     { id: 'empfaenger-platzierung', title: 'Empfänger-Platzierung' },
@@ -115,7 +122,7 @@ const SECTION_SUBS: Record<string, SubMeta[]> = {
 type Section =
   | 'overview' | 'login' | 'map' | 'drones' | 'flightzones'
   | 'nfz' | 'violations' | 'reports' | 'settings' | 'admin'
-  | 'receivers' | 'simulation' | 'hardware' | 'ota' | 'tips';
+  | 'receivers' | 'simulation' | 'hardware' | 'ota' | 'installation' | 'tips';
 
 const SECTIONS: { id: Section; title: string; icon: string; adminOnly?: boolean }[] = [
   { id: 'overview', title: 'Übersicht', icon: '📋' },
@@ -132,6 +139,7 @@ const SECTIONS: { id: Section; title: string; icon: string; adminOnly?: boolean 
   { id: 'simulation', title: 'Simulation', icon: '🧪', adminOnly: true },
   { id: 'hardware', title: 'Hardware-Inbetriebnahme', icon: '🔧', adminOnly: true },
   { id: 'ota', title: 'OTA-Updates & Merged Binary', icon: '📲', adminOnly: true },
+  { id: 'installation', title: 'Installation & Update', icon: '📦', adminOnly: true },
   { id: 'tips', title: 'Tipps & Tricks', icon: '💡' },
 ];
 
@@ -1862,6 +1870,150 @@ esptool.py --chip esp32s3 write_flash 0x0 flightarc-esp32-s3-XXXX-merged.bin`}</
   );
 }
 
+function SectionInstallation() {
+  return (
+    <div>
+      <h2>Installation & Update</h2>
+
+      <InfoBox type="info">
+        FlightArc bietet Installations- und Update-Skripte für <strong>Linux/macOS</strong> (Python) und <strong>Windows</strong> (PowerShell).
+        Bei einem Update bleiben Datenbank und Benutzer erhalten — es sei denn, der Datenbank-Reset wird explizit angefordert.
+      </InfoBox>
+
+      <div id="voraussetzungen">
+        <h3>Voraussetzungen</h3>
+        <table style={tableStyle}>
+          <thead>
+            <tr><th style={thStyle}>Software</th><th style={thStyle}>Version</th><th style={thStyle}>Hinweis</th></tr>
+          </thead>
+          <tbody>
+            <tr><td style={tdStyle}>Python</td><td style={tdStyle}>3.8+</td><td style={tdStyle}>Wird für das Backend und die Installer-Skripte benötigt</td></tr>
+            <tr><td style={tdStyle}>Node.js</td><td style={tdStyle}>16+</td><td style={tdStyle}>Wird für das Frontend (React Build) benötigt</td></tr>
+            <tr><td style={tdStyle}>npm</td><td style={tdStyle}>8+</td><td style={tdStyle}>Wird mit Node.js mitgeliefert</td></tr>
+            <tr><td style={tdStyle}>Git</td><td style={tdStyle}>beliebig</td><td style={tdStyle}>Optional — für automatische Updates per git pull</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="neuinstallation">
+        <h3>Neuinstallation</h3>
+        <p>Nach dem Klonen des Repositories:</p>
+
+        <h4>Linux / macOS</h4>
+        <CodeBlock>{`cd drone-mesh-mapper-web
+python3 install.py`}</CodeBlock>
+
+        <h4>Windows (PowerShell)</h4>
+        <CodeBlock>{`.\\install.ps1`}</CodeBlock>
+
+        <p>Das Skript führt automatisch folgende Schritte aus:</p>
+        <ol>
+          <li>Prüft ob Python, Node.js und npm installiert sind</li>
+          <li>Erstellt ein Python Virtual Environment (<code>backend/venv/</code>)</li>
+          <li>Installiert alle Python-Abhängigkeiten</li>
+          <li>Installiert alle Node.js-Abhängigkeiten</li>
+          <li>Baut das Frontend (Production Build)</li>
+          <li>Erstellt die <code>.env</code>-Datei mit Standardwerten</li>
+        </ol>
+
+        <h4>Optionaler Port</h4>
+        <CodeBlock>{`# Linux/macOS
+python3 install.py --port 8080
+
+# Windows
+.\\install.ps1 -Port 8080`}</CodeBlock>
+      </div>
+
+      <div id="update">
+        <h3>Update (bestehende Installation)</h3>
+        <p>
+          Dasselbe Skript erkennt automatisch, ob FlightArc bereits installiert ist.
+          Bei einem Update wird:
+        </p>
+        <ul>
+          <li>Der neueste Code per <code>git pull</code> geladen (wenn Git-Repository)</li>
+          <li>Alle Abhängigkeiten aktualisiert</li>
+          <li>Das Frontend neu gebaut</li>
+        </ul>
+
+        <InfoBox type="tip">
+          Die Datenbank mit allen Benutzern, Einstellungen und Flugdaten bleibt beim Update <strong>immer</strong> erhalten.
+        </InfoBox>
+
+        <h4>Update mit Datenbank-Reset</h4>
+        <InfoBox type="danger">
+          Nur verwenden wenn die Datenbank bewusst zurückgesetzt werden soll! Alle Benutzer, Mandanten und Flugdaten gehen verloren.
+        </InfoBox>
+        <CodeBlock>{`# Linux/macOS
+python3 install.py --reset-db
+
+# Windows
+.\\install.ps1 -ResetDB`}</CodeBlock>
+        <p>Es wird eine Sicherheitsabfrage angezeigt, bevor die Datenbank gelöscht wird.</p>
+      </div>
+
+      <div id="deinstallation">
+        <h3>Deinstallation</h3>
+        <p>Zum Entfernen der Installation stehen separate Skripte bereit:</p>
+
+        <h4>Standard (Datenbank bleibt erhalten)</h4>
+        <CodeBlock>{`# Linux/macOS
+python3 uninstall.py
+
+# Windows
+.\\uninstall.ps1`}</CodeBlock>
+        <p>Entfernt: Python venv, node_modules, Frontend-Build, .env, __pycache__</p>
+
+        <h4>Mit Datenbank löschen</h4>
+        <CodeBlock>{`# Linux/macOS
+python3 uninstall.py --delete-db
+
+# Windows
+.\\uninstall.ps1 -DeleteDB`}</CodeBlock>
+
+        <h4>Vollständige Entfernung (inkl. Quellcode)</h4>
+        <CodeBlock>{`# Linux/macOS
+python3 uninstall.py --full
+
+# Windows
+.\\uninstall.ps1 -Full`}</CodeBlock>
+        <InfoBox type="danger">
+          <code>--full</code> löscht das gesamte Projektverzeichnis unwiderruflich!
+        </InfoBox>
+      </div>
+
+      <div id="skript-referenz">
+        <h3>Skript-Referenz</h3>
+        <table style={tableStyle}>
+          <thead>
+            <tr><th style={thStyle}>Skript</th><th style={thStyle}>Parameter</th><th style={thStyle}>Beschreibung</th></tr>
+          </thead>
+          <tbody>
+            <tr><td style={tdStyle}><code>install.py</code></td><td style={tdStyle}>(keine)</td><td style={tdStyle}>Neuinstallation oder Update</td></tr>
+            <tr><td style={tdStyle}><code>install.py</code></td><td style={tdStyle}><code>--reset-db</code></td><td style={tdStyle}>Update mit Datenbank-Reset</td></tr>
+            <tr><td style={tdStyle}><code>install.py</code></td><td style={tdStyle}><code>--port N</code></td><td style={tdStyle}>Server-Port setzen</td></tr>
+            <tr><td style={tdStyle}><code>install.ps1</code></td><td style={tdStyle}><code>-ResetDB</code></td><td style={tdStyle}>Update mit Datenbank-Reset</td></tr>
+            <tr><td style={tdStyle}><code>install.ps1</code></td><td style={tdStyle}><code>-Port N</code></td><td style={tdStyle}>Server-Port setzen</td></tr>
+            <tr><td style={tdStyle}><code>uninstall.py</code></td><td style={tdStyle}>(keine)</td><td style={tdStyle}>Deinstallation (DB bleibt)</td></tr>
+            <tr><td style={tdStyle}><code>uninstall.py</code></td><td style={tdStyle}><code>--delete-db</code></td><td style={tdStyle}>Deinstallation inkl. Datenbank</td></tr>
+            <tr><td style={tdStyle}><code>uninstall.py</code></td><td style={tdStyle}><code>--full</code></td><td style={tdStyle}>Gesamtes Verzeichnis löschen</td></tr>
+            <tr><td style={tdStyle}><code>uninstall.ps1</code></td><td style={tdStyle}><code>-DeleteDB</code></td><td style={tdStyle}>Deinstallation inkl. Datenbank</td></tr>
+            <tr><td style={tdStyle}><code>uninstall.ps1</code></td><td style={tdStyle}><code>-Full</code></td><td style={tdStyle}>Gesamtes Verzeichnis löschen</td></tr>
+          </tbody>
+        </table>
+
+        <h4>Server starten nach Installation</h4>
+        <CodeBlock>{`# Linux/macOS
+cd backend && ./venv/bin/python3 app.py
+
+# Windows
+cd backend; .\\venv\\Scripts\\python.exe app.py`}</CodeBlock>
+        <p>Danach im Browser öffnen: <code>http://localhost:3020</code> (oder der konfigurierte Port).</p>
+      </div>
+    </div>
+  );
+}
+
 function SectionTips() {
   return (
     <div>
@@ -2040,6 +2192,7 @@ const SECTION_CONTENT: Record<Section, () => JSX.Element> = {
   simulation: SectionSimulation,
   hardware: SectionHardware,
   ota: SectionOta,
+  installation: SectionInstallation,
   tips: SectionTips,
 };
 

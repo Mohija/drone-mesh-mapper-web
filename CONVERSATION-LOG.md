@@ -2,7 +2,7 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-20 (Automatische Einstellungsspeicherung)
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-23 (Install/Update/Uninstall-Skripte)
 - **Typ:** Projekt | **Status:** Development
 
 ## Offene Aufgaben
@@ -24,6 +24,13 @@
 - [ ] Docker Deployment Package
 
 ## Änderungshistorie
+
+### 2026-03-23 - Install/Update/Uninstall-Skripte + Dokumentation
+- **Install-Skripte** (`install.py`, `install.ps1`): Automatische Neuinstallation oder Update. Erkennt bestehende Installation, zieht Git-Updates, aktualisiert Dependencies, baut Frontend. Datenbank bleibt bei Update IMMER erhalten, optional `--reset-db` für expliziten Reset mit Sicherheitsabfrage.
+- **Deinstallations-Skripte** (`uninstall.py`, `uninstall.ps1`): Entfernt venv, node_modules, dist, .env. Datenbank bleibt standardmäßig erhalten. Optionen: `--delete-db` (DB auch löschen) und `--full` (gesamtes Verzeichnis löschen).
+- **Handbuch**: Neue Section "Installation & Update" in HelpPage.tsx (admin-only) mit Voraussetzungen, Neuinstallation, Update, Deinstallation und Skript-Referenz.
+- **README.md**: Komplett überarbeitet mit Installation, Update, Deinstallation und Skript-Referenztabelle.
+- **Dateien**: `install.py`, `install.ps1`, `uninstall.py`, `uninstall.ps1`, `README.md`, `frontend/src/components/HelpPage.tsx`
 
 ### 2026-03-20 - Automatische Einstellungsspeicherung + rollenbasierte Hilfe
 - **Alle Anzeigeeinstellungen** werden jetzt automatisch per User im localStorage gespeichert und beim nächsten Besuch wiederhergestellt
