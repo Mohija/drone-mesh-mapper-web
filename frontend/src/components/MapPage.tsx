@@ -57,9 +57,13 @@ export default function MapPage() {
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [droneCount, setDroneCount] = useState(0);
-  const [radiusEnabled, setRadiusEnabled] = useState(true);
-  const [radius, setRadius] = useState(DEFAULT_RADIUS);
-  const [noFlyEnabled, setNoFlyEnabled] = useState(false);
+  const [radiusEnabled, setRadiusEnabled] = useState(() => getUserItem('radius-enabled') !== 'false');
+  const [radius, setRadius] = useState(() => {
+    const stored = getUserItem('radius');
+    const parsed = stored ? Number(stored) : DEFAULT_RADIUS;
+    return [5000, 10000, 25000, 50000, 100000, 250000].includes(parsed) ? parsed : DEFAULT_RADIUS;
+  });
+  const [noFlyEnabled, setNoFlyEnabled] = useState(() => getUserItem('nofly-enabled') === 'true');
   const [noFlyPanelOpen, setNoFlyPanelOpen] = useState(false);
   const isMobile = useIsMobile();
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
@@ -72,7 +76,7 @@ export default function MapPage() {
   useEffect(() => {
     fetchMissionZoneDefaults().then(setMzDefaults).catch(() => {});
   }, []);
-  const [showReceiverCoverage, setShowReceiverCoverage] = useState(false);
+  const [showReceiverCoverage, setShowReceiverCoverage] = useState(() => getUserItem('receiver-coverage') === 'true');
   const [receiverCoverage, setReceiverCoverage] = useState<ReceiverCoverage[]>([]);
 
   // Poll receiver coverage when toggle is enabled
@@ -95,9 +99,16 @@ export default function MapPage() {
 
   const [mobileZoneMinAGL, setMobileZoneMinAGL] = useState('');
   const [mobileZoneMaxAGL, setMobileZoneMaxAGL] = useState('');
-  const [nfzRadiusEnabled, setNfzRadiusEnabled] = useState(false);
-  const [nfzRadius, setNfzRadius] = useState(50000); // 50km default
-  const [altitudeZone, setAltitudeZone] = useState('all');
+  const [nfzRadiusEnabled, setNfzRadiusEnabled] = useState(() => getUserItem('nfz-radius-enabled') === 'true');
+  const [nfzRadius, setNfzRadius] = useState(() => {
+    const stored = getUserItem('nfz-radius');
+    const parsed = stored ? Number(stored) : 50000;
+    return [10000, 25000, 50000, 100000, 250000].includes(parsed) ? parsed : 50000;
+  });
+  const [altitudeZone, setAltitudeZone] = useState(() => {
+    const stored = getUserItem('altitude-zone');
+    return stored && ALTITUDE_ZONES.some(z => z.id === stored) ? stored : 'all';
+  });
   const [refreshRate, setRefreshRate] = useState(() => {
     const stored = getUserItem('refresh-rate');
     const parsed = stored ? Number(stored) : 2000;
@@ -141,6 +152,15 @@ export default function MapPage() {
   useEffect(() => {
     setUserItem('nofly-layers', JSON.stringify(enabledNoFlyLayers));
   }, [enabledNoFlyLayers]);
+
+  // Persist user display preferences
+  useEffect(() => { setUserItem('radius-enabled', String(radiusEnabled)); }, [radiusEnabled]);
+  useEffect(() => { setUserItem('radius', String(radius)); }, [radius]);
+  useEffect(() => { setUserItem('nofly-enabled', String(noFlyEnabled)); }, [noFlyEnabled]);
+  useEffect(() => { setUserItem('nfz-radius-enabled', String(nfzRadiusEnabled)); }, [nfzRadiusEnabled]);
+  useEffect(() => { setUserItem('nfz-radius', String(nfzRadius)); }, [nfzRadius]);
+  useEffect(() => { setUserItem('altitude-zone', altitudeZone); }, [altitudeZone]);
+  useEffect(() => { setUserItem('receiver-coverage', String(showReceiverCoverage)); }, [showReceiverCoverage]);
 
   const loadDrones = useCallback(async () => {
     const seq = pollSeqRef.current;

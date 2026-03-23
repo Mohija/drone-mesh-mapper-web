@@ -250,18 +250,11 @@ void WiFiManager::loop() {
         }
     }
 
-    // ── STA reconnect attempts ───────────────────────────────
-    // Do NOT call WiFi.begin() while a client is connected to the AP —
-    // it disrupts the WiFi stack and breaks the captive portal.
-    // But if no clients are connected, we MUST try to reconnect to known networks.
-    if (_apActive) {
-#ifdef ESP32
-        int apClients = WiFi.softAPgetStationNum();
-#else
-        int apClients = wifi_softap_get_station_num();
-#endif
-        if (apClients > 0) return;  // Someone is using the portal — don't disrupt
-    }
+    // ── STA reconnect: SKIP entirely when AP is active ──────
+    // WiFi.begin() disrupts the AP radio on ESP32-S3, making the AP
+    // invisible/unstable. Once AP is up, new credentials come only via
+    // captive portal (setStaCredentials). Reboot triggers a fresh scan.
+    if (_apActive) return;
 
     if (_staConfigured && !connected && (now - _lastReconnectAttempt > WIFI_RECONNECT_MS)) {
         _lastReconnectAttempt = now;
@@ -401,9 +394,13 @@ void WiFiManager::_scanAndCache() {
 void WiFiManager::_startAp() {
     if (_apActive) return;
 
-    // Set mode to AP (or AP+STA if STA configured)
-    WiFi.mode(_staConfigured ? WIFI_AP_STA : WIFI_AP);
-    delay(100);
+    // Stop any pending STA connection — frees the radio for clean AP operation.
+    // Without this, the lingering STA attempt blocks the DHCP server on ESP32-S3.
+    // When user sets credentials via captive portal, setStaCredentials() switches
+    // to AP_STA mode automatically.
+    WiFi.disconnect(false);  // Stop STA connection attempt (don't un-init yet)
+    WiFi.mode(WIFI_AP);      // Switch to AP-only — implicitly stops STA cleanly
+    delay(200);
 
     // Start AP on channel 6, open network, max 4 clients
     WiFi.softAP(_apSsid.c_str(), nullptr, 6, 0, 4);

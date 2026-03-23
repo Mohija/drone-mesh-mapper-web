@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useMemo } from 'react';
 import type { Drone, ViolationRecord } from './types/drone';
 import type { ServerViolationRecord } from './api';
 import { fetchViolations, deleteViolationRecord, clearViolationRecords } from './api';
-import { getUserItem } from './userStorage';
+import { getUserItem, setUserItem } from './userStorage';
 
 /** Play a short alert beep for new violations (respects user setting) */
 function playAlertSound() {
@@ -42,7 +42,11 @@ export interface UseViolationLogReturn {
 
 export function useViolationLog(violationVersion?: number): UseViolationLogReturn {
   const [records, setRecords] = useState<ViolationRecord[]>([]);
-  const [collapsed, setCollapsed] = useState(true);
+  const [collapsed, setCollapsedRaw] = useState(() => getUserItem('violation-collapsed') !== 'false');
+  const setCollapsed = useCallback((v: boolean) => {
+    setCollapsedRaw(v);
+    setUserItem('violation-collapsed', String(v));
+  }, []);
   // Track which record IDs we already alerted on (survives re-renders)
   const alertedRef = useRef<Set<string>>(new Set());
   // Local UI state: per-record trail visibility (not shared across users)

@@ -2,7 +2,7 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-17 (Drohnen-Adressbuch)
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-20 (Automatische Einstellungsspeicherung)
 - **Typ:** Projekt | **Status:** Development
 
 ## Offene Aufgaben
@@ -24,6 +24,13 @@
 - [ ] Docker Deployment Package
 
 ## Änderungshistorie
+
+### 2026-03-20 - Automatische Einstellungsspeicherung + rollenbasierte Hilfe
+- **Alle Anzeigeeinstellungen** werden jetzt automatisch per User im localStorage gespeichert und beim nächsten Besuch wiederhergestellt
+- **Neu persistiert**: NFZ ein/aus, Höhenfilter, Radius ein/aus + Wert, NFZ-Radius ein/aus + Wert, Empfänger-Abdeckung, Violation-Tabelle collapsed
+- **Bereits persistiert** (unverändert): Aktualisierungsrate, NFZ-Layer-Auswahl, Tracked Drones, Theme, Violation Sound
+- **Rollenbasierte Hilfe**: HelpPage zeigt nur relevante Sektionen basierend auf User-Rolle. Admin-only: Administration, Empfänger, Simulation, Hardware, OTA. Auch Suche (Ctrl+K) und Sidebar filtern nach Rolle.
+- **Dateien**: `frontend/src/components/MapPage.tsx`, `frontend/src/useViolationLog.ts`, `frontend/src/components/HelpPage.tsx`
 
 ### 2026-03-17 - Drohnen-Adressbuch (pro Mandant)
 - **Adressbuch-Feature**: Drohnen-Kennungen (basic_id/ICAO) auf benutzerdefinierte Namen mappen

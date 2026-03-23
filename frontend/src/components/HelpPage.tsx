@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../ThemeContext';
 import { useIsMobile } from '../useIsMobile';
+import { useAuth } from '../AuthContext';
 
 // ─── Subsection Metadata (for search + mini-TOC) ───────
 
@@ -116,7 +117,7 @@ type Section =
   | 'nfz' | 'violations' | 'reports' | 'settings' | 'admin'
   | 'receivers' | 'simulation' | 'hardware' | 'ota' | 'tips';
 
-const SECTIONS: { id: Section; title: string; icon: string }[] = [
+const SECTIONS: { id: Section; title: string; icon: string; adminOnly?: boolean }[] = [
   { id: 'overview', title: 'Übersicht', icon: '📋' },
   { id: 'login', title: 'Anmeldung', icon: '🔑' },
   { id: 'map', title: 'Kartenansicht', icon: '🗺️' },
@@ -126,11 +127,11 @@ const SECTIONS: { id: Section; title: string; icon: string }[] = [
   { id: 'violations', title: 'Verstöße', icon: '⚠️' },
   { id: 'reports', title: 'Flugberichte', icon: '📄' },
   { id: 'settings', title: 'Einstellungen', icon: '⚙️' },
-  { id: 'admin', title: 'Administration', icon: '👤' },
-  { id: 'receivers', title: 'Empfänger-Verwaltung', icon: '📡' },
-  { id: 'simulation', title: 'Simulation', icon: '🧪' },
-  { id: 'hardware', title: 'Hardware-Inbetriebnahme', icon: '🔧' },
-  { id: 'ota', title: 'OTA-Updates & Merged Binary', icon: '📲' },
+  { id: 'admin', title: 'Administration', icon: '👤', adminOnly: true },
+  { id: 'receivers', title: 'Empfänger-Verwaltung', icon: '📡', adminOnly: true },
+  { id: 'simulation', title: 'Simulation', icon: '🧪', adminOnly: true },
+  { id: 'hardware', title: 'Hardware-Inbetriebnahme', icon: '🔧', adminOnly: true },
+  { id: 'ota', title: 'OTA-Updates & Merged Binary', icon: '📲', adminOnly: true },
   { id: 'tips', title: 'Tipps & Tricks', icon: '💡' },
 ];
 
@@ -379,6 +380,7 @@ function SectionOverview() {
             <li><strong>Flugberichte</strong> — Zeichne Flugverläufe auf und exportiere als HTML/PDF-Report</li>
             <li><strong>Multi-Mandanten</strong> — Isolierte Arbeitsbereiche für verschiedene Organisationen</li>
             <li><strong>Hardware-Empfänger</strong> — ESP32/ESP8266-Integration für echte Open Drone ID Erkennung</li>
+            <li><strong>Automatische Einstellungsspeicherung</strong> — Alle Anzeigeeinstellungen (Radius, Höhenfilter, NFZ, Empfänger-Abdeckung etc.) werden pro Benutzer im Browser gespeichert und beim nächsten Besuch automatisch wiederhergestellt</li>
           </ul>
           <SourceColorLegend />
           <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
@@ -456,10 +458,10 @@ function SectionMap() {
             </thead>
             <tbody>
               <tr><td style={tdStyle}><strong>FlightArc v1.5</strong></td><td style={tdStyle}>App-Name mit Version. Daneben die aktuelle Drohnen-Anzahl und Empfänger-Status.</td></tr>
-              <tr><td style={tdStyle}><strong>↻ Aktualisierungsrate</strong></td><td style={tdStyle}>Wie oft die Karte aktualisiert wird. Optionen: 1s, 2s (Standard), 5s, 10s, 30s. Wird im Browser gespeichert.</td></tr>
-              <tr><td style={tdStyle}><strong>⊕ Radius-Filter</strong></td><td style={tdStyle}>Begrenzt die Anzeige auf einen Umkreis um das Kartenzentrum. Optionen: 5–500 km oder Aus. Schalte den Filter mit dem ⊕-Button an/aus.</td></tr>
-              <tr><td style={tdStyle}><strong>↕ Höhenfilter</strong></td><td style={tdStyle}>Filtert Drohnen nach Höhenzone: Alle, 0–100m, 100–500m, 500–2000m, &gt;2000m.</td></tr>
-              <tr><td style={tdStyle}><strong>🚫 NFZ-Button</strong></td><td style={tdStyle}>Öffnet das Flugverbotszonen-Panel (DIPUL-Layer).</td></tr>
+              <tr><td style={tdStyle}><strong>↻ Aktualisierungsrate</strong></td><td style={tdStyle}>Wie oft die Karte aktualisiert wird. Optionen: 1s, 2s (Standard), 5s, 10s, 30s. Wird automatisch pro Benutzer gespeichert.</td></tr>
+              <tr><td style={tdStyle}><strong>⊕ Radius-Filter</strong></td><td style={tdStyle}>Begrenzt die Anzeige auf einen Umkreis um das Kartenzentrum. Optionen: 5–250 km oder Aus. Einstellung wird automatisch gespeichert.</td></tr>
+              <tr><td style={tdStyle}><strong>↕ Höhenfilter</strong></td><td style={tdStyle}>Filtert Drohnen nach Höhenzone: Alle, 0–50m (CTR), 0–100m (Natur), 0–120m (Open), 120–300m (Specific), 300m+ (Certified). Auswahl wird automatisch gespeichert.</td></tr>
+              <tr><td style={tdStyle}><strong>🚫 NFZ-Button</strong></td><td style={tdStyle}>Öffnet das Flugverbotszonen-Panel (DIPUL-Layer). Der Ein/Aus-Status, gewählte Layer und NFZ-Radius werden automatisch gespeichert.</td></tr>
               <tr><td style={tdStyle}><strong>📡 Empfänger</strong></td><td style={tdStyle}>Blendet Empfänger-Positionen und Abdeckungsradius ein/aus.</td></tr>
               <tr><td style={tdStyle}><strong>📐 Zonen-Button</strong></td><td style={tdStyle}>Öffnet das Flugzonen-Panel zur Verwaltung von Überwachungszonen.</td></tr>
               <tr><td style={tdStyle}><strong>📊 Tracking-Button</strong></td><td style={tdStyle}>Öffnet das Tracking-Panel mit aktiven Verfolgungen.</td></tr>
@@ -1425,7 +1427,6 @@ esptool.py --chip esp8266 --port /dev/ttyUSB0 \\
           <tr><td style={tdStyle}><strong>Doppelblinken</strong> (2x 200ms, Pause)</td><td style={tdStyle}>Orange</td><td style={tdStyle}>WLAN ok, Backend nicht erreichbar</td><td style={tdStyle}>Backend-URL und Netzwerk prüfen (Server erreichbar? Firewall? Port?)</td></tr>
           <tr><td style={tdStyle}><strong>Dauerhaft an</strong></td><td style={tdStyle}>Grün</td><td style={tdStyle}>Alles ok — Online</td><td style={tdStyle}>Empfänger funktioniert, sendet Heartbeats und Erkennungen</td></tr>
           <tr><td style={tdStyle}><strong>Kurzes Aufblitzen</strong> (80ms)</td><td style={tdStyle}>Weiß</td><td style={tdStyle}>Drohne erkannt</td><td style={tdStyle}>Normale Aktivität — LED blitzt weiß bei jeder gesendeten Erkennung</td></tr>
-          <tr><td style={tdStyle}><strong>SOS-Muster</strong></td><td style={tdStyle}>Rot</td><td style={tdStyle}>Schwerer Fehler</td><td style={tdStyle}>ESP neustarten, ggf. Flash löschen und Firmware neu flashen</td></tr>
         </tbody>
       </table>
 
@@ -1510,7 +1511,6 @@ esptool.py --chip esp8266 --port /dev/ttyUSB0 \\
           <tr><td style={tdStyle}>Doppelblinken (2x 200ms, Pause)</td><td style={tdStyle}>Orange</td><td style={tdStyle}>WiFi verbunden, Backend nicht erreichbar</td></tr>
           <tr><td style={tdStyle}>Dauerhaft an</td><td style={tdStyle}>Grün</td><td style={tdStyle}>Online — verbunden mit FlightArc Backend</td></tr>
           <tr><td style={tdStyle}>Kurzes Aufblitzen (80ms)</td><td style={tdStyle}>Weiß</td><td style={tdStyle}>Drohne erkannt!</td></tr>
-          <tr><td style={tdStyle}>SOS-Muster</td><td style={tdStyle}>Rot</td><td style={tdStyle}>Schwerer Fehler — ESP neustarten, ggf. Firmware neu flashen</td></tr>
         </tbody>
       </table>
         </div>
@@ -2045,10 +2045,11 @@ const SECTION_CONTENT: Record<Section, () => JSX.Element> = {
 
 // ─── Search Modal ────────────────────────────────────────
 
-function SearchModal({ open, onClose, onSelect }: {
+function SearchModal({ open, onClose, onSelect, sections }: {
   open: boolean;
   onClose: () => void;
   onSelect: (sectionId: Section, subId?: string) => void;
+  sections: typeof SECTIONS;
 }) {
   const [query, setQuery] = useState('');
   const [selectedIdx, setSelectedIdx] = useState(0);
@@ -2062,7 +2063,7 @@ function SearchModal({ open, onClose, onSelect }: {
     if (!query.trim()) return [];
     const q = query.toLowerCase();
     const out: { sectionId: Section; icon: string; sectionTitle: string; subTitle?: string; subId?: string }[] = [];
-    for (const s of SECTIONS) {
+    for (const s of sections) {
       if (s.title.toLowerCase().includes(q)) {
         out.push({ sectionId: s.id, icon: s.icon, sectionTitle: s.title });
       }
@@ -2196,13 +2197,20 @@ function MiniTOC({ subs, activeSubId, onSubClick }: {
 export default function HelpPage() {
   const navigate = useNavigate();
   const { theme } = useTheme();
+  const { canManage } = useAuth();
   const isMobile = useIsMobile();
   const isWide = !useIsMobile(1100);
   const contentRef = useRef<HTMLDivElement>(null);
 
+  // Filter sections based on user role
+  const visibleSections = useMemo(() =>
+    SECTIONS.filter(s => !s.adminOnly || canManage),
+    [canManage],
+  );
+
   const [active, setActive] = useState<Section>(() => {
     const hash = window.location.hash.slice(1).split('--')[0];
-    if (hash && SECTIONS.some(s => s.id === hash)) return hash as Section;
+    if (hash && visibleSections.some(s => s.id === hash)) return hash as Section;
     return 'overview';
   });
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -2314,8 +2322,8 @@ export default function HelpPage() {
   }, []);
 
   const filteredSections = searchTerm
-    ? SECTIONS.filter(s => s.title.toLowerCase().includes(searchTerm.toLowerCase()))
-    : SECTIONS;
+    ? visibleSections.filter(s => s.title.toLowerCase().includes(searchTerm.toLowerCase()))
+    : visibleSections;
 
   const Content = SECTION_CONTENT[active];
   const currentSubs = SECTION_SUBS[active] || [];
@@ -2482,7 +2490,7 @@ export default function HelpPage() {
       )}
 
       {/* Search Modal */}
-      <SearchModal open={searchOpen} onClose={() => setSearchOpen(false)} onSelect={handleSearchSelect} />
+      <SearchModal open={searchOpen} onClose={() => setSearchOpen(false)} onSelect={handleSearchSelect} sections={visibleSections} />
     </div>
   );
 }
