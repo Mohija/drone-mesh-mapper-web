@@ -411,9 +411,15 @@ export default function ReceiverList() {
     }
 
     try {
+      // Backend URL comes from the tenant-wide firmware_backend_url setting,
+      // never from the stale buildConfig.backend_url (which can still hold a
+      // LAN IP from a build that predates the setting). If the state isn't
+      // loaded yet, send empty and let the backend fall back to TenantSettings
+      // on its side — never to window.location.origin, which would be a
+      // local address on a dev machine.
       await startBuildAsync({
         node_id: node.id,
-        backend_url: buildConfig?.backend_url || window.location.origin,
+        backend_url: firmwareBackendUrl || '',
         wifi_networks: wifiNets || undefined,
       });
       addOtaLog('Build gestartet, warte auf Abschluss...');
