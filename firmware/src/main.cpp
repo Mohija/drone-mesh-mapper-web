@@ -14,6 +14,13 @@
 #include "odid_scanner.h"
 #include "http_client.h"
 #include "led_status.h"
+#if HAS_GPS
+#include "gps_module.h"
+#endif
+#if HAS_RGB_BUTTON
+#include "rgb_button.h"
+#include <esp_sleep.h>
+#endif
 
 #ifdef ESP32
 #include <esp_task_wdt.h>
@@ -27,6 +34,12 @@ CaptivePortal portal;
 OdidScanner scanner;
 FlightArcClient client;
 LedStatus led;
+#if HAS_GPS
+GpsModule gps;
+#endif
+#if HAS_RGB_BUTTON
+RgbButton rgbBtn;
+#endif
 
 unsigned long lastIngest = 0;
 unsigned long lastHeartbeat = 0;
@@ -54,11 +67,30 @@ void setup() {
 #else
     Serial.println("TLS: disabled");
 #endif
+#if HAS_GPS
+    Serial.println("GPS: enabled (ATGM336H on UART1)");
+#endif
+#if HAS_RGB_BUTTON
+    Serial.println("RGB-Button: enabled (GPIO4 = power, GPIO5/6/7 = RGB)");
+#endif
     Serial.println("================================");
+
+#if HAS_RGB_BUTTON
+    // RGB button before LED so LedStatus can route colours through it.
+    bool fromDeepSleep = (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT0);
+    rgbBtn.begin(fromDeepSleep);
+#endif
 
     // 1. LED
     led.begin();
+#if HAS_RGB_BUTTON
+    led.attachRgbButton(&rgbBtn);
+#endif
     led.setState(LED_BOOT);
+
+#if HAS_GPS
+    gps.begin();
+#endif
 
     // 2. WiFi (SoftAP provisioning: AP starts only when STA fails)
     String apSsid = String(AP_SSID_PREFIX) + String(NODE_NAME).substring(0, 8);
@@ -80,6 +112,16 @@ void setup() {
 
 void loop() {
     unsigned long now = millis();
+
+#if HAS_RGB_BUTTON
+    // Handle the button first; a long-press may call esp_deep_sleep_start()
+    // and never return.
+    rgbBtn.loop();
+#endif
+
+#if HAS_GPS
+    gps.loop();
+#endif
 
     // Captive portal FIRST — DNS must respond fast for captive portal detection
     portal.loop();
@@ -127,6 +169,14 @@ void loop() {
         if (count > 0) {
             float nodeLat = portal.hasLocation() ? portal.getLatitude() : 0;
             float nodeLon = portal.hasLocation() ? portal.getLongitude() : 0;
+#if HAS_GPS
+            // GPS fix overrides the portal-configured location so the receiver
+            // follows its real position without manual calibration.
+            if (gps.hasFix()) {
+                nodeLat = (float) gps.latitude();
+                nodeLon = (float) gps.longitude();
+            }
+#endif
 
             if (client.sendIngest(detections, count, nodeLat, nodeLon)) {
                 detectionsSinceBoot += count;
@@ -181,6 +231,16 @@ void loop() {
         float lat = portal.hasLocation() ? portal.getLatitude() : 0;
         float lon = portal.hasLocation() ? portal.getLongitude() : 0;
         float acc = portal.hasLocation() ? portal.getAccuracy() : 0;
+#if HAS_GPS
+        if (gps.hasFix()) {
+            lat = (float) gps.latitude();
+            lon = (float) gps.longitude();
+            // Approximate horizontal accuracy in metres from HDOP (1 HDOP ≈ 3m
+            // with a decent module). Clamp to something sane if HDOP is huge.
+            float h = gps.hdop();
+            acc = (h > 0 && h < 20.0f) ? h * 3.0f : 30.0f;
+        }
+#endif
 
         OtaInfo ota = client.sendHeartbeat(
             FIRMWARE_VERSION,

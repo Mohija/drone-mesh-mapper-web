@@ -810,6 +810,7 @@ ENV_MAP = {
     "esp32-s3": "esp32-s3",
     "esp32-c3": "esp32-c3",
     "esp8266": "esp8266",
+    "esp32-s3-gps": "esp32-s3-gps",
 }
 
 FLASH_MODE_NAMES = {0: "qio", 1: "qout", 2: "dio", 3: "dout"}
@@ -818,6 +819,7 @@ BOARD_INFO = {
     "esp32-s3": {"flash_mode": "dio", "flash_size": "8MB", "partition": "default_8MB.csv", "chip": "esp32s3"},
     "esp32-c3": {"flash_mode": "qio", "flash_size": "4MB", "partition": "default.csv", "chip": "esp32c3"},
     "esp8266":  {"flash_mode": "qio", "flash_size": "4MB", "partition": "default", "chip": "esp8266"},
+    "esp32-s3-gps": {"flash_mode": "dio", "flash_size": "8MB", "partition": "default_8MB.csv", "chip": "esp32s3"},
 }
 
 
@@ -825,6 +827,7 @@ PARTITION_MAX_APP_SIZE = {
     "esp32-s3": 3342336,   # 3264 KB (default_8MB.csv app0)
     "esp32-c3": 1310720,   # 1280 KB (default.csv app0)
     "esp8266":  1044464,   # ~1020 KB
+    "esp32-s3-gps": 3342336,  # same partition as esp32-s3
 }
 
 

@@ -40,6 +40,7 @@ const HARDWARE_TYPES = [
   { value: 'esp32-s3', label: 'ESP32-S3', desc: 'BLE + WiFi ODID, HTTPS | DIO 8MB', recommended: true },
   { value: 'esp32-c3', label: 'ESP32-C3', desc: 'BLE + WiFi ODID, HTTPS | QIO 4MB' },
   { value: 'esp8266', label: 'ESP8266', desc: 'Nur WiFi-Beacon ODID, kein BLE, kein HTTPS', limited: true },
+  { value: 'esp32-s3-gps', label: 'ESP32+GPS', desc: 'ESP32-S3 mit ATGM336H GPS + RGB-Taster (GPIO4/5/6/7)' },
 ];
 
 const ANTENNA_PRESETS = [

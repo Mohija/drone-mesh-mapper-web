@@ -1,9 +1,15 @@
 #include "led_status.h"
 
+#if HAS_RGB_BUTTON
+#include "rgb_button.h"
+#endif
+
 // ESP32-S3 DevKitC has RGB Neopixel on GPIO48
 // ESP32-C3 and ESP8266 use built-in LED on GPIO2
+// The esp32-s3-gps variant skips both and routes colours through the
+// external RGB push-button driver.
 #ifdef ESP32
-  #if defined(CONFIG_IDF_TARGET_ESP32S3)
+  #if defined(CONFIG_IDF_TARGET_ESP32S3) && !HAS_RGB_BUTTON
     #define USE_NEOPIXEL 1
     #define NEOPIXEL_PIN 48
     // Brightness (0-255), keep low to avoid blinding
@@ -15,8 +21,14 @@
   #define USE_NEOPIXEL 0
 #endif
 
+#ifndef NEO_BRIGHT
+#define NEO_BRIGHT 20
+#endif
+
 void LedStatus::begin() {
-#if USE_NEOPIXEL
+#if HAS_RGB_BUTTON
+    // Pins are managed by RgbButton::begin() — nothing to do here.
+#elif USE_NEOPIXEL
     pinMode(NEOPIXEL_PIN, OUTPUT);
     _off();
 #else
@@ -38,7 +50,9 @@ void LedStatus::flashDetection() {
 }
 
 void LedStatus::_setColor(uint8_t r, uint8_t g, uint8_t b) {
-#if USE_NEOPIXEL
+#if HAS_RGB_BUTTON
+    if (_rgbBtn) _rgbBtn->setColor(r > 0, g > 0, b > 0);
+#elif USE_NEOPIXEL
     neopixelWrite(NEOPIXEL_PIN, r, g, b);
 #else
     // Single-color LED: on if any color > 0

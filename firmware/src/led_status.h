@@ -27,6 +27,10 @@ enum LedState {
     LED_ERROR
 };
 
+#if HAS_RGB_BUTTON
+class RgbButton;   // fwd
+#endif
+
 class LedStatus {
 public:
     void begin();
@@ -34,11 +38,21 @@ public:
     void flashDetection();
     void loop();
 
+#if HAS_RGB_BUTTON
+    /** When the firmware is running on the RGB-taster variant, route every
+     *  colour update through the button driver so its shutdown animation
+     *  isn't overwritten by status updates. */
+    void attachRgbButton(RgbButton* btn) { _rgbBtn = btn; }
+#endif
+
 private:
     LedState _state = LED_BOOT;
     bool _on = false;
     bool _flashActive = false;
     unsigned long _flashStart = 0;
+#if HAS_RGB_BUTTON
+    RgbButton* _rgbBtn = nullptr;
+#endif
 
     void _setColor(uint8_t r, uint8_t g, uint8_t b);
     void _off();

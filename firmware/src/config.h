@@ -57,6 +57,46 @@
 #define HAS_TLS 0
 #endif
 
+// Hardware-variant feature flags. Only the esp32-s3-gps build enables these;
+// every other env leaves them at 0 so the existing code paths stay identical.
+#ifndef HAS_GPS
+#define HAS_GPS 0
+#endif
+
+#ifndef HAS_RGB_BUTTON
+#define HAS_RGB_BUTTON 0
+#endif
+
+// Pin defaults (only used when the matching feature flag is set). The
+// esp32-s3-gps env overrides these via -D build flags.
+#ifndef GPS_UART_RX
+#define GPS_UART_RX 17
+#endif
+#ifndef GPS_UART_TX
+#define GPS_UART_TX 18
+#endif
+#ifndef GPS_UART_BAUD
+#define GPS_UART_BAUD 9600
+#endif
+#ifndef RGB_BTN_PIN
+#define RGB_BTN_PIN 4
+#endif
+#ifndef RGB_LED_R_PIN
+#define RGB_LED_R_PIN 5
+#endif
+#ifndef RGB_LED_G_PIN
+#define RGB_LED_G_PIN 6
+#endif
+#ifndef RGB_LED_B_PIN
+#define RGB_LED_B_PIN 7
+#endif
+
+// RGB-button timing
+#define RGB_BTN_LONG_PRESS_MS      2000   // Hold this long to toggle power
+#define RGB_BTN_DEBOUNCE_MS        40     // Software debounce
+#define RGB_BTN_POWEROFF_HINT_MS   800    // Red LED turns on after hint threshold
+#define RGB_BTN_WAKE_LOCKOUT_MS    3000   // Ignore button for 3s after wake-up
+
 // ─── Runtime constants ──────────────────────────────────────
 
 #define INGEST_MIN_INTERVAL_MS  100     // Min 100ms between ingest sends (event-based)

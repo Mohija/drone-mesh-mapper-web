@@ -300,10 +300,10 @@ class TrailArchive(db.Model):
 
 
 class ReceiverNode(db.Model):
-    """Hardware receiver node (ESP32-S3, ESP32-C3, ESP8266) for Open Drone ID detection."""
+    """Hardware receiver node (ESP32-S3, ESP32-C3, ESP8266, ESP32-S3+GPS) for Open Drone ID detection."""
     __tablename__ = "receiver_nodes"
 
-    HARDWARE_TYPES = ("esp32-s3", "esp32-c3", "esp8266")
+    HARDWARE_TYPES = ("esp32-s3", "esp32-c3", "esp8266", "esp32-s3-gps")
     # Status thresholds (seconds since last heartbeat).
     # Firmware sends every 30 s → 120 s gives four heartbeat periods of slack
     # to absorb one transient HTTP timeout + one retry without flipping to stale.
@@ -313,7 +313,7 @@ class ReceiverNode(db.Model):
     id = db.Column(db.String(8), primary_key=True, default=_uuid8)
     tenant_id = db.Column(db.String(8), db.ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
     name = db.Column(db.String(200), nullable=False)
-    hardware_type = db.Column(db.String(20), nullable=False)  # esp32-s3, esp32-c3, esp8266
+    hardware_type = db.Column(db.String(20), nullable=False)  # esp32-s3, esp32-c3, esp8266, esp32-s3-gps
     api_key = db.Column(db.String(64), unique=True, nullable=False, default=lambda: secrets.token_hex(32))
     firmware_version = db.Column(db.String(20), nullable=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False)

@@ -11,6 +11,7 @@ const HARDWARE_TYPES = [
   { value: 'esp32-s3', label: 'ESP32-S3 (empfohlen)', badge: 'WiFi + BLE' },
   { value: 'esp32-c3', label: 'ESP32-C3', badge: 'WiFi + BLE' },
   { value: 'esp8266', label: 'ESP8266 (Light)', badge: 'Nur WiFi' },
+  { value: 'esp32-s3-gps', label: 'ESP32+GPS', badge: 'WiFi + BLE + GPS' },
 ];
 
 function formatUptime(seconds: number): string {

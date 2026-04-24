@@ -1,6 +1,19 @@
 {
   "versions": [
     {
+      "version": "1.6.0",
+      "date": "2026-04-24",
+      "hardware": ["esp32-s3-gps"],
+      "changes": [
+        "Neuer Hardware-Typ \"ESP32+GPS\" (esp32-s3-gps): ESP32-S3 N16R8 mit ATGM336H GPS-Modul (UART1, GPIO17/18 @ 9600 Baud) und externem RGB-Taster",
+        "GPS: automatische Positionsübernahme — Fix-Koordinaten überschreiben die manuell konfigurierte Position bei Heartbeat und Ingest",
+        "RGB-Taster: langer Druck (≥2s) löst Deep-Sleep aus, erneuter Druck weckt den Controller (wake-on-ext0 an GPIO4)",
+        "RGB-Taster: ab 800ms Haltezeit leuchtet die rote LED als \"Shutdown-Vorwarnung\"",
+        "RGB-LEDs (GPIO5/6/7, Common-Anode mit 100/100/33 Ω): spiegeln die Status-LED-Zustände (Boot blau-blink, Kein-WiFi gelb, Kein-Backend orange, Online grün, Fehler rot-SOS)",
+        "Alle bestehenden Firmware-Features (Open Drone ID WiFi+BLE, Captive Portal, OTA, Watchdog) bleiben unverändert verfügbar"
+      ]
+    },
+    {
       "version": "1.5.3",
       "date": "2026-04-24",
       "hardware": ["esp32-s3", "esp32-c3", "esp8266"],
