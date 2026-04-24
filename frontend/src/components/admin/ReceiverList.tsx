@@ -589,9 +589,22 @@ export default function ReceiverList() {
   return (
     <div data-testid="receiver-list">
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
-        <div style={{ flex: 1, display: 'flex', alignItems: 'baseline', gap: 16 }}>
-          <h1 className="fa-display" style={{ margin: 0, fontSize: 32, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.05 }}>Empfänger</h1>
-          <span className="fa-micro" style={{ paddingLeft: 12, borderLeft: '2px solid var(--accent)' }}>Remote-ID · Mesh</span>
+        <div style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: isMobile ? 'flex-start' : 'baseline',
+          flexDirection: isMobile ? 'column' : 'row',
+          gap: isMobile ? 6 : 16,
+          minWidth: 0,
+        }}>
+          <h1 className="fa-display" style={{ margin: 0, fontSize: isMobile ? 24 : 32, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.05 }}>Empfänger</h1>
+          <span
+            className="fa-micro"
+            style={isMobile
+              ? { paddingTop: 4, borderTop: '2px solid var(--accent)' }
+              : { paddingLeft: 12, borderLeft: '2px solid var(--accent)' }
+            }
+          >Remote-ID · Mesh</span>
         </div>
         <AdminTooltip
           brief="Neuen Hardware-Empfänger registrieren"
@@ -1078,7 +1091,12 @@ export default function ReceiverList() {
               <div
                 data-testid={`receiver-card-header-${node.id}`}
                 onClick={() => setExpandedId(expandedId === node.id ? null : node.id)}
-                style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, cursor: 'pointer' }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10,
+                  cursor: 'pointer',
+                  minHeight: 44,          // HIG / Material touch-target minimum
+                  touchAction: 'manipulation', // suppress 300ms tap delay
+                }}
               >
                 <span data-testid={`receiver-status-${node.id}`} style={{
                   width: 10, height: 10, borderRadius: '50%', flexShrink: 0,

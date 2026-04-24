@@ -200,6 +200,50 @@ button.fa-btn-primary:disabled {
   box-shadow: var(--shadow-lg);
 }
 
+/* ── Mobile + tablet responsive adjustments for the new design system ──
+   Matches the existing `@media (max-width: 768px)` block used elsewhere and
+   adds a tighter breakpoint for phones. Fixes that came out of the mobile
+   audit: display headings too large on phones, 36px buttons too small for
+   touch (Apple HIG / Material Design both want ≥44px), background-attachment:
+   fixed stutters on iOS Safari, and the card top-highlight clips on narrow
+   cards. */
+@media (max-width: 768px) {
+  body {
+    /* iOS Safari has known scroll-lag with background-attachment: fixed;
+       fall back to scroll on smaller viewports. */
+    background-attachment: scroll;
+  }
+  button.fa-btn-primary {
+    /* 12px top/bottom × 16px FG + line-height ≈ 44px touch target */
+    padding: 12px 20px;
+    min-height: 44px;
+  }
+  .fa-micro {
+    /* The 0.14em tracking gets uncomfortable once font-size is small on
+       a dense card. Loosen a bit. */
+    letter-spacing: 0.10em;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Scale down display headings on phones so `Einstellungen` + a subtitle
+     fit without forced breaks. Uses !important on purpose because the
+     inline `fontSize` values on the <h1> elements would otherwise win. */
+  h1.fa-display,
+  h2.fa-display,
+  h3.fa-display,
+  .fa-display {
+    font-size: clamp(20px, 6vw, 26px) !important;
+  }
+  .fa-card {
+    border-radius: 10px;
+  }
+  .fa-card::before {
+    left: 10px;
+    right: 10px;
+  }
+}
+
 /* Leaflet dark theme overrides */
 .leaflet-container {
   background: var(--bg-primary) !important;

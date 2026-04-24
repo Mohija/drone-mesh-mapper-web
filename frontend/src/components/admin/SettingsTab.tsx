@@ -350,8 +350,14 @@ export default function SettingsTab() {
         display: 'flex', alignItems: 'center', gap: 12,
         marginBottom: 20, flexWrap: 'wrap',
       }}>
-        <h1 className="fa-display" style={{ margin: 0, fontSize: 32, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.05 }}>Einstellungen</h1>
-        <div className="fa-micro" style={{ marginLeft: 2, paddingLeft: 12, borderLeft: '2px solid var(--accent)' }}>Admin · Mandanten-Config</div>
+        <h1 className="fa-display" style={{ margin: 0, fontSize: isMobile ? 24 : 32, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.05 }}>Einstellungen</h1>
+        <div
+          className="fa-micro"
+          style={isMobile
+            ? { flexBasis: '100%', marginLeft: 0, paddingLeft: 0, borderLeft: 'none', borderTop: '2px solid var(--accent)', paddingTop: 6 }
+            : { marginLeft: 2, paddingLeft: 12, borderLeft: '2px solid var(--accent)' }
+          }
+        >Admin · Mandanten-Config</div>
       </div>
 
       {/* Error */}
