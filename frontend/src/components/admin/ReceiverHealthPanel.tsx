@@ -11,6 +11,11 @@ import type { ReceiverNode } from '../../api';
 
 interface Props {
   node: ReceiverNode;
+  /** Latest version expected for THIS node's hardware type, resolved from
+   *  the backend changelog (stats.latestFirmwareVersions). Falls back to
+   *  the node's own firmwareVersion so nodes without a published changelog
+   *  entry don't get a spurious warning. */
+  expectedFirmware?: string | null;
 }
 
 interface HealthCheck {
@@ -19,7 +24,23 @@ interface HealthCheck {
   detail?: string;
 }
 
-const EXPECTED_FIRMWARE = '1.5.3';
+/**
+ * Parse a semantic version like "1.6.1" into [1, 6, 1] for numeric compare.
+ * Non-numeric / missing parts become 0 so "1.5" sorts below "1.5.1".
+ */
+function parseVersion(v: string): number[] {
+  return v.split('.').map(p => parseInt(p, 10) || 0);
+}
+
+function compareVersions(a: string, b: string): number {
+  const pa = parseVersion(a), pb = parseVersion(b);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (d !== 0) return d < 0 ? -1 : 1;
+  }
+  return 0;
+}
 
 function secondsAgo(epoch: number | null): number | null {
   if (!epoch) return null;
@@ -55,7 +76,7 @@ function heapCapacity(hw: string): number {
   return 320_000; // esp32-s3 / esp32-s3-gps default
 }
 
-function computeChecks(node: ReceiverNode): HealthCheck[] {
+function computeChecks(node: ReceiverNode, expectedFirmware?: string | null): HealthCheck[] {
   const checks: HealthCheck[] = [];
   const age = secondsAgo(node.lastHeartbeat);
 
@@ -66,13 +87,26 @@ function computeChecks(node: ReceiverNode): HealthCheck[] {
     detail: age != null ? `vor ${formatAge(age)}` : 'nie',
   });
 
-  // Firmware
-  checks.push({
-    label: `Firmware ${node.firmwareVersion || 'unbekannt'}`,
-    level: node.firmwareVersion === EXPECTED_FIRMWARE ? 'ok'
-      : node.firmwareVersion ? 'warn' : 'info',
-    detail: node.firmwareVersion === EXPECTED_FIRMWARE ? 'aktuell' : `erwartet ${EXPECTED_FIRMWARE}`,
-  });
+  // Firmware — compare against the latest published version for this
+  // node's hardware type. Old == warn (upgrade available), newer == info
+  // (dev build running ahead of the published changelog), equal == ok.
+  if (node.firmwareVersion) {
+    const fw = node.firmwareVersion;
+    if (!expectedFirmware) {
+      checks.push({ label: `Firmware ${fw}`, level: 'info', detail: 'keine Referenz im Changelog' });
+    } else {
+      const cmp = compareVersions(fw, expectedFirmware);
+      if (cmp === 0) {
+        checks.push({ label: `Firmware ${fw}`, level: 'ok', detail: 'aktuell' });
+      } else if (cmp < 0) {
+        checks.push({ label: `Firmware ${fw}`, level: 'warn', detail: `Update auf ${expectedFirmware} verfügbar` });
+      } else {
+        checks.push({ label: `Firmware ${fw}`, level: 'info', detail: `neuer als Changelog-Stand ${expectedFirmware}` });
+      }
+    }
+  } else {
+    checks.push({ label: 'Firmware unbekannt', level: 'info' });
+  }
 
   // WiFi signal
   if (node.wifiRssi != null) {
@@ -191,8 +225,8 @@ function Bar({ percent, color, label }: { percent: number; color: string; label:
   );
 }
 
-export default function ReceiverHealthPanel({ node }: Props) {
-  const checks = computeChecks(node);
+export default function ReceiverHealthPanel({ node, expectedFirmware }: Props) {
+  const checks = computeChecks(node, expectedFirmware);
   const warnings = checks.filter(c => c.level === 'warn');
   const errors = checks.filter(c => c.level === 'error');
   const statusColor = node.status === 'online' ? '#22c55e'

@@ -1208,7 +1208,7 @@ export default function ReceiverList() {
               {/* Health detail panel (mobile) */}
               {expandedId === node.id && (
                 <div data-testid={`receiver-detail-mobile-${node.id}`} style={{ marginBottom: 12 }}>
-                  <ReceiverHealthPanel node={node} />
+                  <ReceiverHealthPanel node={node} expectedFirmware={stats?.latestFirmwareVersions?.[node.hardwareType]} />
                 </div>
               )}
 
@@ -1481,7 +1481,7 @@ export default function ReceiverList() {
                   {expandedId === node.id && (
                     <tr key={`${node.id}-detail`} data-testid={`receiver-detail-${node.id}`}>
                       <td colSpan={6} style={{ padding: '12px 16px', background: 'var(--bg-primary)' }}>
-                        <ReceiverHealthPanel node={node} />
+                        <ReceiverHealthPanel node={node} expectedFirmware={stats?.latestFirmwareVersions?.[node.hardwareType]} />
                         {/* Firmware build info */}
                         {node.lastBuildAt && (
                           <div style={{
