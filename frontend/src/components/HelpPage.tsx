@@ -2478,10 +2478,14 @@ export default function HelpPage() {
   const navigate = useNavigate();
   const routerLocation = useLocation();
   // location.state is set by <HelpLink> when the user opened help from a
-  // specific menu/button. Shows a top-left breadcrumb "← Zurück zu Empfänger"
-  // so the user knows a single back-click returns them where they came from.
-  const fromState = routerLocation.state as { fromPath?: string; fromLabel?: string } | null;
-  const fromPath = fromState?.fromPath;
+  // specific menu/button. We snapshot it once on mount (useState lazy init)
+  // so subsequent hash-only navigations within the help page (subsection
+  // clicks) don't wipe it — otherwise state vanishes after the user clicks
+  // any link inside help and the "back" button goes missing.
+  const [fromPath] = useState<string | null>(() => {
+    const s = routerLocation.state as { fromPath?: string } | null;
+    return s?.fromPath ?? null;
+  });
   const { theme } = useTheme();
   const { canManage } = useAuth();
   const isMobile = useIsMobile();
@@ -2744,8 +2748,12 @@ export default function HelpPage() {
               <div style={{ marginBottom: 16 }}>
                 <button
                   onClick={() => {
-                    if (window.history.length > 1) navigate(-1);
-                    else navigate(fromPath);
+                    // Deterministic: always navigate to the stashed origin
+                    // path. navigate(-1) is fragile here because hash-only
+                    // sub-section clicks push extra history entries and the
+                    // browser back button might only pop one of those,
+                    // leaving the user still on /help.
+                    navigate(fromPath);
                   }}
                   data-testid="help-back"
                   style={{

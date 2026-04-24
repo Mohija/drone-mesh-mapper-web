@@ -2,28 +2,18 @@ import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../AuthContext';
 import { useIsMobile } from '../../useIsMobile';
-import HelpLink from '../HelpLink';
 
-// Each nav item maps to the help section + optional subsection that
-// describes it. Clicking the "?" next to the label opens that exact anchor.
-const navItems: Array<{
-  to: string;
-  label: string;
-  end?: boolean;
-  superAdminOnly?: boolean;
-  helpSection: string;
-  helpSub?: string;
-}> = [
-  { to: '/admin',             label: 'Dashboard',   end: true, helpSection: 'admin',      helpSub: 'dashboard' },
-  { to: '/admin/tenants',     label: 'Mandanten',   superAdminOnly: true, helpSection: 'admin', helpSub: 'mandanten-verwaltung' },
-  { to: '/admin/users',       label: 'Benutzer',    helpSection: 'admin',      helpSub: 'benutzer-verwaltung' },
-  { to: '/admin/receivers',   label: 'Empfänger',   helpSection: 'receivers' },
-  { to: '/admin/addressbook', label: 'Adressbuch',  helpSection: 'drones' },
-  { to: '/admin/settings',    label: 'Einstellungen', helpSection: 'admin',    helpSub: 'zonen-einstellungen' },
-  { to: '/admin/simulation',  label: 'Simulation',  helpSection: 'simulation' },
-  { to: '/admin/logs',        label: 'Logs',        helpSection: 'admin',      helpSub: 'log-viewer' },
-  { to: '/admin/audit',       label: 'Sicherheit',  helpSection: 'admin',      helpSub: 'sicherheits-audit' },
-  { to: '/admin/planning',    label: 'Planung',     helpSection: 'receivers',  helpSub: 'empfaenger-planung' },
+const navItems = [
+  { to: '/admin', label: 'Dashboard', end: true },
+  { to: '/admin/tenants', label: 'Mandanten', superAdminOnly: true },
+  { to: '/admin/users', label: 'Benutzer' },
+  { to: '/admin/receivers', label: 'Empfänger' },
+  { to: '/admin/addressbook', label: 'Adressbuch' },
+  { to: '/admin/settings', label: 'Einstellungen' },
+  { to: '/admin/simulation', label: 'Simulation' },
+  { to: '/admin/logs', label: 'Logs' },
+  { to: '/admin/audit', label: 'Sicherheit' },
+  { to: '/admin/planning', label: 'Planung' },
 ];
 
 export default function AdminLayout() {
@@ -107,45 +97,30 @@ export default function AdminLayout() {
         </div>
       )}
 
-      {/* Nav items — each row is the nav link + a small help "?" button that
-          jumps straight into the corresponding help section. Flex row so the
-          help button sits on the right without pushing the link width. */}
+      {/* Nav items */}
       {navItems
         .filter(item => !item.superAdminOnly || isSuperAdmin)
         .map(item => (
-          <div
+          <NavLink
             key={item.to}
-            style={{ display: 'flex', alignItems: 'stretch', paddingRight: 12 }}
+            to={item.to}
+            end={item.end}
+            onClick={() => isMobile && setSidebarOpen(false)}
+            style={({ isActive }) => ({
+              display: 'flex',
+              alignItems: 'center',
+              padding: isMobile ? '14px 16px' : '10px 16px',
+              minHeight: isMobile ? 48 : undefined,
+              fontSize: isMobile ? 15 : 13,
+              fontWeight: isActive ? 600 : 400,
+              color: isActive ? 'var(--accent)' : 'var(--text-secondary)',
+              background: isActive ? 'rgba(0, 212, 170, 0.1)' : 'transparent',
+              textDecoration: 'none',
+              borderLeft: isActive ? '3px solid var(--accent)' : '3px solid transparent',
+            })}
           >
-            <NavLink
-              to={item.to}
-              end={item.end}
-              onClick={() => isMobile && setSidebarOpen(false)}
-              style={({ isActive }) => ({
-                flex: 1,
-                display: 'flex',
-                alignItems: 'center',
-                padding: isMobile ? '14px 16px' : '10px 16px',
-                minHeight: isMobile ? 48 : undefined,
-                fontSize: isMobile ? 15 : 13,
-                fontWeight: isActive ? 600 : 400,
-                color: isActive ? 'var(--accent)' : 'var(--text-secondary)',
-                background: isActive ? 'rgba(0, 212, 170, 0.1)' : 'transparent',
-                textDecoration: 'none',
-                borderLeft: isActive ? '3px solid var(--accent)' : '3px solid transparent',
-              })}
-            >
-              {item.label}
-            </NavLink>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <HelpLink
-                section={item.helpSection}
-                sub={item.helpSub}
-                title={`Hilfe: ${item.label}`}
-                size={isMobile ? 22 : 18}
-              />
-            </div>
-          </div>
+            {item.label}
+          </NavLink>
         ))
       }
 
