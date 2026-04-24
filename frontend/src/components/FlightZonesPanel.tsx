@@ -24,6 +24,13 @@ interface Props {
   readOnly?: boolean;
   /** Per-tenant mission zone defaults (radius & color) */
   missionZoneDefaults?: { radius: number; color: string };
+  /** Zone currently in vertex-edit mode (drag markers live on the map). */
+  editingZoneId?: string | null;
+  /** Live vertex count of the working copy — shown in the edit controls. */
+  editingPointCount?: number;
+  onStartEditZone?: (zoneId: string) => void;
+  onSaveEditZone?: () => void;
+  onCancelEditZone?: () => void;
 }
 
 export default function FlightZonesPanel({
@@ -44,6 +51,11 @@ export default function FlightZonesPanel({
   onClose,
   readOnly = false,
   missionZoneDefaults,
+  editingZoneId = null,
+  editingPointCount = 0,
+  onStartEditZone,
+  onSaveEditZone,
+  onCancelEditZone,
 }: Props) {
   const [newName, setNewName] = useState('');
   const [newColor, setNewColor] = useState(ZONE_COLORS[zones.length % ZONE_COLORS.length]);
@@ -546,27 +558,56 @@ export default function FlightZonesPanel({
           </div>
         )}
 
-        {zones.map(zone => (
+        {zones.map(zone => {
+          const isEditing = editingZoneId === zone.id;
+          const livePointCount = isEditing ? editingPointCount : zone.polygon.length;
+          return (
           <div
             key={zone.id}
             data-testid={`zone-item-${zone.id}`}
             style={{
               padding: '8px 10px',
               marginBottom: 6,
-              background: 'var(--bg-tertiary)',
+              background: isEditing ? 'rgba(0,212,170,0.08)' : 'var(--bg-tertiary)',
               borderRadius: 6,
               borderLeft: `3px solid ${zone.color}`,
+              boxShadow: isEditing ? '0 0 0 1px var(--accent)' : 'none',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
               <div
-                onClick={() => onSelectZone(zone.id)}
-                style={{ cursor: 'pointer', flex: 1 }}
+                onClick={() => !isEditing && onSelectZone(zone.id)}
+                style={{ cursor: isEditing ? 'default' : 'pointer', flex: 1 }}
               >
                 <span style={{ fontWeight: 600, fontSize: 12 }}>{zone.name}</span>
+                {isEditing && (
+                  <span style={{
+                    marginLeft: 6, fontSize: 9, fontWeight: 700,
+                    padding: '2px 5px', borderRadius: 3,
+                    background: 'var(--accent)', color: '#fff', letterSpacing: '0.5px',
+                  }}>BEARBEITEN</span>
+                )}
               </div>
-              {!readOnly && (
+              {!readOnly && !isEditing && (
                 <div style={{ display: 'flex', gap: 4 }}>
+                  {onStartEditZone && zone.polygon.length >= 3 && (
+                    <button
+                      onClick={() => onStartEditZone(zone.id)}
+                      title="Polygon bearbeiten (Punkte ziehen, Doppelklick zum Entfernen)"
+                      data-testid={`edit-btn-${zone.id}`}
+                      disabled={drawingMode || (editingZoneId !== null && !isEditing)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: drawingMode || editingZoneId !== null ? 'var(--text-muted)' : 'var(--accent)',
+                        fontSize: 14,
+                        cursor: drawingMode || editingZoneId !== null ? 'default' : 'pointer',
+                        padding: '2px 4px',
+                      }}
+                    >
+                      &#9998;
+                    </button>
+                  )}
                   <button
                     onClick={() => onAssignZone(zone.id)}
                     title="Drohnen zuweisen"
@@ -601,7 +642,7 @@ export default function FlightZonesPanel({
               )}
             </div>
             <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-              {zone.polygon.length} Punkte &middot; {zone.assignedDrones.length} Drohne{zone.assignedDrones.length !== 1 ? 'n' : ''} zugewiesen
+              {livePointCount} Punkte &middot; {zone.assignedDrones.length} Drohne{zone.assignedDrones.length !== 1 ? 'n' : ''} zugewiesen
               {(zone.minAltitudeAGL !== null || zone.maxAltitudeAGL !== null) && (
                 <span>
                   {' '}&middot; {zone.minAltitudeAGL ?? 0}–{zone.maxAltitudeAGL ?? '∞'} m AGL
@@ -614,8 +655,60 @@ export default function FlightZonesPanel({
                 <span>{zone.createdBy ? ' · ' : ''}Bearbeitet von {zone.updatedBy}</span>
               )}
             </div>
+            {isEditing && (
+              <div
+                data-testid={`edit-controls-${zone.id}`}
+                style={{
+                  marginTop: 8,
+                  padding: '8px',
+                  background: 'var(--bg-secondary)',
+                  borderRadius: 4,
+                  border: '1px solid var(--border)',
+                }}
+              >
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 6, lineHeight: 1.4 }}>
+                  Punkte ziehen zum Verschieben. Doppelklick (oder Rechtsklick) entfernt einen Punkt. Mindestens 3 Punkte nötig.
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    onClick={onSaveEditZone}
+                    disabled={editingPointCount < 3}
+                    data-testid={`save-edit-${zone.id}`}
+                    style={{
+                      flex: 1,
+                      padding: '6px 12px',
+                      background: editingPointCount >= 3 ? 'var(--accent)' : 'var(--bg-tertiary)',
+                      color: editingPointCount >= 3 ? '#fff' : 'var(--text-muted)',
+                      border: 'none',
+                      borderRadius: 4,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: editingPointCount >= 3 ? 'pointer' : 'default',
+                    }}
+                  >
+                    Speichern
+                  </button>
+                  <button
+                    onClick={onCancelEditZone}
+                    data-testid={`cancel-edit-${zone.id}`}
+                    style={{
+                      padding: '6px 10px',
+                      background: 'var(--bg-tertiary)',
+                      color: 'var(--text-secondary)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 4,
+                      fontSize: 12,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Abbrechen
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

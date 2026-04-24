@@ -287,6 +287,13 @@ interface Props {
   focusPosition?: { lat: number; lon: number } | null;
   receiverCoverage?: ReceiverCoverage[];
   showReceiverCoverage?: boolean;
+  /** Zone whose polygon is being edited (vertex drag / remove). */
+  editingZoneId?: string | null;
+  /** Working copy of the editing zone's polygon — overrides the stored shape
+   *  while active. */
+  editingPolygon?: [number, number][];
+  onEditVertexMove?: (index: number, lat: number, lon: number) => void;
+  onEditVertexRemove?: (index: number) => void;
 }
 
 // Store drone data for map event handlers (avoids stale closures)
@@ -302,7 +309,7 @@ const TILE_URLS = {
   light: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
 };
 
-export default function MapComponent({ drones, selectedDrone, userLocation, onDroneClick, activeNoFlyLayers, nfzBounds, nfzRadiusCenter, nfzRadiusMeters, droneRadiusCenter, droneRadiusMeters, trails = [], flightZones = [], drawingMode = false, pendingPoints = [], snappable = false, onMapClickForZone, focusPosition, receiverCoverage = [], showReceiverCoverage = false }: Props) {
+export default function MapComponent({ drones, selectedDrone, userLocation, onDroneClick, activeNoFlyLayers, nfzBounds, nfzRadiusCenter, nfzRadiusMeters, droneRadiusCenter, droneRadiusMeters, trails = [], flightZones = [], drawingMode = false, pendingPoints = [], snappable = false, onMapClickForZone, focusPosition, receiverCoverage = [], showReceiverCoverage = false, editingZoneId = null, editingPolygon, onEditVertexMove, onEditVertexRemove }: Props) {
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
@@ -322,6 +329,7 @@ export default function MapComponent({ drones, selectedDrone, userLocation, onDr
   const zoneLabelsRef = useRef<Map<string, L.Tooltip>>(new Map());
   const drawingPolylineRef = useRef<L.Polyline | null>(null);
   const drawingMarkersRef = useRef<L.CircleMarker[]>([]);
+  const editVertexMarkersRef = useRef<L.Marker[]>([]);
   const rcCoverageCirclesRef = useRef<Map<string, L.Circle>>(new Map());
   const rcCoverageMarkersRef = useRef<Map<string, L.CircleMarker>>(new Map());
   const navigate = useNavigate();
@@ -889,6 +897,69 @@ export default function MapComponent({ drones, selectedDrone, userLocation, onDr
     };
   }, [drawingMode, pendingPoints, snappable]);
 
+  // Render draggable vertex markers for the zone currently being edited.
+  // Mirrors the PlanningTab pattern: live drag updates the polygon layer
+  // directly for 60fps feedback; state only syncs at dragend. Dblclick and
+  // contextmenu remove the vertex (keeping a 3-point minimum).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    // Always clear old markers first — mode toggles and vertex mutations
+    // both land here.
+    editVertexMarkersRef.current.forEach(m => m.remove());
+    editVertexMarkersRef.current = [];
+
+    if (!editingZoneId || !editingPolygon || editingPolygon.length < 3) return;
+
+    const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#00d4aa';
+
+    editingPolygon.forEach((pt, idx) => {
+      const icon = L.divIcon({
+        html: `<div class="planning-vertex" style="background:${accent}"></div>`,
+        className: 'planning-vertex-wrapper',
+        iconSize: [18, 18],
+        iconAnchor: [9, 9],
+      });
+      const marker = L.marker([pt[0], pt[1]], {
+        icon,
+        draggable: true,
+        autoPan: true,
+        autoPanPadding: [40, 40],
+        title: 'Ziehen zum Verschieben · Doppelklick zum Entfernen',
+      }).addTo(map);
+
+      marker.on('drag', (e) => {
+        const ll = (e.target as L.Marker).getLatLng();
+        const poly = zonePolygonsRef.current.get(editingZoneId);
+        if (poly) {
+          const latlngs = editingPolygon.map((p, i) => (
+            i === idx ? L.latLng(ll.lat, ll.lng) : L.latLng(p[0], p[1])
+          ));
+          poly.setLatLngs(latlngs);
+        }
+      });
+      marker.on('dragend', (e) => {
+        const ll = (e.target as L.Marker).getLatLng();
+        onEditVertexMove?.(idx, ll.lat, ll.lng);
+      });
+
+      const removeSelf = (e: L.LeafletEvent) => {
+        L.DomEvent.stopPropagation(e as unknown as Event);
+        onEditVertexRemove?.(idx);
+      };
+      marker.on('dblclick', removeSelf);
+      marker.on('contextmenu', removeSelf);
+
+      editVertexMarkersRef.current.push(marker);
+    });
+
+    return () => {
+      editVertexMarkersRef.current.forEach(m => m.remove());
+      editVertexMarkersRef.current = [];
+    };
+  }, [editingZoneId, editingPolygon, onEditVertexMove, onEditVertexRemove]);
+
   // Render flight zone polygons with permanent name labels
   useEffect(() => {
     const map = mapRef.current;
@@ -930,23 +1001,36 @@ export default function MapComponent({ drones, selectedDrone, userLocation, onDr
 
     // Update or create polygons
     for (const zone of flightZones) {
-      if (zone.polygon.length < 3) continue;
-      const latlngs: L.LatLngExpression[] = zone.polygon.map(p => [p[0], p[1]]);
+      // While a zone is being edited the working polygon (editingPolygon)
+      // drives the visual instead of the stored zone.polygon.
+      const activePolygon: [number, number][] = (editingZoneId === zone.id && editingPolygon && editingPolygon.length >= 3)
+        ? editingPolygon
+        : zone.polygon;
+      if (activePolygon.length < 3) continue;
+      const latlngs: L.LatLngExpression[] = activePolygon.map(p => [p[0], p[1]]);
       const labelText = zone.name + altLabel(zone);
-      const center = centroid(zone.polygon);
+      const center = centroid(activePolygon);
       const existing = zonePolygonsRef.current.get(zone.id);
+      const isEditing = editingZoneId === zone.id;
 
       if (existing) {
         existing.setLatLngs(latlngs);
-        existing.setStyle({ color: zone.color, fillColor: zone.color });
+        existing.setStyle({
+          color: zone.color,
+          fillColor: zone.color,
+          weight: isEditing ? 3 : 2,
+          dashArray: isEditing ? '6, 4' : undefined,
+          fillOpacity: isEditing ? 0.1 : 0.15,
+        });
       } else {
         const polygon = L.polygon(latlngs, {
           color: zone.color,
           fillColor: zone.color,
-          fillOpacity: 0.15,
-          weight: 2,
+          fillOpacity: isEditing ? 0.1 : 0.15,
+          weight: isEditing ? 3 : 2,
           opacity: 0.7,
           interactive: true,
+          dashArray: isEditing ? '6, 4' : undefined,
         }).addTo(map);
         polygon.bringToBack();
         zonePolygonsRef.current.set(zone.id, polygon);
@@ -970,7 +1054,7 @@ export default function MapComponent({ drones, selectedDrone, userLocation, onDr
         zoneLabelsRef.current.set(zone.id, tooltip);
       }
     }
-  }, [flightZones]);
+  }, [flightZones, editingZoneId, editingPolygon]);
 
   // Render receiver coverage circles and center markers
   useEffect(() => {

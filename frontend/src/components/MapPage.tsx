@@ -118,6 +118,9 @@ export default function MapPage() {
   const [trackingPanelOpen, setTrackingPanelOpen] = useState(false);
   const [zonesPanelOpen, setZonesPanelOpen] = useState(false);
   const [assignZoneId, setAssignZoneId] = useState<string | null>(null);
+  // Zone-polygon edit mode: working copy of the polygon is held locally while
+  // the user drags vertices. Committed to the server via updateZone on save.
+  const [editingZone, setEditingZone] = useState<{ id: string; polygon: [number, number][] } | null>(null);
   const [focusPosition, setFocusPosition] = useState<{ lat: number; lon: number } | null>(null);
   const [selectedViolationRecordId, setSelectedViolationRecordId] = useState<string | null>(null);
   const [violationTableHeight, setViolationTableHeight] = useState(0);
@@ -261,6 +264,47 @@ export default function MapPage() {
     setSelectedDrone(null);
   }, []);
 
+  // Zone polygon editing: load the zone's current polygon into the working
+  // copy. The map renders draggable vertex markers over this copy; drag /
+  // dblclick events mutate it; save pushes to the server.
+  const startEditZone = useCallback((zoneId: string) => {
+    const zone = flightZones.zones.find(z => z.id === zoneId);
+    if (!zone) return;
+    setEditingZone({ id: zoneId, polygon: zone.polygon.map(p => [p[0], p[1]]) });
+    if (flightZones.drawingMode) flightZones.cancelDrawing();
+  }, [flightZones]);
+
+  const updateEditingVertex = useCallback((index: number, lat: number, lon: number) => {
+    setEditingZone(prev => {
+      if (!prev) return prev;
+      const next = prev.polygon.map((p, i) => i === index ? [lat, lon] as [number, number] : p);
+      return { ...prev, polygon: next };
+    });
+  }, []);
+
+  const removeEditingVertex = useCallback((index: number) => {
+    setEditingZone(prev => {
+      if (!prev) return prev;
+      // Keep at least 3 points — a polygon degenerates below that.
+      if (prev.polygon.length <= 3) return prev;
+      return { ...prev, polygon: prev.polygon.filter((_, i) => i !== index) };
+    });
+  }, []);
+
+  const saveEditingZone = useCallback(async () => {
+    if (!editingZone) return;
+    if (editingZone.polygon.length < 3) return;
+    try {
+      await flightZones.updateZone(editingZone.id, { polygon: editingZone.polygon });
+    } finally {
+      setEditingZone(null);
+    }
+  }, [editingZone, flightZones]);
+
+  const cancelEditingZone = useCallback(() => {
+    setEditingZone(null);
+  }, []);
+
   const handleToggleNoFlyLayer = useCallback((layerId: string) => {
     setEnabledNoFlyLayers(prev =>
       prev.includes(layerId) ? prev.filter(id => id !== layerId) : [...prev, layerId]
@@ -369,6 +413,10 @@ export default function MapPage() {
         focusPosition={focusPosition}
         receiverCoverage={receiverCoverage}
         showReceiverCoverage={showReceiverCoverage}
+        editingZoneId={editingZone?.id}
+        editingPolygon={editingZone?.polygon}
+        onEditVertexMove={updateEditingVertex}
+        onEditVertexRemove={removeEditingVertex}
       />
 
       {/* ═══ Mobile: Compact top bar ═══ */}
@@ -1048,6 +1096,11 @@ export default function MapPage() {
               onClose={() => setZonesPanelOpen(false)}
               readOnly={!canManage}
               missionZoneDefaults={mzDefaults ? { radius: mzDefaults.radius, color: mzDefaults.color } : undefined}
+              editingZoneId={editingZone?.id ?? null}
+              editingPointCount={editingZone?.polygon.length ?? 0}
+              onStartEditZone={startEditZone}
+              onSaveEditZone={saveEditingZone}
+              onCancelEditZone={cancelEditingZone}
             />
           )}
         </div>
@@ -1418,6 +1471,11 @@ export default function MapPage() {
               onClose={() => setZonesPanelOpen(false)}
               readOnly={!canManage}
               missionZoneDefaults={mzDefaults ? { radius: mzDefaults.radius, color: mzDefaults.color } : undefined}
+              editingZoneId={editingZone?.id ?? null}
+              editingPointCount={editingZone?.polygon.length ?? 0}
+              onStartEditZone={(zoneId) => { startEditZone(zoneId); setZonesPanelOpen(false); }}
+              onSaveEditZone={saveEditingZone}
+              onCancelEditZone={cancelEditingZone}
             />
           </div>
         </div>
