@@ -1321,15 +1321,53 @@ _CHIP_FAMILIES = {
 }
 
 
+def _authenticate_query_token():
+    """Fallback auth for endpoints hit by `fetch()` without Authorization header
+    (e.g. esp-web-tools). Accepts `?token=<access_jwt>` and populates g.* the
+    same way login_required does. Returns (user, error_response) — exactly one
+    will be non-None.
+    """
+    from auth import JWT_SECRET, JWT_ALGORITHM
+    from models import User
+    import jwt as pyjwt
+
+    token = request.args.get("token", "").strip()
+    if not token:
+        return None, (jsonify({"error": "Authentifizierung erforderlich"}), 401)
+    try:
+        payload = pyjwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except pyjwt.ExpiredSignatureError:
+        return None, (jsonify({"error": "Token abgelaufen"}), 401)
+    except pyjwt.InvalidTokenError:
+        return None, (jsonify({"error": "Ungültiger Token"}), 401)
+    if payload.get("type") != "access":
+        return None, (jsonify({"error": "Ungültiger Token"}), 401)
+
+    user = db.session.get(User, payload["user_id"])
+    if not user or not user.is_active:
+        return None, (jsonify({"error": "Ungültiger Token"}), 401)
+
+    g.current_user = user
+    g.tenant_id = payload.get("tenant_id") or user.tenant_id
+    g.effective_role = payload.get("role") or user.role
+
+    if g.effective_role not in ("tenant_admin", "super_admin"):
+        return None, (jsonify({"error": "Admin-Rechte erforderlich"}), 403)
+    return user, None
+
+
 @receiver_bp.route("/firmware/manifest/<node_id>", methods=["GET"])
-@login_required
-@role_required("tenant_admin")
 def firmware_manifest(node_id):
     """ESP Web Tools manifest pointing at this node's merged binary.
 
-    `<esp-web-install-button>` fetches this JSON, then downloads the binary
-    from the path inside it and streams it over Web Serial to the ESP.
+    `<esp-web-install-button>` fetches this JSON with plain `fetch()` (no
+    Authorization header), so we authenticate via `?token=<access_jwt>`
+    query parameter instead.
     """
+    _user, err = _authenticate_query_token()
+    if err:
+        return err
+
     node = ReceiverNode.query.filter_by(id=node_id, tenant_id=g.tenant_id).first()
     if not node:
         return jsonify({"error": "Empfänger nicht gefunden"}), 404
@@ -1342,6 +1380,10 @@ def firmware_manifest(node_id):
     if not chip_family:
         return jsonify({"error": f"Web-Flash für {node.hardware_type} nicht unterstützt"}), 400
 
+    # Same token is re-used for the binary download (esp-web-tools follows the
+    # path from the manifest and has no other way to authenticate).
+    token = request.args.get("token", "").strip()
+
     manifest = {
         "name": f"FlightArc {node.hardware_type}",
         "version": node.firmware_version or "",
@@ -1352,7 +1394,7 @@ def firmware_manifest(node_id):
                 "parts": [
                     # Merged binary already includes bootloader + partitions,
                     # so offset 0 is correct.
-                    {"path": f"../download/{node.id}?type=merged", "offset": 0},
+                    {"path": f"../download/{node.id}?type=merged&token={token}", "offset": 0},
                 ],
             }
         ],
@@ -1361,10 +1403,40 @@ def firmware_manifest(node_id):
 
 
 @receiver_bp.route("/firmware/download/<node_id>", methods=["GET"])
-@login_required
-@role_required("tenant_admin")
 def download_firmware(node_id):
-    """Download previously built firmware. Use ?type=merged for full-flash binary."""
+    """Download previously built firmware. Use ?type=merged for full-flash binary.
+
+    Accepts either the standard Authorization header (from authFetch) or a
+    `?token=<access_jwt>` query parameter (used by esp-web-tools, which
+    follows the path from the manifest and can't set headers).
+    """
+    # Normal JWT header first; fall back to query-param token otherwise.
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        from auth import JWT_SECRET, JWT_ALGORITHM
+        from models import User
+        import jwt as pyjwt
+        try:
+            payload = pyjwt.decode(auth_header[7:], JWT_SECRET, algorithms=[JWT_ALGORITHM])
+            if payload.get("type") != "access":
+                raise pyjwt.InvalidTokenError
+            user = db.session.get(User, payload["user_id"])
+            if not user or not user.is_active:
+                raise pyjwt.InvalidTokenError
+            g.current_user = user
+            g.tenant_id = payload.get("tenant_id") or user.tenant_id
+            g.effective_role = payload.get("role") or user.role
+        except pyjwt.InvalidTokenError:
+            return jsonify({"error": "Ungültiger Token"}), 401
+        except pyjwt.ExpiredSignatureError:
+            return jsonify({"error": "Token abgelaufen"}), 401
+        if g.effective_role not in ("tenant_admin", "super_admin"):
+            return jsonify({"error": "Admin-Rechte erforderlich"}), 403
+    else:
+        _user, err = _authenticate_query_token()
+        if err:
+            return err
+
     node = ReceiverNode.query.filter_by(id=node_id, tenant_id=g.tenant_id).first()
     if not node:
         return jsonify({"error": "Empfänger nicht gefunden"}), 404

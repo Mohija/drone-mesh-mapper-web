@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { startBuildAsync, pollBuildStatus, downloadFirmware, fetchWifiNetworks, fetchSettings } from '../../api';
+import { startBuildAsync, pollBuildStatus, downloadFirmware, fetchWifiNetworks, fetchSettings, API_BASE } from '../../api';
 import type { ReceiverNode, FirmwareCheck } from '../../api';
 // Registers the <esp-web-install-button> custom element used by step 5.
 // Side-effect import — the library attaches itself to the global element registry.
@@ -876,7 +876,15 @@ esptool.py --chip ${flashInfo.chip} --port /dev/ttyUSB0 \\
             }}>
               <esp-web-install-button
                 data-testid="esp-web-install-button"
-                manifest={`/api/receivers/firmware/manifest/${node.id}`}
+                manifest={(() => {
+                  // esp-web-tools uses plain fetch() without auth headers —
+                  // pass the access_token as query param so the backend can
+                  // authenticate the same user that already loaded this page.
+                  const token = localStorage.getItem('access_token') || '';
+                  const url = new URL(`${API_BASE}/receivers/firmware/manifest/${node.id}`, window.location.origin);
+                  url.searchParams.set('token', token);
+                  return url.toString();
+                })()}
                 erase-first
               >
                 <button slot="activate" style={{
