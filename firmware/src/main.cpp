@@ -240,6 +240,12 @@ void loop() {
             float h = gps.hdop();
             acc = (h > 0 && h < 20.0f) ? h * 3.0f : 30.0f;
         }
+        GpsTelemetry gpsTel;
+        gpsTel.present = true;
+        gpsTel.hasFix = gps.hasFix();
+        gpsTel.satellites = gps.satellites();
+        gpsTel.hdop = gps.hdop();
+        gpsTel.lastFixAgeSeconds = gps.lastFixAgeSeconds();
 #endif
 
         OtaInfo ota = client.sendHeartbeat(
@@ -254,6 +260,9 @@ void loop() {
             wifiMgr.isApActive(),
             lat, lon, acc,
             wifiMgr.getStaIp().c_str()
+#if HAS_GPS
+            , &gpsTel
+#endif
         );
 
         // OTA update available?

@@ -338,6 +338,13 @@ class ReceiverNode(db.Model):
     last_http_code_reported = db.Column(db.Integer, nullable=True)
     last_telemetry_at = db.Column(db.Float, nullable=True)  # latest heartbeat receive-time
 
+    # GPS telemetry (esp32-s3-gps only — added in migration 011)
+    gps_present = db.Column(db.Boolean, nullable=True)           # firmware has GPS support
+    gps_has_fix = db.Column(db.Boolean, nullable=True)           # current fix valid
+    gps_satellites = db.Column(db.Integer, nullable=True)        # sats in last GGA
+    gps_hdop = db.Column(db.Float, nullable=True)                # horizontal DOP
+    gps_last_fix_age_seconds = db.Column(db.Integer, nullable=True)  # -1 = never
+
     # Detection counters
     total_detections = db.Column(db.Integer, default=0, nullable=False)
     detections_since_boot = db.Column(db.Integer, default=0, nullable=False)
@@ -398,6 +405,11 @@ class ReceiverNode(db.Model):
             "lastErrorCount": self.last_error_count,
             "lastHttpCodeReported": self.last_http_code_reported,
             "lastTelemetryAt": self.last_telemetry_at,
+            "gpsPresent": self.gps_present,
+            "gpsHasFix": self.gps_has_fix,
+            "gpsSatellites": self.gps_satellites,
+            "gpsHdop": self.gps_hdop,
+            "gpsLastFixAgeSeconds": self.gps_last_fix_age_seconds,
             "totalDetections": self.total_detections,
             "detectionsSinceBoot": self.detections_since_boot,
             "status": self.status,

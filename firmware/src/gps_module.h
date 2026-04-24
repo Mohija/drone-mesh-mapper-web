@@ -29,6 +29,9 @@ public:
     bool hasFix() const { return _hasFix; }
     /** Seconds since the last NMEA fix. Use to decide whether data is fresh. */
     unsigned long secondsSinceFix() const;
+    /** Same as secondsSinceFix() but returns -1 when no fix has ever been
+     *  seen since boot — useful as a diagnostic field in the heartbeat. */
+    long lastFixAgeSeconds() const;
 
     double latitude() const { return _lat; }
     double longitude() const { return _lon; }

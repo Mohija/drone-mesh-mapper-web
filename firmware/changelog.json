@@ -1,6 +1,15 @@
 {
   "versions": [
     {
+      "version": "1.6.1",
+      "date": "2026-04-24",
+      "hardware": ["esp32-s3-gps"],
+      "changes": [
+        "GPS-Telemetrie im Heartbeat: gps_present, gps_has_fix, gps_satellites, gps_hdop, gps_last_fix_age_seconds — macht sichtbar, ob das Modul kommuniziert, wie viele Satelliten gefunden wurden und wie alt der letzte Fix ist. Auch ohne aktuellen Fix wird jetzt jeder Heartbeat die GPS-Status-Felder enthalten.",
+        "Admin-UI: neues GPS-Panel in der Empfänger-Detailansicht (Status-Badge + Satelliten, HDOP, Fix-Alter, Koordinaten)"
+      ]
+    },
+    {
       "version": "1.6.0",
       "date": "2026-04-24",
       "hardware": ["esp32-s3-gps"],

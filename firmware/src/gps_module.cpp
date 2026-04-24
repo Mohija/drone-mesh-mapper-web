@@ -46,6 +46,11 @@ unsigned long GpsModule::secondsSinceFix() const {
     return (millis() - _lastFixMs) / 1000;
 }
 
+long GpsModule::lastFixAgeSeconds() const {
+    if (_lastFixMs == 0) return -1;
+    return (long)((millis() - _lastFixMs) / 1000);
+}
+
 void GpsModule::_handleSentence(char* line) {
     if (line[0] != '$') return;
     if (!_verifyChecksum(line)) return;

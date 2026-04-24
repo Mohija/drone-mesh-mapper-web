@@ -747,6 +747,11 @@ export interface ReceiverNode {
   lastErrorCount: number | null;
   lastHttpCodeReported: number | null;
   lastTelemetryAt: number | null;
+  gpsPresent: boolean | null;
+  gpsHasFix: boolean | null;
+  gpsSatellites: number | null;
+  gpsHdop: number | null;
+  gpsLastFixAgeSeconds: number | null;
   totalDetections: number;
   detectionsSinceBoot: number;
   coverageRadius: number | null;

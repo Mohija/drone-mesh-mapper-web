@@ -515,6 +515,24 @@ def heartbeat():
         if data.get("accuracy") is not None:
             node.last_location_accuracy = data["accuracy"]
 
+    # GPS telemetry (esp32-s3-gps build only — other firmwares don't send these)
+    if "gps_present" in data:
+        node.gps_present = bool(data["gps_present"])
+    if "gps_has_fix" in data:
+        node.gps_has_fix = bool(data["gps_has_fix"])
+    if "gps_satellites" in data:
+        node.gps_satellites = int(data["gps_satellites"])
+    if "gps_hdop" in data:
+        try:
+            node.gps_hdop = float(data["gps_hdop"])
+        except (TypeError, ValueError):
+            pass
+    if "gps_last_fix_age_seconds" in data:
+        try:
+            node.gps_last_fix_age_seconds = int(data["gps_last_fix_age_seconds"])
+        except (TypeError, ValueError):
+            pass
+
     db.session.commit()
 
     # Connection log

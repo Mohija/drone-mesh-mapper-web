@@ -125,7 +125,8 @@ OtaInfo FlightArcClient::sendHeartbeat(const char* fwVersion, const char* hwType
                                      int freeHeap, int uptimeSeconds,
                                      int detectionsSinceBoot, bool apActive,
                                      float lat, float lon, float accuracy,
-                                     const char* wifiIp) {
+                                     const char* wifiIp,
+                                     const GpsTelemetry* gps) {
     JsonDocument doc;
     doc["firmware_version"] = fwVersion;
     doc["hardware_type"] = hwType;
@@ -152,6 +153,17 @@ OtaInfo FlightArcClient::sendHeartbeat(const char* fwVersion, const char* hwType
         if (accuracy > 0) {
             doc["accuracy"] = accuracy;
         }
+    }
+
+    // GPS telemetry — ships on the esp32-s3-gps build even when no fix has
+    // been acquired yet, so the backend can surface "0 sat / kein Fix" in
+    // the diagnosis instead of just showing nothing.
+    if (gps && gps->present) {
+        doc["gps_present"] = true;
+        doc["gps_has_fix"] = gps->hasFix;
+        doc["gps_satellites"] = gps->satellites;
+        doc["gps_hdop"] = gps->hdop;
+        doc["gps_last_fix_age_seconds"] = gps->lastFixAgeSeconds;
     }
 
     String body;

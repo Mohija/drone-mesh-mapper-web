@@ -11,6 +11,17 @@ struct OtaInfo {
     String version;
 };
 
+/** Optional GPS telemetry bundled into each heartbeat. Always sent on the
+ *  esp32-s3-gps build so the backend can show module status even when no
+ *  fix has been acquired yet. Nullptr skips the fields. */
+struct GpsTelemetry {
+    bool present = false;       // firmware was built with GPS support
+    bool hasFix = false;        // current NMEA fix valid
+    int satellites = 0;         // satellites used in the last fix (GGA field 7)
+    float hdop = 0.0f;          // horizontal dilution of precision
+    long lastFixAgeSeconds = -1; // -1 = never had a fix since boot
+};
+
 class FlightArcClient {
 public:
     void begin(const char* backendUrl, const char* apiKey);
@@ -24,7 +35,8 @@ public:
                        int freeHeap, int uptimeSeconds,
                        int detectionsSinceBoot, bool apActive,
                        float lat, float lon, float accuracy,
-                       const char* wifiIp = "");
+                       const char* wifiIp = "",
+                       const GpsTelemetry* gps = nullptr);
 
     // Perform OTA firmware update (ESP32 only)
     bool performOtaUpdate(const String& otaUrl);

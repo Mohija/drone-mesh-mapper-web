@@ -156,6 +156,30 @@ function Pill({ color, label }: { color: string; label: string }) {
   );
 }
 
+function GpsStatusLine({ node }: { node: ReceiverNode }) {
+  // Status derivation:
+  //   Fix          → grün
+  //   Satelliten aber kein Fix → gelb (Sky-View-Problem)
+  //   0 Satelliten → rot (Kabel/Pin falsch oder Modul defekt)
+  let color = '#6b7280', label = 'unbekannt';
+  if (node.gpsHasFix) {
+    color = '#22c55e';
+    label = 'Fix';
+  } else if ((node.gpsSatellites ?? 0) > 0) {
+    color = '#eab308';
+    label = 'Kein Fix — sucht Satelliten';
+  } else {
+    color = '#ef4444';
+    label = 'Keine Satelliten';
+  }
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+      <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, boxShadow: `0 0 6px ${color}` }} />
+      <span style={{ fontWeight: 600, color }}>{label}</span>
+    </div>
+  );
+}
+
 function Bar({ percent, color, label }: { percent: number; color: string; label: string }) {
   return (
     <div style={{ flex: 1, minWidth: 120 }}>
@@ -260,6 +284,57 @@ export default function ReceiverHealthPanel({ node }: Props) {
             <div><span style={{ color: 'var(--text-muted)' }}>AP-Modus:</span> {node.apActive == null ? '-' : (node.apActive ? 'ja (Captive Portal)' : 'nein')}</div>
           </div>
         </div>
+
+        {/* GPS — only shown when the firmware reports GPS support (esp32-s3-gps).
+            Surfaces module status even when no fix has been acquired, so the
+            operator can distinguish "wiring broken" (0 sat) from "needs sky
+            view" (some sat, no fix). */}
+        {node.gpsPresent && (
+          <div className="fa-card" style={{ padding: 12 }} data-testid={`receiver-gps-${node.id}`}>
+            <div className="fa-micro" style={{ marginBottom: 10 }}>GPS-Modul</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12 }}>
+              <GpsStatusLine node={node} />
+              <div><span style={{ color: 'var(--text-muted)' }}>Satelliten:</span>{' '}
+                <span style={{
+                  fontWeight: 600,
+                  color: (node.gpsSatellites ?? 0) >= 4 ? '#22c55e'
+                    : (node.gpsSatellites ?? 0) >= 1 ? '#eab308' : '#ef4444',
+                }}>
+                  {node.gpsSatellites ?? 0}
+                </span>
+                {(node.gpsSatellites ?? 0) === 0 && (
+                  <span style={{ marginLeft: 6, color: 'var(--text-muted)', fontSize: 11 }}>
+                    (keine Verbindung zum Modul?)
+                  </span>
+                )}
+              </div>
+              <div><span style={{ color: 'var(--text-muted)' }}>HDOP:</span>{' '}
+                {node.gpsHdop != null && node.gpsHdop < 99
+                  ? (
+                    <span style={{
+                      color: node.gpsHdop < 2 ? '#22c55e'
+                        : node.gpsHdop < 5 ? '#eab308' : '#ef4444',
+                    }}>
+                      {node.gpsHdop.toFixed(1)}
+                    </span>
+                  )
+                  : '-'}
+              </div>
+              <div><span style={{ color: 'var(--text-muted)' }}>Letzter Fix:</span>{' '}
+                {node.gpsLastFixAgeSeconds == null || node.gpsLastFixAgeSeconds < 0
+                  ? 'nie'
+                  : node.gpsLastFixAgeSeconds < 60
+                    ? `vor ${node.gpsLastFixAgeSeconds}s`
+                    : `vor ${Math.floor(node.gpsLastFixAgeSeconds / 60)}m ${node.gpsLastFixAgeSeconds % 60}s`}
+              </div>
+              <div><span style={{ color: 'var(--text-muted)' }}>Koordinaten:</span>{' '}
+                {node.lastLatitude != null && node.lastLongitude != null && node.gpsHasFix
+                  ? <code style={{ fontSize: 10 }}>{node.lastLatitude.toFixed(5)}, {node.lastLongitude.toFixed(5)}</code>
+                  : '-'}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Health check list */}

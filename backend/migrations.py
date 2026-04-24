@@ -164,6 +164,17 @@ MIGRATIONS: list[dict[str, Any]] = [
             "ALTER TABLE tenant_settings ADD COLUMN retention_audit_logs_days INTEGER",
         ],
     },
+    {
+        "version": "013_receiver_gps_telemetry",
+        "description": "GPS diagnostic fields from the esp32-s3-gps heartbeat (present, has_fix, satellites, hdop, last_fix_age_seconds)",
+        "statements": [
+            "ALTER TABLE receiver_nodes ADD COLUMN gps_present BOOLEAN",
+            "ALTER TABLE receiver_nodes ADD COLUMN gps_has_fix BOOLEAN",
+            "ALTER TABLE receiver_nodes ADD COLUMN gps_satellites INTEGER",
+            "ALTER TABLE receiver_nodes ADD COLUMN gps_hdop FLOAT",
+            "ALTER TABLE receiver_nodes ADD COLUMN gps_last_fix_age_seconds INTEGER",
+        ],
+    },
 ]
 
 
