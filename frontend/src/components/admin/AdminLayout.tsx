@@ -221,11 +221,14 @@ export default function AdminLayout() {
         </>
       )}
 
-      {/* Content */}
+      {/* Content. Right padding leaves a clear gutter so the top-right HelpFab
+          (44px wide + 16px viewport margin) never overlaps page-header action
+          buttons. Mobile keeps a slightly tighter gutter to preserve usable
+          width on narrow screens. */}
       <main style={{
         flex: 1,
         overflow: 'auto',
-        padding: isMobile ? '60px 12px 24px' : 24,
+        padding: isMobile ? '60px 68px 24px 12px' : '24px 76px 24px 24px',
       }}>
         <Outlet />
       </main>
