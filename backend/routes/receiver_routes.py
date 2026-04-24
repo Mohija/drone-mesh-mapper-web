@@ -303,7 +303,7 @@ def receiver_stats():
     # Latest firmware version per hardware type from changelog
     changelog = _read_firmware_changelog()
     latest_versions = {}
-    for hw in ["esp32-s3", "esp32-c3", "esp8266"]:
+    for hw in ["esp32-s3", "esp32-c3", "esp32-s3-gps"]:
         for v in changelog:
             if hw in v.get("hardware", []):
                 latest_versions[hw] = v["version"]
@@ -749,9 +749,6 @@ def _create_merged_binary(node_id: str, hw_type: str, env_name: str) -> int | No
     """Create merged full-flash binary (bootloader + partitions + boot_app0 + firmware).
     Returns merged file size in bytes, or None on failure/unsupported.
     """
-    if hw_type == "esp8266":
-        return None  # merge-bin not supported for ESP8266
-
     board = BOARD_INFO.get(hw_type)
     if not board:
         return None
@@ -809,7 +806,6 @@ _build_jobs: dict = {}
 ENV_MAP = {
     "esp32-s3": "esp32-s3",
     "esp32-c3": "esp32-c3",
-    "esp8266": "esp8266",
     "esp32-s3-gps": "esp32-s3-gps",
 }
 
@@ -818,7 +814,6 @@ FLASH_MODE_NAMES = {0: "qio", 1: "qout", 2: "dio", 3: "dout"}
 BOARD_INFO = {
     "esp32-s3": {"flash_mode": "dio", "flash_size": "8MB", "partition": "default_8MB.csv", "chip": "esp32s3"},
     "esp32-c3": {"flash_mode": "qio", "flash_size": "4MB", "partition": "default.csv", "chip": "esp32c3"},
-    "esp8266":  {"flash_mode": "qio", "flash_size": "4MB", "partition": "default", "chip": "esp8266"},
     "esp32-s3-gps": {"flash_mode": "dio", "flash_size": "8MB", "partition": "default_8MB.csv", "chip": "esp32s3"},
 }
 
@@ -826,7 +821,6 @@ BOARD_INFO = {
 PARTITION_MAX_APP_SIZE = {
     "esp32-s3": 3342336,   # 3264 KB (default_8MB.csv app0)
     "esp32-c3": 1310720,   # 1280 KB (default.csv app0)
-    "esp8266":  1044464,   # ~1020 KB
     "esp32-s3-gps": 3342336,  # same partition as esp32-s3
 }
 

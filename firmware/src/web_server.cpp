@@ -1,13 +1,8 @@
 #include "web_server.h"
 #include "config.h"
 
-#ifdef ESP32
-  #include <WebServer.h>
-  static WebServer server(WEB_SERVER_PORT);
-#else
-  #include <ESP8266WebServer.h>
-  static ESP8266WebServer server(WEB_SERVER_PORT);
-#endif
+#include <WebServer.h>
+static WebServer server(WEB_SERVER_PORT);
 
 static CaptivePortal* _portal = nullptr;
 

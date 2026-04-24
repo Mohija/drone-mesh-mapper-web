@@ -39,7 +39,6 @@ function semverCompare(a: string, b: string): number {
 const HARDWARE_TYPES = [
   { value: 'esp32-s3', label: 'ESP32-S3', desc: 'BLE + WiFi ODID, HTTPS | DIO 8MB', recommended: true },
   { value: 'esp32-c3', label: 'ESP32-C3', desc: 'BLE + WiFi ODID, HTTPS | QIO 4MB' },
-  { value: 'esp8266', label: 'ESP8266', desc: 'Nur WiFi-Beacon ODID, kein BLE, kein HTTPS', limited: true },
   { value: 'esp32-s3-gps', label: 'ESP32+GPS', desc: 'ESP32-S3 mit ATGM336H GPS + RGB-Taster (GPIO4/5/6/7)' },
 ];
 
@@ -99,22 +98,6 @@ const SHOPPING_LISTS: Record<string, { title: string; note: string; items: Shopp
         link: 'https://www.amazon.de/Bluetooth-Antenne-2-4GHz-geeignet-ESP8266/dp/B0CTG8XJSN' },
       { name: 'Kabelverschraubung M16 IP68 (5er-Pack)', desc: 'Wasserdichte Kabel-Durchführung für USB-Kabel ins Gehäuse.', price: '~7 €', required: false,
         link: 'https://www.amazon.de/Kabelverschraubung-M16-Hanibos-Kabeldurchf%C3%BChrung-Kabelverschraubungen/dp/B0BXRVX368' },
-    ],
-  },
-  'esp8266': {
-    title: 'ESP8266 / NodeMCU (Budget)',
-    note: 'Nur WiFi-Beacon ODID – kein BLE, kein HTTPS. NodeMCU kommt immer mit vorgelöteten Pin-Headers. Wichtig: NodeMCU Lolin V3 ist die breite Variante (28mm Pin-Abstand) — nur kompatible Base Boards verwenden!',
-    items: [
-      { name: 'AZDelivery NodeMCU Lolin V3 (vorgelötet)', desc: 'ESP-12F Board mit CH340G, Micro-USB, WiFi 2,4 GHz. Pin-Headers vorgelötet, inkl. E-Book. Breite Variante (28mm Pin-Abstand).', price: '~7 €', required: true, group: 'controller-set',
-        link: 'https://www.amazon.de/AZDelivery-NodeMCU-Lolin-WiFi-Parent/dp/B07Z5C3KQF' },
-      { name: 'Base Board für NodeMCU V3 Wide (28mm)', desc: 'DUBEUYEW Base Board — bestätigt kompatibel mit breiter NodeMCU V3 (28mm Pin-Abstand). DC-Buchse 6–24V, 5V/3.3V Ausgänge, GPIO-Verdopplung, Montagelöcher (60×60mm).', price: '~9 €', required: true, group: 'controller-set',
-        link: 'https://www.amazon.de/dp/B0D1KCYG3W' },
-      { name: 'Micro-USB Kabel (1m)', desc: 'Datenkabel für Flashen und Stromversorgung. Auf Datenkabel achten!', price: '~5 €', required: true,
-        link: 'https://www.amazon.de/KabelDirekt-Micro-Ladekabel-Datenkabel-schwarz/dp/B00L5G2IR6' },
-      { name: 'USB-Netzteil 5V/2A (3er-Pack)', desc: 'Steckernetzteil mit USB-A Ausgang. 3er-Pack praktisch für mehrere Nodes.', price: '~9 €', required: true,
-        link: 'https://www.amazon.de/Ladeger%C3%A4t-Netzstecker-Smartphones-Spielzeug-Spielkonsole-wei%C3%9F/dp/B0CM9G39DW' },
-      { name: 'ABS-Gehäuse IP65 (100×68×50 mm)', desc: 'Wasserdichtes Elektronik-Gehäuse. Passt NodeMCU + Base Board (60×60mm) mit etwas Luft.', price: '~7 €', required: true,
-        link: 'https://www.amazon.de/Elektronische-Wasserdichte-Industriegeh%C3%A4use-Anschlussdose-Verteilerdose/dp/B0DDWR9LP3' },
     ],
   },
 };
@@ -671,7 +654,7 @@ export default function ReceiverList() {
         })()}
         <AdminTooltip
           brief="Neuen Hardware-Empfänger registrieren"
-          detail={"Erstellt einen neuen Empfänger-Eintrag in der Datenbank. Du wählst einen Namen und den Hardware-Typ (ESP32-S3, ESP32-C3 oder ESP8266).\nNach dem Erstellen kannst du die Firmware bauen und auf den Mikrocontroller flashen.\nEs wird eine Einkaufsliste mit allen benötigten Teilen und Links angezeigt."}
+          detail={"Erstellt einen neuen Empfänger-Eintrag in der Datenbank. Du wählst einen Namen und den Hardware-Typ (ESP32-S3, ESP32-C3 oder ESP32+GPS).\nNach dem Erstellen kannst du die Firmware bauen und auf den Mikrocontroller flashen.\nEs wird eine Einkaufsliste mit allen benötigten Teilen und Links angezeigt."}
         >
           <button
             data-testid="receiver-create-btn"
@@ -924,7 +907,7 @@ export default function ReceiverList() {
               >
                 {HARDWARE_TYPES.map(t => (
                   <option key={t.value} value={t.value}>
-                    {t.label}{t.recommended ? ' ★ Empfohlen' : ''}{t.limited ? ' (eingeschränkt)' : ''}
+                    {t.label}{t.recommended ? ' ★ Empfohlen' : ''}
                   </option>
                 ))}
               </select>
@@ -948,20 +931,6 @@ export default function ReceiverList() {
               {creating ? 'Erstellen...' : 'Erstellen'}
             </button>
           </div>
-          {newType === 'esp8266' && (
-            <div data-testid="esp8266-warning" style={{
-              marginTop: 10,
-              padding: '8px 12px',
-              background: 'rgba(234,179,8,0.1)',
-              border: '1px solid #eab308',
-              borderRadius: 6,
-              fontSize: 12,
-              color: '#eab308',
-            }}>
-              ESP8266 ist eine Light-Variante: Kein BLE (nur WiFi-Beacon ODID), kein HTTPS, eingeschränkter RAM.
-            </div>
-          )}
-
           {/* Shopping list */}
           {SHOPPING_LISTS[newType] && (
             <div data-testid="shopping-list-section" style={{ marginTop: 12 }}>
@@ -1137,13 +1106,6 @@ export default function ReceiverList() {
                         Kein passender Steckboden verfügbar — Befestigung im Gehäuse mit Abstandshaltern/Klebepads. Etwas weniger RAM als der S3.
                       </>
                     )}
-                    {newType === 'esp8266' && (
-                      <>
-                        <strong>Nur für Spezialfälle.</strong> Der ESP8266 erkennt nur WiFi-Beacon ODID — kein BLE, kein HTTPS.
-                        Nur sinnvoll als Budget-Ergänzung an Standorten, wo bekannt WiFi-Beacon-Drohnen fliegen.
-                        Für den vollen Funktionsumfang wird <strong>ESP32-S3</strong> empfohlen.
-                      </>
-                    )}
                   </div>
                 </div>
               )}
@@ -1164,7 +1126,7 @@ export default function ReceiverList() {
             Noch keine Empfänger angelegt
           </div>
           <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20, maxWidth: 440, margin: '0 auto 20px', lineHeight: 1.5 }}>
-            Ein Empfänger ist ein ESP32 oder ESP8266, der Drohnen-Remote-ID-Signale
+            Ein Empfänger ist ein ESP32, der Drohnen-Remote-ID-Signale
             in deiner Umgebung mithört und an dieses Dashboard sendet. Leg einen
             ersten Node an — die Firmware bauen wir dir danach automatisch.
           </div>
@@ -1324,7 +1286,7 @@ export default function ReceiverList() {
                 >
                   Firmware erstellen
                 </button>
-                {node.status !== 'offline' && node.hardwareType !== 'esp8266' && !node.otaUpdatePending && (() => {
+                {node.status !== 'offline' && !node.otaUpdatePending && (() => {
                   const latestForHw = stats?.latestFirmwareVersions?.[node.hardwareType];
                   const hasUpdate = (node.lastBuildVersion && node.firmwareVersion && node.lastBuildVersion !== node.firmwareVersion)
                     || (latestForHw && node.firmwareVersion && semverCompare(node.firmwareVersion, latestForHw) < 0);
@@ -1446,18 +1408,6 @@ export default function ReceiverList() {
                     </td>
                     <td style={{ ...tdStyle, textAlign: 'center' }}>
                       <span style={{ fontSize: 12 }}>{node.hardwareType.toUpperCase()}</span>
-                      {node.hardwareType === 'esp8266' && (
-                        <span style={{
-                          fontSize: 9,
-                          padding: '1px 5px',
-                          borderRadius: 3,
-                          background: 'rgba(234,179,8,0.15)',
-                          color: '#eab308',
-                          marginLeft: 4,
-                        }}>
-                          Light
-                        </span>
-                      )}
                     </td>
                     <td style={{ ...tdStyle, textAlign: 'center', fontSize: 12 }}>
                       {timeAgo(node.lastHeartbeat)}
@@ -1616,7 +1566,7 @@ export default function ReceiverList() {
 
                         <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                           {/* OTA Update */}
-                          {node.status !== 'offline' && node.hardwareType !== 'esp8266' && (
+                          {node.status !== 'offline' && (
                             node.otaUpdatePending ? (
                               <AdminTooltip
                                 brief="OTA-Update abbrechen"
@@ -1644,7 +1594,7 @@ export default function ReceiverList() {
                             ) : (
                               <AdminTooltip
                                 brief="Firmware drahtlos aktualisieren (OTA)"
-                                detail={"Baut automatisch die neueste Firmware und sendet sie per Over-the-Air Update an den ESP.\n\nAblauf:\n1. Automatischer Firmware-Build (WiFi-Credentials werden aus dem letzten Build übernommen)\n2. OTA-Trigger an den Empfänger\n3. ESP lädt Firmware herunter, verifiziert SHA-256 und startet neu\n\nEin Progress-Modal zeigt Build-Log, OTA-Status und ESP-Antwort in Echtzeit.\n\nWiFi-Persistenz: Falls keine gespeicherten Build-Credentials vorhanden sind, nutzt der ESP die im NVS (Non-Volatile Storage) gespeicherten WiFi-Daten vom letzten erfolgreichen Login. NVS überlebt OTA-Updates.\n\nKein physischer Zugriff nötig! Nur ESP32-S3/C3 (nicht ESP8266).\nBei Fehler: Automatischer Rollback auf die vorherige Firmware."}
+                                detail={"Baut automatisch die neueste Firmware und sendet sie per Over-the-Air Update an den ESP.\n\nAblauf:\n1. Automatischer Firmware-Build (WiFi-Credentials werden aus dem letzten Build übernommen)\n2. OTA-Trigger an den Empfänger\n3. ESP lädt Firmware herunter, verifiziert SHA-256 und startet neu\n\nEin Progress-Modal zeigt Build-Log, OTA-Status und ESP-Antwort in Echtzeit.\n\nWiFi-Persistenz: Falls keine gespeicherten Build-Credentials vorhanden sind, nutzt der ESP die im NVS (Non-Volatile Storage) gespeicherten WiFi-Daten vom letzten erfolgreichen Login. NVS überlebt OTA-Updates.\n\nKein physischer Zugriff nötig! Verfügbar für ESP32-S3, ESP32-C3 und ESP32+GPS.\nBei Fehler: Automatischer Rollback auf die vorherige Firmware."}
                               >
                                 <button
                                   data-testid={`receiver-ota-${node.id}`}
@@ -1677,7 +1627,7 @@ export default function ReceiverList() {
                           {node.lastBuildAt && (
                             <AdminTooltip
                               brief="Anwendungs-Firmware herunterladen (.bin)"
-                              detail={"Lädt die reine Anwendungs-Firmware als .bin-Datei herunter.\nDiese Datei enthält NUR den FlightArc-Code ohne Bootloader und Partitionstabelle.\n\nVerwendung:\n- Für OTA-Updates über esptool oder das Web-Interface des ESP\n- Wenn Bootloader und Partitionen bereits auf dem ESP vorhanden sind\n- Offset beim manuellen Flashen: 0x10000 (ESP32) bzw. 0x0 (ESP8266)\n\nFür ein komplett frisches Board verwende stattdessen \"Full-Flash (Merged)\"."}
+                              detail={"Lädt die reine Anwendungs-Firmware als .bin-Datei herunter.\nDiese Datei enthält NUR den FlightArc-Code ohne Bootloader und Partitionstabelle.\n\nVerwendung:\n- Für OTA-Updates über esptool oder das Web-Interface des ESP\n- Wenn Bootloader und Partitionen bereits auf dem ESP vorhanden sind\n- Offset beim manuellen Flashen: 0x10000 (ESP32)\n\nFür ein komplett frisches Board verwende stattdessen \"Full-Flash (Merged)\"."}
                             >
                               <button
                                 data-testid={`receiver-download-${node.id}`}

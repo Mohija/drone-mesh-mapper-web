@@ -261,7 +261,7 @@ function NetworkArchDiagram() {
       <text x="80" y="120" fill="#00d4aa" fontWeight="600" fontSize="11" textAnchor="middle" fontFamily="sans-serif">ESP32-C3</text>
       <text x="80" y="137" fill="#5eead4" fontSize="9" textAnchor="middle" fontFamily="sans-serif">BLE + WiFi ODID</text>
       <rect x="20" y="170" width="120" height="60" rx="8" fill="#eab308" fillOpacity="0.15" stroke="#eab308" />
-      <text x="80" y="195" fill="#eab308" fontWeight="600" fontSize="11" textAnchor="middle" fontFamily="sans-serif">ESP8266</text>
+      <text x="80" y="195" fill="#eab308" fontWeight="600" fontSize="11" textAnchor="middle" fontFamily="sans-serif">ESP32+GPS</text>
       <text x="80" y="212" fill="#fde047" fontSize="9" textAnchor="middle" fontFamily="sans-serif">Nur WiFi (Light)</text>
       {/* Arrows to backend */}
       <line x1="140" y1="50" x2="230" y2="130" stroke="#00d4aa" strokeWidth="1.5" strokeDasharray="4,3" />
@@ -339,7 +339,7 @@ function EspSetupDiagram() {
       {/* Detail box */}
       <rect x="20" y="115" width="565" height="90" rx="8" fill="#1e293b" stroke="#475569" />
       <text x="35" y="138" fill="#94a3b8" fontWeight="600" fontSize="11" fontFamily="sans-serif">Benötigt:</text>
-      <text x="35" y="158" fill="#64748b" fontSize="11" fontFamily="sans-serif">• ESP32-S3/C3 oder ESP8266 Board mit USB-Anschluss</text>
+      <text x="35" y="158" fill="#64748b" fontSize="11" fontFamily="sans-serif">• ESP32-S3/C3 Board mit USB-Anschluss</text>
       <text x="35" y="175" fill="#64748b" fontSize="11" fontFamily="sans-serif">• USB-Datenkabel (nicht nur Ladekabel!)</text>
       <text x="35" y="192" fill="#64748b" fontSize="11" fontFamily="sans-serif">• esptool.py installiert (pip install esptool) oder Chrome/Edge für Web Serial</text>
     </svg>
@@ -390,7 +390,7 @@ function SectionOverview() {
             <li><strong>Flugverbotszonen (NFZ)</strong> — Offizielle DIPUL-Daten mit Flughäfen, Naturschutzgebieten, etc.</li>
             <li><strong>Flugberichte</strong> — Zeichne Flugverläufe auf und exportiere als HTML/PDF-Report</li>
             <li><strong>Multi-Mandanten</strong> — Isolierte Arbeitsbereiche für verschiedene Organisationen</li>
-            <li><strong>Hardware-Empfänger</strong> — ESP32/ESP8266-Integration für echte Open Drone ID Erkennung</li>
+            <li><strong>Hardware-Empfänger</strong> — ESP32-Integration für echte Open Drone ID Erkennung</li>
             <li><strong>Automatische Einstellungsspeicherung</strong> — Alle Anzeigeeinstellungen (Radius, Höhenfilter, NFZ, Empfänger-Abdeckung etc.) werden pro Benutzer im Browser gespeichert und beim nächsten Besuch automatisch wiederhergestellt</li>
           </ul>
           <SourceColorLegend />
@@ -788,7 +788,7 @@ function SectionSettings() {
               <tr><td style={tdStyle}><strong>ADS-B.fi</strong></td><td style={tdStyle}>Finnisches ADS-B Netzwerk mit weltweiter Abdeckung</td></tr>
               <tr><td style={tdStyle}><strong>ADS-B.lol</strong></td><td style={tdStyle}>Community-basiertes ADS-B Netzwerk</td></tr>
               <tr><td style={tdStyle}><strong>OGN</strong></td><td style={tdStyle}>Open Glider Network — Segelflugzeuge, Gleitschirme, Ballons</td></tr>
-              <tr><td style={tdStyle}><strong>Empfänger</strong></td><td style={tdStyle}>Eigene ESP32/ESP8266 Hardware-Empfänger für Open Drone ID</td></tr>
+              <tr><td style={tdStyle}><strong>Empfänger</strong></td><td style={tdStyle}>Eigene ESP32 Hardware-Empfänger für Open Drone ID</td></tr>
             </tbody>
           </table>
           <InfoBox type="warning">
@@ -1055,7 +1055,7 @@ function SectionReceivers() {
       <h2>Empfänger-Verwaltung</h2>
       <p>
         Unter <strong>Administration → Empfänger</strong> verwaltest du deine Hardware-Empfänger
-        (ESP32-S3, ESP32-C3, ESP8266).
+        (ESP32-S3, ESP32-C3, ESP32+GPS).
       </p>
       <details className="help-sub" id="statistik-leiste" open>
         <summary style={h3SummaryStyle}><span className="help-caret">&#9654;</span> Statistik-Leiste</summary>
@@ -1080,7 +1080,7 @@ function SectionReceivers() {
               <ul>
                 <li><strong>ESP32-S3</strong> — BLE + WiFi ODID, HTTPS-fähig (empfohlen)</li>
                 <li><strong>ESP32-C3</strong> — BLE + WiFi ODID, HTTPS-fähig, kompakter</li>
-                <li><strong>ESP8266</strong> — Nur WiFi-Beacon ODID, kein BLE, kein HTTPS (Light)</li>
+                <li><strong>ESP32+GPS</strong> — ESP32-S3 mit GPS-Modul für mobilen Einsatz (Fahrzeug/Drohne)</li>
               </ul>
             </li>
             <li>Klicke auf <strong>„Erstellen"</strong></li>
@@ -1103,7 +1103,7 @@ function SectionReceivers() {
             <li><strong>Firmware-Verlauf</strong> — Chronologische Liste aller Firmware-Versionen mit Datum und Methode (Flash/OTA/Heartbeat)</li>
             <li><strong>„App-Firmware" herunterladen</strong> — Lädt die gespeicherte Firmware erneut herunter (kein Rebuild nötig)</li>
             <li><strong>„Full-Flash (Merged)" herunterladen</strong> — Lädt das Merged Binary herunter (Bootloader + Partitions + Firmware in einer Datei, nur ESP32). Siehe Abschnitt <em>OTA-Updates & Merged Binary</em>.</li>
-            <li><strong>„OTA Update senden"</strong> — Sendet ein Over-the-Air Update an den Empfänger (nur ESP32-S3/C3, nicht ESP8266). Das Update wird beim nächsten Heartbeat übermittelt. Siehe Abschnitt <em>OTA-Updates & Merged Binary</em>.</li>
+            <li><strong>„OTA Update senden"</strong> — Sendet ein Over-the-Air Update an den Empfänger. Das Update wird beim nächsten Heartbeat übermittelt. Siehe Abschnitt <em>OTA-Updates & Merged Binary</em>.</li>
             <li><strong>„Firmware erstellen"</strong> — Baut Firmware komplett neu. Optional mit neuem API-Key (Checkbox „Neuen API-Key generieren" — alter Key wird dann ungültig, alter ESP muss neu geflasht werden)</li>
             <li><strong>„Kommunikations-Log"</strong> — Zeigt Log-Einträge nur für diesen Empfänger (muss zuerst aktiviert werden)</li>
             <li><strong>„Deakt."</strong> — Deaktiviert den Empfänger (kann sich nicht mehr authentifizieren)</li>
@@ -1330,7 +1330,7 @@ function SectionSimulation() {
       <p>
         Unter <strong>Administration → Simulation</strong> kannst du Dummy-Empfänger erstellen und starten,
         die simulierte Drohnen-Daten erzeugen. Diese verhalten sich exakt wie echte Hardware-Empfänger
-        (ESP32/ESP8266) und eignen sich zum Testen der Karte, Zonen und Verstöße ohne echte Hardware.
+        (ESP32) und eignen sich zum Testen der Karte, Zonen und Verstöße ohne echte Hardware.
       </p>
       <div id="simulator-erstellen">
         <h3>Simulator erstellen</h3>
@@ -1339,7 +1339,7 @@ function SectionSimulation() {
             <li><strong>Name</strong> — Ein beschreibender Name (z.B. „Bielefeld City")</li>
             <li><strong>Drohnen</strong> — Anzahl simulierter Drohnen (1–50)</li>
             <li><strong>Position</strong> — Breitengrad/Längengrad als Zentrum der Simulation</li>
-            <li><strong>Hardware</strong> — Simulierter Chip-Typ (ESP32-S3, ESP32-C3, ESP8266)</li>
+            <li><strong>Hardware</strong> — Simulierter Chip-Typ (ESP32-S3, ESP32-C3, ESP32+GPS)</li>
             <li>Klicke <strong>„Erstellen & Starten"</strong></li>
           </ol>
       </div>
@@ -1388,7 +1388,7 @@ function SectionHardware() {
     <div>
       <h2>Hardware-Inbetriebnahme</h2>
       <p>
-        Diese Anleitung beschreibt, wie du einen ESP32 oder ESP8266 als Open Drone ID Empfänger
+        Diese Anleitung beschreibt, wie du einen ESP32 als Open Drone ID Empfänger
         in Betrieb nimmst.
       </p>
       <EspSetupDiagram />
@@ -1400,7 +1400,7 @@ function SectionHardware() {
               <tr><th style={thStyle}>Was</th><th style={thStyle}>Details</th></tr>
             </thead>
             <tbody>
-              <tr><td style={tdStyle}><strong>Board</strong></td><td style={tdStyle}>ESP32-S3, ESP32-C3 oder ESP8266 (DevKit mit USB)</td></tr>
+              <tr><td style={tdStyle}><strong>Board</strong></td><td style={tdStyle}>ESP32-S3 oder ESP32-C3 (DevKit mit USB)</td></tr>
               <tr><td style={tdStyle}><strong>USB-Kabel</strong></td><td style={tdStyle}>Datenkabel (nicht nur Ladekabel!). Typ-C oder Micro-USB je nach Board.</td></tr>
               <tr><td style={tdStyle}><strong>esptool.py</strong></td><td style={tdStyle}><code>pip install esptool</code> — oder Chrome/Edge für Web Serial Flash</td></tr>
               <tr><td style={tdStyle}><strong>Stromversorgung</strong></td><td style={tdStyle}>USB-Netzteil (5V/500mA) oder Powerbank für Außeneinsatz</td></tr>
@@ -1474,12 +1474,6 @@ function SectionHardware() {
             <td style={tdStyle}>BOOT halten → RST kurz drücken → BOOT loslassen</td>
             <td style={tdStyle}><code>/dev/ttyACM0</code> oder <code>/dev/ttyUSB0</code></td>
           </tr>
-          <tr>
-            <td style={tdStyle}><strong>ESP8266</strong></td>
-            <td style={tdStyle}>FLASH (GPIO0) + RST</td>
-            <td style={tdStyle}>FLASH halten → RST kurz drücken → FLASH loslassen</td>
-            <td style={tdStyle}><code>/dev/ttyUSB0</code></td>
-          </tr>
         </tbody>
       </table>
       <InfoBox type="warning">
@@ -1507,11 +1501,6 @@ esptool.py --chip esp32c3 --port /dev/ttyUSB0 \\
   --baud 460800 write_flash \\
   0x0 flightarc-esp32-c3-XXXX.bin
 
-# ═══ ESP8266 ═══
-esptool.py --chip esp8266 erase_flash
-esptool.py --chip esp8266 --port /dev/ttyUSB0 \\
-  write_flash 0x0 flightarc-esp8266-XXXX.bin
-
 # Windows: --port COM3 (o.ä.) statt /dev/ttyUSB0`}</CodeBlock>
       <h4>Option B: Web Serial (Chrome/Edge)</h4>
       <p>
@@ -1526,7 +1515,7 @@ esptool.py --chip esp8266 --port /dev/ttyUSB0 \\
       <h4>LED-Signale</h4>
       <InfoBox type="info">
         <strong>ESP32-S3 DevKitC:</strong> RGB Neopixel auf GPIO48 — farbige Statusanzeige (blau, gelb, orange, grün, weiß, rot).{' '}
-        <strong>ESP32-C3 / ESP8266:</strong> Eingebaute LED auf GPIO2 — nur an/aus (keine Farben).
+        <strong>ESP32-C3:</strong> Eingebaute LED auf GPIO2 — nur an/aus (keine Farben).
       </InfoBox>
       <table style={tableStyle}>
         <thead>
@@ -1623,7 +1612,7 @@ esptool.py --chip esp8266 --port /dev/ttyUSB0 \\
           <InfoBox type="warning">
             Der ESP32 unterstützt ausschließlich <strong>2,4-GHz-Netzwerke</strong>. 5-GHz-Netzwerke werden
             beim Scan nicht erkannt und können nicht verwendet werden. Dies betrifft alle ESP32-Varianten
-            (S3, C3) sowie den ESP8266.
+            (S3, C3).
           </InfoBox>
           <h4>iPhone / iPad Hotspot (Persönlicher Hotspot)</h4>
           <p>
@@ -1668,18 +1657,18 @@ esptool.py --chip esp8266 --port /dev/ttyUSB0 \\
           <tr><th style={thStyle}>Problem</th><th style={thStyle}>Lösung</th></tr>
         </thead>
         <tbody>
-          <tr><td style={tdStyle}>ESP wird nicht erkannt</td><td style={tdStyle}>Anderes USB-Kabel versuchen (Datenkabel!). ESP32-S3 hat native USB (kein Treiber nötig). ESP32-C3 und ESP8266 brauchen CH340 oder CP2102 Treiber. Unter Linux: <code>ls /dev/ttyUSB*</code> oder <code>ls /dev/ttyACM*</code> prüfen.</td></tr>
+          <tr><td style={tdStyle}>ESP wird nicht erkannt</td><td style={tdStyle}>Anderes USB-Kabel versuchen (Datenkabel!). ESP32-S3 hat native USB (kein Treiber nötig). ESP32-C3 braucht evtl. CH340 oder CP2102 Treiber. Unter Linux: <code>ls /dev/ttyUSB*</code> oder <code>ls /dev/ttyACM*</code> prüfen.</td></tr>
           <tr><td style={tdStyle}>Kein WiFi-Hotspot</td><td style={tdStyle}>8 Sekunden warten — der Hotspot startet erst nach dem STA-Timeout (~8s). Falls danach kein Hotspot: Board resetten (EN/RST-Taste).</td></tr>
           <tr><td style={tdStyle}>Captive Portal öffnet sich nicht / sehr langsam</td><td style={tdStyle}>Das ist <strong>normales Verhalten</strong>. iOS braucht 30–45s, Android 5–15s, Windows 10–20s nach dem WLAN-Connect bis das Portal-Popup erscheint. Die Verzögerung liegt im Betriebssystem, nicht im Empfänger. <strong>Tipp:</strong> Direkt <code>http://192.168.4.1</code> im Browser öffnen, statt auf das Popup zu warten.</td></tr>
           <tr><td style={tdStyle}>WLAN-Netzwerk wird nicht gefunden</td><td style={tdStyle}>Der ESP32 unterstützt <strong>nur 2,4 GHz</strong> — 5-GHz-Netzwerke sind unsichtbar. Siehe <em>Bekannte Einschränkungen</em> im Handbuch. Bei iPhone-Hotspot: <strong>„Kompatibilität maximieren"</strong> aktivieren (Einstellungen → Persönlicher Hotspot).</td></tr>
-          <tr><td style={tdStyle}>Empfänger bleibt „Offline"</td><td style={tdStyle}>Backend-URL prüfen. Firewall-Port 3020 offen? HTTP statt HTTPS bei ESP8266. Ab Firmware 1.5.3: der Controller startet sich selbst neu, wenn 10 Minuten lang keine erfolgreiche Backend-Verbindung besteht (Watchdog-Reboot).</td></tr>
+          <tr><td style={tdStyle}>Empfänger bleibt „Offline"</td><td style={tdStyle}>Backend-URL prüfen. Firewall-Port 3020 offen? Ab Firmware 1.5.3: der Controller startet sich selbst neu, wenn 10 Minuten lang keine erfolgreiche Backend-Verbindung besteht (Watchdog-Reboot).</td></tr>
           <tr><td style={tdStyle}>Tägliche Health-Checks extern (Remote-Agent)</td><td style={tdStyle}>Unter <em>Einstellungen → Service-Tokens</em> einen Token mit Scope <code>health_read</code> erstellen. Der Token wird nur einmalig angezeigt — sofort in den externen Monitor/Agent übernehmen. Der Agent ruft dann <code>GET /api/receivers/health-summary</code> mit <code>Authorization: Bearer &lt;token&gt;</code> auf (Bearer-Header funktioniert durch den Hub-Live-View-Proxy) und bekommt alle Controller-Telemetrie (Status, WiFi, Heap, Uptime, Fehlerzähler, Audit-Snapshot der letzten 24 h, Backup-Rotation-Status).</td></tr>
-          <tr><td style={tdStyle}>Doppelblinken (orange)</td><td style={tdStyle}>WiFi ist verbunden, aber Backend nicht erreichbar. Backend-URL, Firewall-Port (3020) und Netzwerkverbindung prüfen. Bei HTTPS: ESP8266 unterstützt nur HTTP. Ab 1.5.3 erscheint der Zustand sofort (GET /health-Probe 3s) statt erst nach 10s Heartbeat-Timeout.</td></tr>
+          <tr><td style={tdStyle}>Doppelblinken (orange)</td><td style={tdStyle}>WiFi ist verbunden, aber Backend nicht erreichbar. Backend-URL, Firewall-Port (3020) und Netzwerkverbindung prüfen. Ab 1.5.3 erscheint der Zustand sofort (GET /health-Probe 3s) statt erst nach 10s Heartbeat-Timeout.</td></tr>
           <tr><td style={tdStyle}>Empfänger kommt nach WiFi-Ausfall nicht zurück</td><td style={tdStyle}>Bis Firmware 1.5.2 blieb der Controller nach 2 fehlgeschlagenen Reconnects dauerhaft im AP-Modus hängen und meldete sich nie wieder beim Backend. <strong>Fix ab 1.5.3:</strong> STA-Reconnect läuft auch bei aktivem AP weiter (30s-Kadenz). Falls betroffen: auf 1.5.3 updaten oder kurz neu starten.</td></tr>
-          <tr><td style={tdStyle}>Keine Drohnen erkannt</td><td style={tdStyle}>Nur Drohnen mit aktivierter Remote ID (ODID) werden erkannt — EU-Pflicht seit 01.01.2024. DJI-Drohnen senden per WiFi NAN (ESP32 erforderlich). ESP8266 kann kein BLE und kein NAN. WiFi-Kanal prüfen: Empfänger lauscht auf dem Kanal des verbundenen WiFi-Netzwerks.</td></tr>
+          <tr><td style={tdStyle}>Keine Drohnen erkannt</td><td style={tdStyle}>Nur Drohnen mit aktivierter Remote ID (ODID) werden erkannt — EU-Pflicht seit 01.01.2024. DJI-Drohnen senden per WiFi NAN (ESP32 erforderlich). WiFi-Kanal prüfen: Empfänger lauscht auf dem Kanal des verbundenen WiFi-Netzwerks.</td></tr>
           <tr><td style={tdStyle}>SHA-256 Boot-Loop</td><td style={tdStyle}>Flash komplett löschen: <code>esptool.py --chip esp32s3 erase_flash</code>, dann erneut flashen. Alternativ: <strong>Merged Binary</strong> verwenden (Full-Flash enthält Bootloader + Partitionen). Ursache: korrupter Flash, falscher Flash-Modus (ESP32-S3 braucht DIO) oder Web-Flasher ohne Bootloader.</td></tr>
           <tr><td style={tdStyle}>API-Key verloren</td><td style={tdStyle}>Unter Empfänger → Details → „API-Key regenerieren". Firmware neu flashen mit neuem Key.</td></tr>
-          <tr><td style={tdStyle}>OTA-Update schlägt fehl</td><td style={tdStyle}>Empfänger muss online sein (grüne LED). Nur ESP32-S3/C3 (nicht ESP8266). Prüfen ob Firmware gebaut wurde. Bei Netzwerkproblemen: Empfänger startet nach fehlgeschlagenem OTA mit alter Firmware weiter.</td></tr>
+          <tr><td style={tdStyle}>OTA-Update schlägt fehl</td><td style={tdStyle}>Empfänger muss online sein (grüne LED). Prüfen ob Firmware gebaut wurde. Bei Netzwerkproblemen: Empfänger startet nach fehlgeschlagenem OTA mit alter Firmware weiter.</td></tr>
         </tbody>
       </table>
         </div>
@@ -1689,25 +1678,25 @@ esptool.py --chip esp8266 --port /dev/ttyUSB0 \\
         <div style={subContentStyle}>
       <table style={tableStyle}>
         <thead>
-          <tr><th style={thStyle}>Feature</th><th style={thStyle}>ESP32-S3</th><th style={thStyle}>ESP32-C3</th><th style={thStyle}>ESP8266</th></tr>
+          <tr><th style={thStyle}>Feature</th><th style={thStyle}>ESP32-S3</th><th style={thStyle}>ESP32-C3</th></tr>
         </thead>
         <tbody>
-          <tr><td style={tdStyle}>BLE-Scan (ODID)</td><td style={tdStyle}>Ja</td><td style={tdStyle}>Ja</td><td style={tdStyle}>Nein</td></tr>
-          <tr><td style={tdStyle}>WiFi-Beacon (ODID)</td><td style={tdStyle}>Ja (2 OUIs)</td><td style={tdStyle}>Ja (2 OUIs)</td><td style={tdStyle}>Ja (2 OUIs)</td></tr>
-          <tr><td style={tdStyle}>WiFi NAN (DJI u.a.)</td><td style={tdStyle}>Ja</td><td style={tdStyle}>Ja</td><td style={tdStyle}>Nein</td></tr>
-          <tr><td style={tdStyle}>Pilot-Position</td><td style={tdStyle}>Ja</td><td style={tdStyle}>Ja</td><td style={tdStyle}>Ja (WiFi only)</td></tr>
-          <tr><td style={tdStyle}>Dual-Core</td><td style={tdStyle}>Ja (BLE+WiFi parallel)</td><td style={tdStyle}>Nein (Single Core)</td><td style={tdStyle}>Nein</td></tr>
-          <tr><td style={tdStyle}>HTTPS</td><td style={tdStyle}>Ja</td><td style={tdStyle}>Ja</td><td style={tdStyle}>Nein</td></tr>
-          <tr><td style={tdStyle}>OTA-Update</td><td style={tdStyle}>Ja (Dual-Slot)</td><td style={tdStyle}>Ja (Dual-Slot)</td><td style={tdStyle}>Nein</td></tr>
-          <tr><td style={tdStyle}>Merged Binary</td><td style={tdStyle}>Ja</td><td style={tdStyle}>Ja</td><td style={tdStyle}>Nein</td></tr>
-          <tr><td style={tdStyle}>LED-Farben</td><td style={tdStyle}>RGB Neopixel (GPIO48)</td><td style={tdStyle}>Nur An/Aus (GPIO2)</td><td style={tdStyle}>Nur An/Aus (GPIO2)</td></tr>
-          <tr><td style={tdStyle}>Flash-Modus</td><td style={tdStyle}>DIO</td><td style={tdStyle}>QIO</td><td style={tdStyle}>QIO</td></tr>
-          <tr><td style={tdStyle}>Flash-Größe</td><td style={tdStyle}>8 MB</td><td style={tdStyle}>4 MB</td><td style={tdStyle}>4 MB</td></tr>
-          <tr><td style={tdStyle}>Partition</td><td style={tdStyle}>8MB (2x 3.2MB OTA)</td><td style={tdStyle}>4MB (2x 1.3MB OTA)</td><td style={tdStyle}>Standard</td></tr>
-          <tr><td style={tdStyle}>RAM</td><td style={tdStyle}>~320KB</td><td style={tdStyle}>~280KB</td><td style={tdStyle}>~80KB</td></tr>
-          <tr><td style={tdStyle}>USB-Treiber</td><td style={tdStyle}>Nativ (kein Treiber)</td><td style={tdStyle}>CH340/CP2102</td><td style={tdStyle}>CH340/CP2102</td></tr>
-          <tr><td style={tdStyle}>Preis (ca.)</td><td style={tdStyle}>6–10€</td><td style={tdStyle}>4–7€</td><td style={tdStyle}>2–4€</td></tr>
-          <tr><td style={tdStyle}>Empfehlung</td><td style={tdStyle}>Beste Wahl</td><td style={tdStyle}>Kompakt & günstig</td><td style={tdStyle}>Nur für WiFi-only</td></tr>
+          <tr><td style={tdStyle}>BLE-Scan (ODID)</td><td style={tdStyle}>Ja</td><td style={tdStyle}>Ja</td></tr>
+          <tr><td style={tdStyle}>WiFi-Beacon (ODID)</td><td style={tdStyle}>Ja (2 OUIs)</td><td style={tdStyle}>Ja (2 OUIs)</td></tr>
+          <tr><td style={tdStyle}>WiFi NAN (DJI u.a.)</td><td style={tdStyle}>Ja</td><td style={tdStyle}>Ja</td></tr>
+          <tr><td style={tdStyle}>Pilot-Position</td><td style={tdStyle}>Ja</td><td style={tdStyle}>Ja</td></tr>
+          <tr><td style={tdStyle}>Dual-Core</td><td style={tdStyle}>Ja (BLE+WiFi parallel)</td><td style={tdStyle}>Nein (Single Core)</td></tr>
+          <tr><td style={tdStyle}>HTTPS</td><td style={tdStyle}>Ja</td><td style={tdStyle}>Ja</td></tr>
+          <tr><td style={tdStyle}>OTA-Update</td><td style={tdStyle}>Ja (Dual-Slot)</td><td style={tdStyle}>Ja (Dual-Slot)</td></tr>
+          <tr><td style={tdStyle}>Merged Binary</td><td style={tdStyle}>Ja</td><td style={tdStyle}>Ja</td></tr>
+          <tr><td style={tdStyle}>LED-Farben</td><td style={tdStyle}>RGB Neopixel (GPIO48)</td><td style={tdStyle}>Nur An/Aus (GPIO2)</td></tr>
+          <tr><td style={tdStyle}>Flash-Modus</td><td style={tdStyle}>DIO</td><td style={tdStyle}>QIO</td></tr>
+          <tr><td style={tdStyle}>Flash-Größe</td><td style={tdStyle}>8 MB</td><td style={tdStyle}>4 MB</td></tr>
+          <tr><td style={tdStyle}>Partition</td><td style={tdStyle}>8MB (2x 3.2MB OTA)</td><td style={tdStyle}>4MB (2x 1.3MB OTA)</td></tr>
+          <tr><td style={tdStyle}>RAM</td><td style={tdStyle}>~320KB</td><td style={tdStyle}>~280KB</td></tr>
+          <tr><td style={tdStyle}>USB-Treiber</td><td style={tdStyle}>Nativ (kein Treiber)</td><td style={tdStyle}>CH340/CP2102</td></tr>
+          <tr><td style={tdStyle}>Preis (ca.)</td><td style={tdStyle}>6–10€</td><td style={tdStyle}>4–7€</td></tr>
+          <tr><td style={tdStyle}>Empfehlung</td><td style={tdStyle}>Beste Wahl</td><td style={tdStyle}>Kompakt & günstig</td></tr>
         </tbody>
       </table>
 
@@ -1785,32 +1774,6 @@ esptool.py --chip esp8266 --port /dev/ttyUSB0 \\
       </table>
       <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Geschätzte Gesamtkosten (Pflichtteile): <strong>~28 €</strong></p>
 
-      {/* ESP8266 Shopping List */}
-      <h4>ESP8266 / NodeMCU (Budget)</h4>
-      <InfoBox type="warning">
-        Nur WiFi-Beacon ODID – kein BLE, kein HTTPS. Geeignet als günstige Ergänzung an Standorten mit bekanntem WiFi-Beacon-Verkehr.
-        NodeMCU kommt immer mit vorgelöteten Pin-Headers. Wichtig: NodeMCU Lolin V3 ist die breite Variante (28mm Pin-Abstand) —
-        nur kompatible Base Boards verwenden!
-      </InfoBox>
-      <table style={tableStyle}>
-        <thead>
-          <tr>
-            <th style={thStyle}>Komponente</th>
-            <th style={thStyle}>Beschreibung</th>
-            <th style={thStyle}>Ca. Preis</th>
-            <th style={thStyle}>Pflicht</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr style={groupRowStyle}><td style={tdStyle}><strong>AZDelivery NodeMCU Lolin V3 (vorgelötet)</strong> <a href="https://www.amazon.de/AZDelivery-NodeMCU-Lolin-WiFi-Parent/dp/B07Z5C3KQF" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a> <span style={groupBadgeStyle}>&#x1F517; 2 Teile = 1 Set</span></td><td style={tdStyle}>ESP-12F Board mit CH340G, Micro-USB, WiFi 2,4 GHz. Pin-Headers vorgelötet, inkl. E-Book. Breite Variante (28mm Pin-Abstand).</td><td style={tdStyle}>~7 €</td><td style={tdStyle}>Ja</td></tr>
-          <tr style={groupRowStyle}><td style={tdStyle}><strong>Base Board für NodeMCU V3 Wide (28mm)</strong> <a href="https://www.amazon.de/dp/B0D1KCYG3W" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>DUBEUYEW Base Board — bestätigt kompatibel mit breiter NodeMCU V3 (28mm Pin-Abstand). DC-Buchse 6–24V, 5V/3.3V Ausgänge, GPIO-Verdopplung, Montagelöcher (60×60mm).</td><td style={tdStyle}>~9 €</td><td style={tdStyle}>Ja</td></tr>
-          <tr><td style={tdStyle}>Micro-USB Kabel (1m) <a href="https://www.amazon.de/KabelDirekt-Micro-Ladekabel-Datenkabel-schwarz/dp/B00L5G2IR6" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Datenkabel für Flashen und Stromversorgung. Auf Datenkabel achten!</td><td style={tdStyle}>~5 €</td><td style={tdStyle}>Ja</td></tr>
-          <tr><td style={tdStyle}>USB-Netzteil 5V/2A (3er-Pack) <a href="https://www.amazon.de/Ladeger%C3%A4t-Netzstecker-Smartphones-Spielzeug-Spielkonsole-wei%C3%9F/dp/B0CM9G39DW" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Steckernetzteil mit USB-A Ausgang. 3er-Pack praktisch für mehrere Nodes.</td><td style={tdStyle}>~9 €</td><td style={tdStyle}>Ja</td></tr>
-          <tr><td style={tdStyle}><strong>ABS-Gehäuse IP65 (100×68×50 mm)</strong> <a href="https://www.amazon.de/Elektronische-Wasserdichte-Industriegeh%C3%A4use-Anschlussdose-Verteilerdose/dp/B0DDWR9LP3" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Wasserdichtes Elektronik-Gehäuse. Passt NodeMCU + Base Board (60×60mm) mit etwas Luft.</td><td style={tdStyle}>~7 €</td><td style={tdStyle}>Ja</td></tr>
-        </tbody>
-      </table>
-      <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Geschätzte Gesamtkosten (Pflichtteile): <strong>~37 €</strong></p>
-
       <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', marginTop: 16 }}>
         Alle Links führen zu Amazon.de (Stand März 2026). Preise können variieren.
         Die Einkaufslisten mit direkten Links werden auch beim Erstellen eines Empfängers in der Admin-Oberfläche angezeigt.
@@ -1840,7 +1803,7 @@ function SectionOta() {
           </p>
           <h4>Voraussetzungen</h4>
           <ul>
-            <li><strong>Nur ESP32-S3 und ESP32-C3</strong> — ESP8266 unterstützt kein OTA</li>
+            <li><strong>ESP32-S3 und ESP32-C3</strong> — beide unterstützen OTA (Dual-Slot)</li>
             <li>Der Empfänger muss <strong>online</strong> sein (grüne LED, Heartbeat aktiv)</li>
           </ul>
           <h4>Automatischer Build</h4>
@@ -1949,7 +1912,7 @@ esptool.py --chip esp32s3 write_flash 0x0 flightarc-esp32-s3-XXXX-merged.bin`}</
             funktioniert das Flashen fehlerfrei.
           </p>
           <InfoBox type="warning">
-            <strong>Nur für ESP32</strong> — Merged Binary wird nur für ESP32-S3 und ESP32-C3 erzeugt, nicht für ESP8266.
+            <strong>Nur für ESP32</strong> — Merged Binary wird für ESP32-S3 und ESP32-C3 erzeugt.
           </InfoBox>
           <InfoBox type="warning">
             <strong>NVS wird gelöscht:</strong> Das Merged Binary überschreibt den gesamten Flash inklusive NVS (Non-Volatile Storage).

@@ -4,7 +4,7 @@
  * Detects drones via Open Drone ID (WiFi Beacon + BLE on ESP32)
  * and reports them to the FlightArc backend.
  *
- * Supports: ESP32-S3, ESP32-C3, ESP8266 (Light variant)
+ * Supports: ESP32-S3, ESP32-C3, ESP32-S3+GPS
  */
 
 #include <Arduino.h>

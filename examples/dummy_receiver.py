@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-FlightArc Dummy Receiver — Simuliert einen Hardware-Empfänger (ESP32/ESP8266).
+FlightArc Dummy Receiver — Simuliert einen Hardware-Empfänger (ESP32).
 
 Exakt gleiche Logik wie die kompilierte Firmware:
   - Alle 2 Sekunden: Ingest (Drohnen-Detections senden)
@@ -540,7 +540,7 @@ Beispiele:
     parser.add_argument("--key", default=os.environ.get("API_KEY", DUMMY_API_KEY),
                         help="API-Key des Empfängers (default: vorkonfigurierter Dummy-Key)")
     parser.add_argument("--hardware", default="esp32-s3",
-                        choices=["esp32-s3", "esp32-c3", "esp8266", "esp32-s3-gps"],
+                        choices=["esp32-s3", "esp32-c3", "esp32-s3-gps"],
                         help="Simulierter Hardware-Typ (default: esp32-s3)")
     parser.add_argument("--name", default="Dummy-Node",
                         help="Node-Name (default: Dummy-Node)")
@@ -567,10 +567,7 @@ Beispiele:
     print("================================")
     print(f"FlightArc Dummy Receiver v{FIRMWARE_VERSION}")
     print(f"Hardware: {args.hardware} (simuliert)")
-    if args.hardware in ("esp32-s3", "esp32-c3", "esp32-s3-gps"):
-        print("BLE: enabled (simuliert)")
-    else:
-        print("BLE: disabled")
+    print("BLE: enabled (simuliert)")
     print("TLS: enabled" if args.url.startswith("https") else "TLS: disabled")
     if args.hardware == "esp32-s3-gps":
         print("GPS: enabled (simuliert)")

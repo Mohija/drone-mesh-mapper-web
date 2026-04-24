@@ -10,7 +10,6 @@ import AdminTooltip from './AdminTooltip';
 const HARDWARE_TYPES = [
   { value: 'esp32-s3', label: 'ESP32-S3 (empfohlen)', badge: 'WiFi + BLE' },
   { value: 'esp32-c3', label: 'ESP32-C3', badge: 'WiFi + BLE' },
-  { value: 'esp8266', label: 'ESP8266 (Light)', badge: 'Nur WiFi' },
   { value: 'esp32-s3-gps', label: 'ESP32+GPS', badge: 'WiFi + BLE + GPS' },
 ];
 
@@ -151,7 +150,7 @@ export default function SimulationTab() {
         )}
         <AdminTooltip
           brief="Neuen Drohnen-Simulator erstellen"
-          detail={"Erstellt einen virtuellen Empfänger der simulierte Drohnen-Erkennungen generiert.\nPerfekt zum Testen der Karte, Zonen und Alarme ohne echte Hardware.\n\nKonfigurierbar:\n- Name: Frei wählbar\n- Drohnenanzahl: 1-50 simulierte Drohnen\n- Position: Breitengrad/Längengrad (Zentrum der Simulation)\n- Hardware-Typ: Simuliert ESP32-S3, C3 oder ESP8266\n\nDer Simulator wird automatisch gestartet und die Drohnen erscheinen auf der Karte wenn die Quelle \"Empfänger\" aktiv ist."}
+          detail={"Erstellt einen virtuellen Empfänger der simulierte Drohnen-Erkennungen generiert.\nPerfekt zum Testen der Karte, Zonen und Alarme ohne echte Hardware.\n\nKonfigurierbar:\n- Name: Frei wählbar\n- Drohnenanzahl: 1-50 simulierte Drohnen\n- Position: Breitengrad/Längengrad (Zentrum der Simulation)\n- Hardware-Typ: Simuliert ESP32-S3, ESP32-C3 oder ESP32+GPS\n\nDer Simulator wird automatisch gestartet und die Drohnen erscheinen auf der Karte wenn die Quelle \"Empfänger\" aktiv ist."}
         >
           <button
             onClick={() => setShowCreate(!showCreate)}
@@ -313,7 +312,7 @@ export default function SimulationTab() {
         borderRadius: 8, fontSize: 12, color: 'var(--text-secondary)',
         lineHeight: 1.6,
       }}>
-        <strong>Hinweis:</strong> Simulierte Empfänger verhalten sich exakt wie echte Hardware-Empfänger (ESP32/ESP8266).
+        <strong>Hinweis:</strong> Simulierte Empfänger verhalten sich exakt wie echte Hardware-Empfänger (ESP32).
         Die Drohnen erscheinen auf der Karte wenn die Quelle "Empfänger" in den Einstellungen aktiviert ist.
         Simulatoren sind flüchtig — nach einem Server-Neustart sind sie weg, die erzeugten Empfänger-Einträge ([SIM]) bleiben aber in der Datenbank.
       </div>

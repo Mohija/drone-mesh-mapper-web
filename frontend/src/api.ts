@@ -729,7 +729,7 @@ export interface ReceiverNode {
   id: string;
   tenantId: string;
   name: string;
-  hardwareType: 'esp32-s3' | 'esp32-c3' | 'esp8266';
+  hardwareType: 'esp32-s3' | 'esp32-c3' | 'esp32-s3-gps';
   apiKey?: string;
   firmwareVersion: string | null;
   isActive: boolean;
@@ -1063,7 +1063,7 @@ export interface SimulatorInstance {
   activeDrones: number;
   lat: number;
   lon: number;
-  hardwareType: 'esp32-s3' | 'esp32-c3' | 'esp8266';
+  hardwareType: 'esp32-s3' | 'esp32-c3' | 'esp32-s3-gps';
   receiverNodeId: string;
   startedAt: number | null;
   uptimeSeconds: number;

@@ -2,14 +2,9 @@
 #include "config.h"
 #include <ArduinoJson.h>
 
-#ifdef ESP32
-  #include <HTTPClient.h>
-  #if HAS_TLS
-    #include <WiFiClientSecure.h>
-  #endif
-#else
-  #include <ESP8266HTTPClient.h>
-  #include <WiFiClient.h>
+#include <HTTPClient.h>
+#if HAS_TLS
+  #include <WiFiClientSecure.h>
 #endif
 
 void FlightArcClient::begin(const char* backendUrl, const char* apiKey) {
@@ -31,8 +26,7 @@ bool FlightArcClient::checkHealth(unsigned long timeoutMs) {
     // transient POST failure.
     String url = _backendUrl + "/health";
 
-#ifdef ESP32
-  #if HAS_TLS
+#if HAS_TLS
     if (url.startsWith("https")) {
         WiFiClientSecure client;
         client.setInsecure();
@@ -48,7 +42,7 @@ bool FlightArcClient::checkHealth(unsigned long timeoutMs) {
         Serial.printf("[HTTP] /health probe failed: %d\n", code);
         return false;
     }
-  #endif
+#endif
     {
         HTTPClient http;
         http.begin(url);
@@ -62,20 +56,6 @@ bool FlightArcClient::checkHealth(unsigned long timeoutMs) {
         Serial.printf("[HTTP] /health probe failed: %d\n", code);
         return false;
     }
-#else
-    WiFiClient client;
-    HTTPClient http;
-    http.begin(client, url);
-    http.setTimeout(timeoutMs);
-    int code = http.GET();
-    http.end();
-    if (code >= 200 && code < 300) {
-        _lastSuccessMs = millis();
-        return true;
-    }
-    Serial.printf("[HTTP] /health probe failed: %d\n", code);
-    return false;
-#endif
 }
 
 bool FlightArcClient::sendIngest(OdidDetection* detections, int count,
@@ -199,8 +179,7 @@ OtaInfo FlightArcClient::sendHeartbeat(const char* fwVersion, const char* hwType
 bool FlightArcClient::_httpPost(const String& path, const String& body) {
     String url = _backendUrl + path;
 
-#ifdef ESP32
-  #if HAS_TLS
+#if HAS_TLS
     // Use HTTPS if URL starts with https
     if (url.startsWith("https")) {
         WiFiClientSecure client;
@@ -224,7 +203,7 @@ bool FlightArcClient::_httpPost(const String& path, const String& body) {
         }
         return _lastSuccess;
     }
-  #endif
+#endif
     // Plain HTTP
     HTTPClient http;
     http.begin(url);
@@ -244,36 +223,13 @@ bool FlightArcClient::_httpPost(const String& path, const String& body) {
         _lastSuccessMs = millis();
     }
     return _lastSuccess;
-#else
-    // ESP8266: HTTP only
-    WiFiClient client;
-    HTTPClient http;
-    http.begin(client, url);
-    http.addHeader("Content-Type", "application/json");
-    http.addHeader("X-Node-Key", _apiKey);
-    http.setTimeout(10000);
-
-    int code = http.POST(body);
-    http.end();
-    _lastHttpCode = code;
-    _lastSuccess = (code >= 200 && code < 300);
-    if (!_lastSuccess) {
-        _retryCount++;
-        Serial.printf("[HTTP] POST %s failed: %d (retry %d)\n", path.c_str(), code, _retryCount);
-    } else {
-        _retryCount = 0;
-        _lastSuccessMs = millis();
-    }
-    return _lastSuccess;
-#endif
 }
 
 String FlightArcClient::_httpPostWithResponse(const String& path, const String& body) {
     String url = _backendUrl + path;
     String response;
 
-#ifdef ESP32
-  #if HAS_TLS
+#if HAS_TLS
     if (url.startsWith("https")) {
         WiFiClientSecure client;
         client.setInsecure();
@@ -297,7 +253,7 @@ String FlightArcClient::_httpPostWithResponse(const String& path, const String& 
         http.end();
         return response;
     }
-  #endif
+#endif
     {
         HTTPClient http;
         http.begin(url);
@@ -317,30 +273,9 @@ String FlightArcClient::_httpPostWithResponse(const String& path, const String& 
         }
         http.end();
     }
-#else
-    WiFiClient client;
-    HTTPClient http;
-    http.begin(client, url);
-    http.addHeader("Content-Type", "application/json");
-    http.addHeader("X-Node-Key", _apiKey);
-    http.setTimeout(10000);
-
-    int code = http.POST(body);
-    _lastHttpCode = code;
-    _lastSuccess = (code >= 200 && code < 300);
-    if (_lastSuccess) {
-        response = http.getString();
-        _retryCount = 0;
-        _lastSuccessMs = millis();
-    } else {
-        _retryCount++;
-    }
-    http.end();
-#endif
     return response;
 }
 
-#ifdef ESP32
 #include <HTTPUpdate.h>
 
 bool FlightArcClient::performOtaUpdate(const String& otaUrl) {
@@ -360,7 +295,7 @@ bool FlightArcClient::performOtaUpdate(const String& otaUrl) {
 
     httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
 
-  #if HAS_TLS
+#if HAS_TLS
     if (fullUrl.startsWith("https")) {
         WiFiClientSecure client;
         client.setInsecure();
@@ -382,7 +317,7 @@ bool FlightArcClient::performOtaUpdate(const String& otaUrl) {
         }
         return false;
     }
-  #endif
+#endif
 
     WiFiClient client;
     Serial.printf("[OTA] HTTP download starting (heap: %d)...\n", ESP.getFreeHeap());
@@ -401,9 +336,3 @@ bool FlightArcClient::performOtaUpdate(const String& otaUrl) {
     }
     return false;
 }
-#else
-bool FlightArcClient::performOtaUpdate(const String& otaUrl) {
-    Serial.println("[OTA] Not supported on ESP8266");
-    return false;
-}
-#endif

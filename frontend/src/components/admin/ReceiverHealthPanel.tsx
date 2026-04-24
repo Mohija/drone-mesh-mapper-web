@@ -49,11 +49,10 @@ function rssiPercent(rssi: number | null): number {
   return Math.max(0, Math.min(100, pct));
 }
 
-// ESP32-S3 has ~320KB usable heap, ESP32-C3 ~200KB, ESP8266 ~80KB
+// ESP32-S3 has ~320KB usable heap, ESP32-C3 ~200KB
 function heapCapacity(hw: string): number {
-  if (hw === 'esp8266') return 80_000;
   if (hw === 'esp32-c3') return 200_000;
-  return 320_000; // esp32-s3 default
+  return 320_000; // esp32-s3 / esp32-s3-gps default
 }
 
 function computeChecks(node: ReceiverNode): HealthCheck[] {

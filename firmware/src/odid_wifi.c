@@ -11,11 +11,9 @@ Simon Wunderlich
 sw@simonwunderlich.de
 */
 
-#if defined(ARDUINO_ARCH_ESP32) || defined(ARDUINO_ARCH_ESP8266)
-#include <Arduino.h>
 #if defined(ARDUINO_ARCH_ESP32)
+#include <Arduino.h>
 #include <sys/time.h>
-#endif
 #include <time.h>
 int clock_gettime(clockid_t clk_id, struct timespec *tp);
 #else
@@ -36,10 +34,6 @@ int clock_gettime(clockid_t, struct timespec *);
 #include <endian.h>
 #define cpu_to_be16(x)  (bswap16(x))
 #define cpu_to_be32(x)  (bswap32(x))
-#elif defined(ARDUINO_ARCH_ESP8266)
-/* ESP8266 has no byteswap.h — define inline */
-#define cpu_to_be16(x)  ((uint16_t)(((x) >> 8) | ((x) << 8)))
-#define cpu_to_be32(x)  ((uint32_t)(((x) >> 24) | (((x) >> 8) & 0xFF00) | (((x) << 8) & 0xFF0000) | ((x) << 24)))
 #else
 #include <byteswap.h>
 #define cpu_to_be16(x)  (bswap_16(x))

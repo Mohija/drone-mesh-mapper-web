@@ -10,13 +10,14 @@
         "RGB-Taster: langer Druck (≥2s) löst Deep-Sleep aus, erneuter Druck weckt den Controller (wake-on-ext0 an GPIO4)",
         "RGB-Taster: ab 800ms Haltezeit leuchtet die rote LED als \"Shutdown-Vorwarnung\"",
         "RGB-LEDs (GPIO5/6/7, Common-Anode mit 100/100/33 Ω): spiegeln die Status-LED-Zustände (Boot blau-blink, Kein-WiFi gelb, Kein-Backend orange, Online grün, Fehler rot-SOS)",
-        "Alle bestehenden Firmware-Features (Open Drone ID WiFi+BLE, Captive Portal, OTA, Watchdog) bleiben unverändert verfügbar"
+        "Alle bestehenden Firmware-Features (Open Drone ID WiFi+BLE, Captive Portal, OTA, Watchdog) bleiben unverändert verfügbar",
+        "ESP8266-Support wurde komplett entfernt — die Plattform wird nicht mehr unterstützt (veraltetes WiFi-API, kein BLE, kein HTTPS). Bestehende Einträge in der Datenbank bleiben funktional, Neuanlage und Firmware-Build sind nur noch für ESP32-S3, ESP32-C3 und ESP32+GPS möglich."
       ]
     },
     {
       "version": "1.5.3",
       "date": "2026-04-24",
-      "hardware": ["esp32-s3", "esp32-c3", "esp8266"],
+      "hardware": ["esp32-s3", "esp32-c3"],
       "changes": [
         "WiFi: STA-Reconnect läuft jetzt auch bei aktivem AP weiter (30s-Kadenz) — behebt Dead-End nach WiFi-Ausfall, bei dem der Controller für immer im AP-Modus hing",
         "Backend-Watchdog: Nach 10 Minuten ohne erfolgreichen Kontakt zum Backend rebootet der Controller automatisch (DNS/TLS/Sockets werden frisch initialisiert)",
@@ -28,7 +29,7 @@
     {
       "version": "1.5.2",
       "date": "2026-03-17",
-      "hardware": ["esp32-s3", "esp32-c3", "esp8266"],
+      "hardware": ["esp32-s3", "esp32-c3"],
       "changes": [
         "WiFi: Boot-Scan läuft IMMER (auch bei 1 Netzwerk oder NVS-Credentials) — Captive Portal zeigt verfügbare Netzwerke",
         "WiFi: Boot-Connect-Timeout von 3s auf 5s erhöht (manche Boards brauchen länger)",
@@ -41,7 +42,7 @@
     {
       "version": "1.5.0",
       "date": "2026-03-17",
-      "hardware": ["esp32-s3", "esp32-c3", "esp8266"],
+      "hardware": ["esp32-s3", "esp32-c3"],
       "changes": [
         "WiFi-IP wird im Heartbeat mitgesendet (behebt 127.0.0.1 Anzeige bei Proxy/Localhost)",
         "Backend bevorzugt gemeldete wifi_ip gegenüber request.remote_addr",
@@ -54,7 +55,7 @@
     {
       "version": "1.4.0",
       "date": "2026-03-16",
-      "hardware": ["esp32-s3", "esp32-c3", "esp8266"],
+      "hardware": ["esp32-s3", "esp32-c3"],
       "changes": [
         "Captive Portal: Kein WiFi.begin() mehr während AP aktiv (behebt 30-45s Delay)",
         "Captive Portal: AP-Timeout von 15s auf 8s reduziert, schnellerer Hotspot-Start",
@@ -67,7 +68,7 @@
     {
       "version": "1.3.0",
       "date": "2026-03-16",
-      "hardware": ["esp32-s3", "esp32-c3", "esp8266"],
+      "hardware": ["esp32-s3", "esp32-c3"],
       "changes": [
         "Captive Portal: 302-Redirects für alle OS (Android/Apple/Windows/Firefox)",
         "Captive Portal: Erfolgsbildschirm mit Countdown und Auto-Close nach WLAN-Verbindung",
@@ -78,7 +79,7 @@
     {
       "version": "1.2.0",
       "date": "2026-03-16",
-      "hardware": ["esp32-s3", "esp32-c3", "esp8266"],
+      "hardware": ["esp32-s3", "esp32-c3"],
       "changes": [
         "HTTPS Error-Logging mit HTTP-Statuscodes",
         "WiFi-Credentials werden im NVS gespeichert",
@@ -88,7 +89,7 @@
     {
       "version": "1.1.0",
       "date": "2026-03-14",
-      "hardware": ["esp32-s3", "esp32-c3", "esp8266"],
+      "hardware": ["esp32-s3", "esp32-c3"],
       "changes": [
         "BLE + WiFi ODID Scanning (Open Drone ID)",
         "OTA-Update Support (nur ESP32)",

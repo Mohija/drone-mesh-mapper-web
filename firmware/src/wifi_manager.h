@@ -3,11 +3,7 @@
 #include <Arduino.h>
 #include "config.h"
 
-#ifdef ESP32
-  #include <WiFi.h>
-#else
-  #include <ESP8266WiFi.h>
-#endif
+#include <WiFi.h>
 
 struct WiFiCredential {
     String ssid;

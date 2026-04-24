@@ -7,7 +7,8 @@
  * LED Status — visual feedback.
  *
  * ESP32-S3 DevKitC: RGB Neopixel on GPIO48 (neopixelWrite)
- * ESP32-C3 / ESP8266: Built-in LED on GPIO2 (digitalWrite)
+ * ESP32-C3: Built-in LED on GPIO2 (digitalWrite)
+ * ESP32-S3+GPS: external common-anode RGB via RgbButton driver
  *
  * States:
  *   LED_BOOT        Blue fast blink       — Booting, WLAN-Suche

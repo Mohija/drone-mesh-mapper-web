@@ -5,7 +5,7 @@
 #endif
 
 // ESP32-S3 DevKitC has RGB Neopixel on GPIO48
-// ESP32-C3 and ESP8266 use built-in LED on GPIO2
+// ESP32-C3 uses the built-in LED on GPIO2
 // The esp32-s3-gps variant skips both and routes colours through the
 // external RGB push-button driver.
 #ifdef ESP32

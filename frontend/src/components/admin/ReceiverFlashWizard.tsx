@@ -30,7 +30,7 @@ interface WifiNetwork {
 const FLASH_INFO: Record<string, { mode: string; size: string; chip: string; erase: string; offset: string }> = {
   'esp32-s3': { mode: 'dio', size: '8MB', chip: 'esp32s3', erase: 'esptool.py --chip esp32s3 erase_flash', offset: '0x0' },
   'esp32-c3': { mode: 'qio', size: '4MB', chip: 'esp32c3', erase: 'esptool.py --chip esp32c3 erase_flash', offset: '0x0' },
-  'esp8266':  { mode: 'qio', size: '4MB', chip: 'esp8266', erase: 'esptool.py --chip esp8266 erase_flash', offset: '0x0' },
+  'esp32-s3-gps': { mode: 'dio', size: '8MB', chip: 'esp32s3', erase: 'esptool.py --chip esp32s3 erase_flash', offset: '0x0' },
 };
 
 const BOOT_MODE_INFO: Record<string, { port: string; auto: string; manual: { steps: string[]; buttons: string; note?: string } }> = {
@@ -61,18 +61,18 @@ const BOOT_MODE_INFO: Record<string, { port: string; auto: string; manual: { ste
       ],
     },
   },
-  'esp8266': {
-    port: '/dev/ttyUSB0 (Linux) oder COM-Port (Windows)',
-    auto: 'NodeMCU und D1 Mini Boards haben einen USB-UART Chip (CH340/CP2102) der automatischen Reset über DTR/RTS unterstützt. In der Regel ist kein manueller Boot-Modus nötig.',
+  'esp32-s3-gps': {
+    port: '/dev/ttyACM0 (Linux) oder COM-Port (Windows)',
+    auto: 'Gleiches Vorgehen wie beim ESP32-S3 — das Board basiert auf demselben Chip. Nativer USB unterstützt automatischen Reset.',
     manual: {
-      buttons: 'FLASH (GPIO0) + RST (RESET)',
+      buttons: 'BOOT + RST (RESET/EN)',
       steps: [
-        'FLASH-Taste (GPIO0) gedrückt halten',
-        'RST-Taste kurz drücken',
-        'FLASH-Taste loslassen',
-        'Download-Modus aktiv',
+        'BOOT-Taste gedrückt halten',
+        'RST-Taste kurz drücken (während BOOT gehalten wird)',
+        'BOOT-Taste loslassen',
+        'Das Board ist jetzt im Download-Modus (bereit zum Flashen)',
       ],
-      note: 'Bei manchen ESP8266-Boards heißt die FLASH-Taste auch "PROG" oder "IO0".',
+      note: 'GPS-Modul und RGB-Taster sind fest verdrahtet (GPIO 17/18 UART, GPIO 4/5/6/7 für Button+LEDs) — nichts muss zum Flashen abgesteckt werden.',
     },
   },
 };
@@ -272,7 +272,6 @@ export default function ReceiverFlashWizard({ node, onClose, regenerateKey: _reg
   const logEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const isEsp8266 = node.hardwareType === 'esp8266';
   const flashInfo = FLASH_INFO[node.hardwareType] || FLASH_INFO['esp32-s3'];
 
   // Load tenant WiFi networks + firmware backend URL on mount
@@ -509,16 +508,6 @@ export default function ReceiverFlashWizard({ node, onClose, regenerateKey: _reg
                   <div>Partition: <strong style={{ color: 'var(--text-primary)' }}>{node.hardwareType === 'esp32-s3' ? '8MB (OTA)' : '4MB (OTA)'}</strong></div>
                 </div>
               </div>
-
-              {isEsp8266 && (
-                <div style={{
-                  padding: '10px 12px', background: 'rgba(234,179,8,0.1)',
-                  border: '1px solid #eab308', borderRadius: 8, fontSize: 12, color: '#eab308',
-                }}>
-                  <strong>ESP8266 Einschränkungen:</strong> Kein BLE (nur WiFi-Beacon ODID),
-                  kein HTTPS, eingeschränkter RAM (~80KB).
-                </div>
-              )}
 
               {/* Boot mode instructions */}
               <BootModeInstructions hardwareType={node.hardwareType} />

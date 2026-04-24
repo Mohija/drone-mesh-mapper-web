@@ -20,24 +20,17 @@ extern "C" {
 #include "odid_wifi.h"
 }
 
-#ifdef ESP32
-  #include "esp_wifi.h"
-  #include <nvs_flash.h>
-  #if HAS_BLE
-    #include <NimBLEDevice.h>
-  #endif
-  #if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(ARDUINO_ESP32S3_DEV)
-    #include <freertos/FreeRTOS.h>
-    #include <freertos/task.h>
-    #include <freertos/queue.h>
-    #define USE_DUAL_CORE 1
-  #else
-    #define USE_DUAL_CORE 0
-  #endif
+#include "esp_wifi.h"
+#include <nvs_flash.h>
+#if HAS_BLE
+  #include <NimBLEDevice.h>
+#endif
+#if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(ARDUINO_ESP32S3_DEV)
+  #include <freertos/FreeRTOS.h>
+  #include <freertos/task.h>
+  #include <freertos/queue.h>
+  #define USE_DUAL_CORE 1
 #else
-  extern "C" {
-    #include "user_interface.h"
-  }
   #define USE_DUAL_CORE 0
 #endif
 
@@ -217,9 +210,7 @@ void OdidScanner::_addOrUpdateDetection(const OdidDetection& det) {
     _count++;
 }
 
-// ─── WiFi Promiscuous Mode (ESP32) ────────────────────────
-
-#ifdef ESP32
+// ─── WiFi Promiscuous Mode ────────────────────────
 
 void OdidScanner::_promiscuousCallbackEsp32(void* buf, wifi_promiscuous_pkt_type_t type) {
     if (!_instance) return;
@@ -324,101 +315,6 @@ void OdidScanner::_startPromiscuousMode() {
     Serial.println("[Scanner] ESP32 promiscuous mode enabled (beacon + NAN)");
 }
 
-#else // ESP8266
-
-void OdidScanner::_promiscuousCallback(void* buf, int type) {
-    if (!_instance) return;
-    if (type != 0) return; // ESP8266: type 0 = management frames
-
-    struct RxControl {
-        signed rssi:8;
-        unsigned rate:4;
-        unsigned is_group:1;
-        unsigned :1;
-        unsigned sig_mode:2;
-        unsigned legacy_length:12;
-        unsigned damatch0:1;
-        unsigned damatch1:1;
-        unsigned bssidmatch0:1;
-        unsigned bssidmatch1:1;
-        unsigned MCS:7;
-        unsigned CWB:1;
-        unsigned HT_length:16;
-        unsigned Smoothing:1;
-        unsigned Not_Sounding:1;
-        unsigned :1;
-        unsigned Aggregation:1;
-        unsigned STBC:2;
-        unsigned FEC_CODING:1;
-        unsigned SGI:1;
-        unsigned rxend_state:8;
-        unsigned ampdu_cnt:8;
-        unsigned channel:4;
-        unsigned :12;
-    };
-
-    struct SnifferPacket {
-        struct RxControl rx_ctrl;
-        uint8_t data[];
-    };
-
-    SnifferPacket* pkt = (SnifferPacket*)buf;
-    const uint8_t* payload = pkt->data;
-    int len = 112; // ESP8266 limited frame length
-
-    OdidDetection det = {};
-    det.rssi = pkt->rx_ctrl.rssi;
-    det.timestamp = millis();
-    det.source = OdidDetection::SRC_WIFI_BEACON;
-
-    // Extract source MAC
-    if (len >= 16) {
-        snprintf(det.mac, sizeof(det.mac), "%02x:%02x:%02x:%02x:%02x:%02x",
-                 payload[10], payload[11], payload[12], payload[13], payload[14], payload[15]);
-    }
-
-    // Parse beacon frame for ODID vendor IEs
-    if (payload[0] == 0x80 && len > 36) {
-        int offset = 36;
-        while (offset + 2 < len) {
-            uint8_t ie_type = payload[offset];
-            uint8_t ie_len = payload[offset + 1];
-            if (offset + 2 + ie_len > len) break;
-
-            if (ie_type == 0xDD && ie_len >= 4) {
-                bool is_odid_oui =
-                    (payload[offset + 2] == 0xFA &&
-                     payload[offset + 3] == 0x0B &&
-                     payload[offset + 4] == 0xBC) ||
-                    (payload[offset + 2] == 0x90 &&
-                     payload[offset + 3] == 0x3A &&
-                     payload[offset + 4] == 0xE6);
-
-                if (is_odid_oui) {
-                    int odid_offset = offset + 7;
-                    int odid_len = ie_len - 5;
-                    if (odid_offset < len && odid_len >= ODID_MESSAGE_SIZE) {
-                        processOdidPayload(&payload[odid_offset], odid_len, det);
-                        if (det.valid) {
-                            _instance->_addOrUpdateDetection(det);
-                        }
-                    }
-                }
-            }
-            offset += ie_len + 2;
-        }
-    }
-}
-
-void OdidScanner::_startPromiscuousMode() {
-    wifi_set_opmode(STATIONAP_MODE);
-    wifi_promiscuous_enable(0);
-    wifi_set_promiscuous_rx_cb((wifi_promiscuous_cb_t)_promiscuousCallback);
-    wifi_promiscuous_enable(1);
-    Serial.println("[Scanner] ESP8266 promiscuous mode enabled (beacon only)");
-}
-
-#endif // ESP32 vs ESP8266
 
 // ─── BLE Scanner (NimBLE, ESP32 only) ──────────────────────
 
@@ -556,9 +452,7 @@ void OdidScanner::stopBleForOta() {
 void OdidScanner::pauseWifiScan() {
     if (_wifiPaused) return;
     _wifiPaused = true;
-#ifdef ESP32
     esp_wifi_set_promiscuous(false);
-#endif
 #if HAS_BLE
     // Pause BLE too — radio coexistence with AP
     NimBLEDevice::getScan()->stop();
