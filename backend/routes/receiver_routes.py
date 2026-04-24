@@ -1313,6 +1313,53 @@ def build_firmware_stream():
     )
 
 
+# ESP chip family names expected by esp-web-tools / esptool-js.
+_CHIP_FAMILIES = {
+    "esp32-s3": "ESP32-S3",
+    "esp32-c3": "ESP32-C3",
+    "esp32-s3-gps": "ESP32-S3",
+}
+
+
+@receiver_bp.route("/firmware/manifest/<node_id>", methods=["GET"])
+@login_required
+@role_required("tenant_admin")
+def firmware_manifest(node_id):
+    """ESP Web Tools manifest pointing at this node's merged binary.
+
+    `<esp-web-install-button>` fetches this JSON, then downloads the binary
+    from the path inside it and streams it over Web Serial to the ESP.
+    """
+    node = ReceiverNode.query.filter_by(id=node_id, tenant_id=g.tenant_id).first()
+    if not node:
+        return jsonify({"error": "Empfänger nicht gefunden"}), 404
+
+    merged_path = os.path.join(FIRMWARE_STORE, f"{node.id}_merged.bin")
+    if not os.path.isfile(merged_path):
+        return jsonify({"error": "Kein Merged-Binary vorhanden. Bitte zuerst Firmware bauen."}), 404
+
+    chip_family = _CHIP_FAMILIES.get(node.hardware_type)
+    if not chip_family:
+        return jsonify({"error": f"Web-Flash für {node.hardware_type} nicht unterstützt"}), 400
+
+    manifest = {
+        "name": f"FlightArc {node.hardware_type}",
+        "version": node.firmware_version or "",
+        "new_install_prompt_erase": True,
+        "builds": [
+            {
+                "chipFamily": chip_family,
+                "parts": [
+                    # Merged binary already includes bootloader + partitions,
+                    # so offset 0 is correct.
+                    {"path": f"../download/{node.id}?type=merged", "offset": 0},
+                ],
+            }
+        ],
+    }
+    return jsonify(manifest)
+
+
 @receiver_bp.route("/firmware/download/<node_id>", methods=["GET"])
 @login_required
 @role_required("tenant_admin")

@@ -1,6 +1,25 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { startBuildAsync, pollBuildStatus, downloadFirmware, fetchWifiNetworks, fetchSettings } from '../../api';
 import type { ReceiverNode, FirmwareCheck } from '../../api';
+// Registers the <esp-web-install-button> custom element used by step 5.
+// Side-effect import — the library attaches itself to the global element registry.
+import 'esp-web-tools';
+
+// JSX typing for the Web Component so TypeScript accepts the tag name.
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      'esp-web-install-button': React.DetailedHTMLProps<
+        React.HTMLAttributes<HTMLElement> & {
+          manifest?: string;
+          'erase-first'?: boolean | '';
+          'show-log'?: boolean | '';
+        },
+        HTMLElement
+      >;
+    }
+  }
+}
 
 interface Props {
   node: ReceiverNode;
@@ -8,14 +27,15 @@ interface Props {
   regenerateKey?: boolean;
 }
 
-type Step = 'intro' | 'config' | 'build' | 'download' | 'done';
+type Step = 'intro' | 'config' | 'build' | 'download' | 'webflash' | 'done';
 
 const STEP_LABELS: Record<Step, string> = {
   intro: '1. Vorbereitung',
   config: '2. Konfiguration',
   build: '3. Firmware bauen',
   download: '4. Verifizierung & Download',
-  done: '5. Fertig',
+  webflash: '5. Browser-Flash',
+  done: '6. Fertig',
 };
 
 interface WifiNetwork {
@@ -744,13 +764,29 @@ export default function ReceiverFlashWizard({ node, onClose, regenerateKey: _reg
               <ChecklistSummary checks={buildResult.checks} />
             )}
 
+            {/* Web-Flash — primary action when the browser supports it and
+                the checks passed. Kept above the .bin download so it's the
+                first thing the user sees. */}
+            {hasWebSerial && !buildResult?.checks.some(c => !c.ok) && (
+              <button
+                data-testid="flash-webflash-btn"
+                onClick={() => setStep('webflash')}
+                style={{
+                  ...primaryBtnStyle,
+                  marginBottom: 8,
+                }}
+              >
+                {'⚡'} Jetzt über USB flashen (Browser)
+              </button>
+            )}
+
             {/* Download button */}
             <button
               data-testid="flash-download-btn"
               onClick={handleDownload}
               disabled={buildResult?.checks.some(c => !c.ok)}
               style={{
-                ...primaryBtnStyle,
+                ...(hasWebSerial ? secondaryBtnStyle : primaryBtnStyle),
                 marginBottom: 16,
                 opacity: buildResult?.checks.some(c => !c.ok) ? 0.5 : 1,
                 cursor: buildResult?.checks.some(c => !c.ok) ? 'not-allowed' : 'pointer',
@@ -758,7 +794,7 @@ export default function ReceiverFlashWizard({ node, onClose, regenerateKey: _reg
             >
               {buildResult?.checks.some(c => !c.ok)
                 ? 'Download gesperrt — Checks fehlgeschlagen'
-                : 'Firmware herunterladen (.bin)'}
+                : 'Oder: .bin-Datei herunterladen'}
             </button>
 
             {/* Flash instructions */}
@@ -799,6 +835,74 @@ esptool.py --chip ${flashInfo.chip} --port /dev/ttyUSB0 \\
                 Endlosschleife mit "SHA-256 comparison failed" startet: Flash zuerst komplett
                 löschen mit <code>erase_flash</code> (Schritt 1), dann erneut flashen.
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Step: Web-Flash (Browser via USB using esp-web-tools) */}
+        {step === 'webflash' && (
+          <div data-testid="flash-step-webflash">
+            <div style={{
+              background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.3)',
+              borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 12,
+              color: 'var(--text-secondary)', lineHeight: 1.6,
+            }}>
+              <div style={{ fontWeight: 600, marginBottom: 6, color: '#3b82f6' }}>
+                {'⚡'} Browser-Flash (Web Serial)
+              </div>
+              <ol style={{ margin: '0 0 0 20px', padding: 0 }}>
+                <li>ESP per USB-Kabel am PC anschliessen (Datenkabel, nicht nur Laden)</li>
+                <li>Unten auf <strong>„Verbinden"</strong> klicken — ein Browser-Dialog fragt nach dem USB-Port</li>
+                <li>Den passenden seriellen Port auswählen (meist <code>USB JTAG/serial debug unit</code> oder <code>USB-SERIAL CH340</code>)</li>
+                <li>„Install FlightArc" bestätigen — der Flash-Vorgang startet automatisch (inkl. Erase + Bootloader + App)</li>
+                <li>Nach „Done" den ESP kurz vom Strom trennen, dann wieder anschließen — er bootet in die neue Firmware</li>
+              </ol>
+            </div>
+
+            <BootModeInstructions hardwareType={node.hardwareType} compact />
+
+            <div style={{
+              display: 'flex', justifyContent: 'center',
+              padding: 16, marginTop: 12, marginBottom: 16,
+              background: 'var(--bg-primary)', borderRadius: 8,
+              border: '1px solid var(--border)',
+            }}>
+              <esp-web-install-button
+                data-testid="esp-web-install-button"
+                manifest={`/api/receivers/firmware/manifest/${node.id}`}
+                erase-first
+              >
+                <button slot="activate" style={{
+                  ...primaryBtnStyle,
+                  width: 'auto',
+                  minWidth: 220,
+                }}>
+                  Verbinden & flashen
+                </button>
+                <span slot="unsupported" style={{ fontSize: 12, color: 'var(--status-error)' }}>
+                  Dieser Browser unterstützt Web Serial nicht. Nutze Chrome oder Edge auf Desktop,
+                  oder lade die <code>.bin</code> herunter und flashe mit esptool.
+                </span>
+                <span slot="not-allowed" style={{ fontSize: 12, color: '#eab308' }}>
+                  Web Serial benötigt HTTPS oder localhost. Öffne die Seite über
+                  <code> https://hub.dasilvafelix.de</code> oder <code>http://localhost:3020</code>.
+                </span>
+              </esp-web-install-button>
+            </div>
+
+            <div style={{
+              padding: '8px 10px', marginBottom: 12,
+              background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.3)',
+              borderRadius: 6, fontSize: 11, color: '#eab308',
+            }}>
+              <strong>Fehler „ESP nicht erkannt"?</strong> Manche ESP32-S3-Boards müssen erst
+              in den Download-Modus gebracht werden: BOOT halten → RST kurz drücken → BOOT loslassen,
+              dann „Verbinden" erneut klicken.
+            </div>
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setStep('download')} style={secondaryBtnStyle}>Zurück</button>
+              <button onClick={() => setStep('done')} style={primaryBtnStyle}>Fertig</button>
             </div>
           </div>
         )}
