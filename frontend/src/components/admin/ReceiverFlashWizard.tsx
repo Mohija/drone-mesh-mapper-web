@@ -25,6 +25,10 @@ interface Props {
   node: ReceiverNode;
   onClose: () => void;
   regenerateKey?: boolean;
+  /** Open the wizard directly on a specific step — used by the overview's
+   *  "Web-Flash" shortcut to skip straight to step 5 when a merged binary
+   *  is already available. */
+  initialStep?: Step;
 }
 
 type Step = 'intro' | 'config' | 'build' | 'download' | 'webflash' | 'done';
@@ -275,8 +279,11 @@ function BootModeInstructions({ hardwareType, compact }: { hardwareType: string;
   );
 }
 
-export default function ReceiverFlashWizard({ node, onClose, regenerateKey: _regenKeyProp = false }: Props) {
-  const [step, setStep] = useState<Step>('intro');
+export default function ReceiverFlashWizard({ node, onClose, regenerateKey: _regenKeyProp = false, initialStep = 'intro' }: Props) {
+  const [step, setStep] = useState<Step>(initialStep);
+  // When the wizard is opened in shortcut mode (directly on a later step),
+  // Zurück closes instead of hopping back into a never-run download step.
+  const shortcutMode = initialStep !== 'intro';
   // Backend URL is managed centrally in Einstellungen (firmware_backend_url)
   const [backendUrl, setBackendUrl] = useState('');
   const [backendUrlLoaded, setBackendUrlLoaded] = useState(false);
@@ -901,7 +908,12 @@ esptool.py --chip ${flashInfo.chip} --port /dev/ttyUSB0 \\
             </div>
 
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => setStep('download')} style={secondaryBtnStyle}>Zurück</button>
+              <button
+                onClick={() => shortcutMode ? onClose() : setStep('download')}
+                style={secondaryBtnStyle}
+              >
+                {shortcutMode ? 'Schliessen' : 'Zurück'}
+              </button>
               <button onClick={() => setStep('done')} style={primaryBtnStyle}>Fertig</button>
             </div>
           </div>

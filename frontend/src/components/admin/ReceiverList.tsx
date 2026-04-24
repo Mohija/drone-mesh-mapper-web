@@ -295,6 +295,10 @@ export default function ReceiverList() {
   // Flash wizard
   const [flashNode, setFlashNode] = useState<ReceiverNode | null>(null);
   const [flashRegenKey, setFlashRegenKey] = useState(false);
+  const [flashInitialStep, setFlashInitialStep] = useState<'intro' | 'webflash'>('intro');
+  // Web Serial API is only available in Chromium-based browsers on secure
+  // contexts (HTTPS or localhost). We read it once on mount.
+  const hasWebSerial = typeof navigator !== 'undefined' && 'serial' in navigator;
 
   // GPS location
   const [locatingId, setLocatingId] = useState<string | null>(null);
@@ -1309,7 +1313,7 @@ export default function ReceiverList() {
                 </button>
                 <button
                   data-testid={`receiver-build-${node.id}`}
-                  onClick={() => { setFlashRegenKey(false); setFlashNode(node); }}
+                  onClick={() => { setFlashInitialStep('intro'); setFlashRegenKey(false); setFlashNode(node); }}
                   style={{ ...mobileBtnStyle, background: '#14b8a6', color: '#fff', border: 'none' }}
                 >
                   Firmware erstellen
@@ -1652,37 +1656,40 @@ export default function ReceiverList() {
                               OTA: {node.otaLastResult === 'success' ? 'Erfolgreich' : node.otaLastResult}
                             </span>
                           )}
-                          {node.lastBuildAt && (
+                          {node.lastBuildMergedSize && (
                             <AdminTooltip
-                              brief="Anwendungs-Firmware herunterladen (.bin)"
-                              detail={"Lädt die reine Anwendungs-Firmware als .bin-Datei herunter.\nDiese Datei enthält NUR den FlightArc-Code ohne Bootloader und Partitionstabelle.\n\nVerwendung:\n- Für OTA-Updates über esptool oder das Web-Interface des ESP\n- Wenn Bootloader und Partitionen bereits auf dem ESP vorhanden sind\n- Offset beim manuellen Flashen: 0x10000 (ESP32)\n\nFür ein komplett frisches Board verwende stattdessen \"Full-Flash (Merged)\"."}
+                              brief={hasWebSerial
+                                ? 'Direkt aus dem Browser über USB flashen'
+                                : 'Web-Flash nicht verfügbar — nur Chrome/Edge auf Desktop mit HTTPS oder localhost'}
+                              detail={hasWebSerial
+                                ? 'Öffnet den Flash-Wizard direkt auf dem Browser-Flash-Schritt.\n\nAblauf:\n1. ESP per USB anschliessen (Datenkabel, nicht nur Laden)\n2. "Verbinden & flashen" klicken\n3. Im Browser-Popup den passenden seriellen Port wählen\n4. Die Merged-Firmware wird automatisch geflasht (inkl. Erase + Bootloader)\n\nKein esptool nötig — alles läuft im Browser via Web Serial API.'
+                                : 'Web Serial wird in diesem Browser nicht unterstützt.\n\nVoraussetzungen:\n- Chrome oder Edge (Desktop)\n- HTTPS-Verbindung oder localhost\n- USB-Port verfügbar\n\nAlternativ: "Full-Flash (Merged)" herunterladen und mit esptool flashen.'}
                             >
                               <button
-                                data-testid={`receiver-download-${node.id}`}
-                                onClick={async (e) => {
+                                data-testid={`receiver-webflash-${node.id}`}
+                                onClick={(e) => {
                                   e.stopPropagation();
-                                  try {
-                                    const blob = await downloadFirmware(node.id);
-                                    const url = URL.createObjectURL(blob);
-                                    const a = document.createElement('a');
-                                    a.href = url;
-                                    a.download = `flightarc-${node.hardwareType}-${node.id}.bin`;
-                                    a.click();
-                                    URL.revokeObjectURL(url);
-                                  } catch { /* silent */ }
+                                  if (!hasWebSerial) return;
+                                  setFlashInitialStep('webflash');
+                                  setFlashRegenKey(false);
+                                  setFlashNode(node);
                                 }}
+                                disabled={!hasWebSerial}
                                 style={{
                                   padding: '5px 12px',
-                                  background: 'var(--bg-tertiary)',
-                                  border: '1px solid #14b8a6',
+                                  background: hasWebSerial ? 'rgba(20,184,166,0.15)' : 'var(--bg-tertiary)',
+                                  border: `1px solid ${hasWebSerial ? '#14b8a6' : 'var(--border)'}`,
                                   borderRadius: 6,
-                                  color: '#14b8a6',
-                                  cursor: 'pointer',
+                                  color: hasWebSerial ? '#14b8a6' : 'var(--text-muted)',
+                                  cursor: hasWebSerial ? 'pointer' : 'not-allowed',
                                   fontSize: 11,
                                   fontWeight: 600,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4,
                                 }}
                               >
-                                App-Firmware
+                                {'⚡'} Web-Flash
                               </button>
                             </AdminTooltip>
                           )}
@@ -1725,7 +1732,7 @@ export default function ReceiverList() {
                           >
                             <button
                               data-testid={`receiver-build-${node.id}`}
-                              onClick={() => { setFlashRegenKey(false); setFlashNode(node); }}
+                              onClick={() => { setFlashInitialStep('intro'); setFlashRegenKey(false); setFlashNode(node); }}
                               style={{
                                 padding: '5px 12px',
                                 background: '#14b8a6',
@@ -1866,7 +1873,8 @@ export default function ReceiverList() {
         <ReceiverFlashWizard
           node={flashNode}
           regenerateKey={flashRegenKey}
-          onClose={() => { setFlashNode(null); setFlashRegenKey(false); loadData(); }}
+          initialStep={flashInitialStep}
+          onClose={() => { setFlashNode(null); setFlashRegenKey(false); setFlashInitialStep('intro'); loadData(); }}
         />
       )}
 
