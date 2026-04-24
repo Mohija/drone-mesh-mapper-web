@@ -1774,8 +1774,47 @@ esptool.py --chip esp32c3 --port /dev/ttyUSB0 \\
       </table>
       <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Geschätzte Gesamtkosten (Pflichtteile): <strong>~28 €</strong></p>
 
+      {/* ESP32+GPS Shopping List */}
+      <h4>ESP32+GPS (mit Standort &amp; RGB-Taster)</h4>
+      <InfoBox type="info">
+        Wie der ESP32-S3, zusätzlich mit ATGM336H GPS-Modul und extern
+        beleuchtetem RGB-Drucktaster. Ein langer Tastendruck (≥2 s) schaltet
+        den Controller per Deep-Sleep aus, ein erneuter Druck weckt ihn wieder.
+        Die LEDs spiegeln die Status-Farben der Firmware.
+        <br /><br />
+        <strong>Verdrahtung (5 Adern zum Taster, 4 zum GPS):</strong><br />
+        GPS: <code>VCC</code>→3,3 V · <code>GND</code>→GND · <code>TX</code>→GPIO 17 · <code>RX</code>→GPIO 18<br />
+        Taster: <code>COM+</code>→3,3 V · <code>SW NO</code>→GPIO 4 · <code>LED R−</code>→100 Ω→GPIO 5 · <code>LED G−</code>→100 Ω→GPIO 6 · <code>LED B−</code>→33 Ω→GPIO 7
+      </InfoBox>
+      <table style={tableStyle}>
+        <thead>
+          <tr>
+            <th style={thStyle}>Komponente</th>
+            <th style={thStyle}>Beschreibung</th>
+            <th style={thStyle}>Ca. Preis</th>
+            <th style={thStyle}>Pflicht</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style={groupRowStyle}><td style={tdStyle}><strong>ESP32-S3-DevKitC-1 N16R8 mit IPEX + Antenne</strong> <a href="https://www.amazon.de/Heemol-DevKitC-1-Entwicklung-Bluetooth-Anschlie%C3%9Fbare/dp/B0FKFXC6F8" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Heemol Board mit 16 MB Flash, 8 MB PSRAM, USB-C, Dual-Core. Mit IPEX-Anschluss + 2,4 GHz Antenne.</td><td style={tdStyle}>~15 €</td><td style={tdStyle}>Ja</td></tr>
+          <tr style={groupRowStyle}><td style={tdStyle}><strong>GPIO Breakout Board für ESP32-S3</strong> <a href="https://www.amazon.de/Meshnology-Erweiterungsboard-Kunststoffdichtungen-Steckdosen-N40/dp/B0FLK4MDDW" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Steckboden mit Montagelöchern, 5 V/3,3 V Ausgänge. Kein Löten nötig.</td><td style={tdStyle}>~12 €</td><td style={tdStyle}>Ja</td></tr>
+          <tr><td style={tdStyle}><strong>ATGM336H-5N GPS-Modul (GPS + BeiDou, UART)</strong> <a href="https://www.amazon.de/s?k=ATGM336H+GPS+BeiDou+Modul+UART" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Kompaktes GNSS-Modul mit aktiver Keramikantenne, 3,3 V, 9600 Baud. NMEA-Ausgang (GGA/RMC). Fix-Zeit draußen 30–60 s.</td><td style={tdStyle}>~10 €</td><td style={tdStyle}>Ja</td></tr>
+          <tr><td style={tdStyle}><strong>RGB-Drucktaster 16 mm (Common-Anode, Metall)</strong> <a href="https://www.amazon.de/s?k=16mm+RGB+Drucktaster+common+anode+edelstahl" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Beleuchteter Edelstahl-Taster mit integrierter RGB-LED, 1× Schließer (NO), gemeinsamer COM+ für Schalter und alle drei LED-Anoden. Einbaubohrung Ø 16 mm.</td><td style={tdStyle}>~10 €</td><td style={tdStyle}>Ja</td></tr>
+          <tr><td style={tdStyle}><strong>Widerstände 100 Ω + 33 Ω</strong> <a href="https://www.amazon.de/s?k=widerstand+sortiment+1%2F4W+metallschicht" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Für die LED-Kathoden: 2× 100 Ω (R + G), 1× 33 Ω (B braucht mehr Strom). ¼ W Metallschicht reicht. Sortiment-Box ist günstiger als Einzelkauf.</td><td style={tdStyle}>~8 €</td><td style={tdStyle}>Ja</td></tr>
+          <tr><td style={tdStyle}>Dupont-Jumper-Kabel (Female-Female, 20 cm) <a href="https://www.amazon.de/s?k=Dupont+Jumper+Kabel+female+female+20cm" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Mindestens 9 Leitungen (4× GPS + 5× Taster). Ein 40er-Bundel deckt mehrere Aufbauten ab.</td><td style={tdStyle}>~6 €</td><td style={tdStyle}>Ja</td></tr>
+          <tr><td style={tdStyle}>USB-A auf USB-C Kabel (1m) <a href="https://www.amazon.de/1-m-langes-usb-c-kabel-usb-a-auf-usb-c-von-amazon/dp/B07Q5JW4J3" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Datenkabel für Flashen und Stromversorgung.</td><td style={tdStyle}>~7 €</td><td style={tdStyle}>Ja</td></tr>
+          <tr><td style={tdStyle}>USB-Netzteil 5V/2A (USB-C) <a href="https://www.amazon.de/Bouge-Universal-Ladeger%C3%A4t-Kompatibilit%C3%A4t-Blackview/dp/B0C2Q5LK11" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Steckernetzteil für Dauerbetrieb.</td><td style={tdStyle}>~8 €</td><td style={tdStyle}>Ja</td></tr>
+          <tr><td style={tdStyle}><strong>ABS-Gehäuse IP65 (100×68×50 mm)</strong> <a href="https://www.amazon.de/Elektronische-Wasserdichte-Industriegeh%C3%A4use-Anschlussdose-Verteilerdose/dp/B0DDWR9LP3" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Wasserdicht. Taster wird in den Deckel eingelassen (Ø 16 mm), GPS-Antenne bleibt idealerweise sichtbar oder liegt am Deckel an.</td><td style={tdStyle}>~8 €</td><td style={tdStyle}>Ja</td></tr>
+          <tr><td style={tdStyle}>Kabelverschraubung M16 IP68 (5er-Pack) <a href="https://www.amazon.de/Kabelverschraubung-M16-Hanibos-Kabeldurchf%C3%BChrung-Kabelverschraubungen/dp/B0BXRVX368" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Für USB/Antenne/Taster-Kabel.</td><td style={tdStyle}>~7 €</td><td style={tdStyle}>Optional</td></tr>
+          <tr><td style={tdStyle}>PoE-Splitter 5V USB-C (IEEE 802.3af) <a href="https://www.amazon.de/UCTRONICS-PoE-Splitter-USB-C-USB-C-Adapter-Sicherheitskameras/dp/B087F4QCTR" target="_blank" rel="noopener noreferrer" style={linkBadgeStyle}>Amazon &#8599;</a></td><td style={tdStyle}>Strom per Netzwerkkabel bei Montage auf Dach oder Mast (freier GPS-Himmel).</td><td style={tdStyle}>~15 €</td><td style={tdStyle}>Optional</td></tr>
+        </tbody>
+      </table>
+      <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Geschätzte Gesamtkosten (Pflichtteile): <strong>~84 €</strong></p>
+
       <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', marginTop: 16 }}>
         Alle Links führen zu Amazon.de (Stand März 2026). Preise können variieren.
+        Für GPS-Modul, RGB-Taster und Widerstände zeigen die Links Suchergebnisse —
+        dort passende Angebote wählen (es gibt viele Anbieter zu ähnlichen Preisen).
         Die Einkaufslisten mit direkten Links werden auch beim Erstellen eines Empfängers in der Admin-Oberfläche angezeigt.
       </p>
         </div>
