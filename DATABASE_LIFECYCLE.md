@@ -32,13 +32,13 @@
 
 ## 2. Eine neue Migration hinzufügen
 
-1. In `backend/migrations.py` unten einen Eintrag in `MIGRATIONS = [...]` anhängen:
+1. In `backend/migrations.py` unten einen Eintrag in `MIGRATIONS = [...]` anhängen (aktueller Stand bis `012`, siehe `manage.py migrate status` für den Live-Zustand):
    ```python
    {
-       "version": "012_add_firmware_backend_url",
-       "description": "Tenant-weite URL für Firmware-Build",
+       "version": "013_whatever_you_re_adding",
+       "description": "Einzeiler, was diese Migration tut",
        "statements": [
-           "ALTER TABLE tenant_settings ADD COLUMN firmware_backend_url VARCHAR(255)",
+           "ALTER TABLE some_table ADD COLUMN new_field VARCHAR(255)",
        ],
    }
    ```

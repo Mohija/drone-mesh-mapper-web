@@ -64,6 +64,9 @@ const SECTION_SUBS: Record<string, SubMeta[]> = {
     { id: 'log-viewer', title: 'Log-Viewer' },
     { id: 'sicherheits-audit', title: 'Sicherheits-Audit' },
     { id: 'wifi-netzwerk-verwaltung', title: 'WiFi-Netzwerk-Verwaltung' },
+    { id: 'firmware-backend-url', title: 'Firmware Backend-URL' },
+    { id: 'datenaufbewahrung', title: 'Datenaufbewahrung (Retention)' },
+    { id: 'service-tokens', title: 'Service-Tokens' },
   ],
   receivers: [
     { id: 'statistik-leiste', title: 'Statistik-Leiste' },
@@ -968,6 +971,80 @@ function SectionAdmin() {
             die Option <strong>„Kompatibilität maximieren"</strong> aktiviert sein.
           </InfoBox>
       </div>
+
+      <div id="firmware-backend-url">
+        <h3>Firmware Backend-URL</h3>
+        <p>
+          Unter <strong>Administration → Einstellungen → Firmware Backend-URL</strong> wird die URL gepflegt,
+          die beim Firmware-Build in jeden Empfänger-Controller <strong>eingebrannt</strong> wird.
+          Diese URL muss von überall erreichbar sein, wo ein Controller stehen könnte — also <strong>niemals eine LAN-IP</strong>
+          (<code>192.168.*</code>, <code>10.*</code>, <code>localhost</code>), sondern eine öffentliche Domain via
+          Cloudflare-Tunnel (z. B. <code>https://hub.dasilvafelix.de/api/live/flight-arc</code>).
+          Der Server weigert sich, einen Build mit einer LAN-IP zu erzeugen.
+        </p>
+        <p>
+          Das Feld im Flash-Wizard ist <strong>read-only</strong> und zeigt die hier gepflegte URL an. Ändert man sie hier,
+          gilt sie für alle folgenden Builds und OTA-Updates.
+        </p>
+        <InfoBox type="warning">
+          <strong>Firmware 1.5.3 Watchdog:</strong> Wenn ein Controller die eingebrannte URL 10 Minuten lang nicht erreicht,
+          rebootet er sich selbst (DNS/TLS/Sockets werden frisch initialisiert). Deshalb ist die externe Erreichbarkeit
+          absolut kritisch.
+        </InfoBox>
+      </div>
+
+      <div id="datenaufbewahrung">
+        <h3>Datenaufbewahrung (Retention)</h3>
+        <p>
+          Unter <strong>Administration → Einstellungen → Datenaufbewahrung</strong> wird gesteuert, wie lange
+          Log-Tabellen in der Datenbank aufbewahrt werden. Ein Background-Thread im Backend prunt stündlich:
+        </p>
+        <table style={tableStyle}>
+          <thead>
+            <tr><th style={thStyle}>Tabelle</th><th style={thStyle}>Standard</th><th style={thStyle}>Bereich</th></tr>
+          </thead>
+          <tbody>
+            <tr><td style={tdStyle}>System-Logs (Request-/Modul-Logs)</td><td style={tdStyle}>14 Tage</td><td style={tdStyle}>1 – 365</td></tr>
+            <tr><td style={tdStyle}>Audit-Logs (User-Aktionen)</td><td style={tdStyle}>90 Tage</td><td style={tdStyle}>1 – 365</td></tr>
+            <tr><td style={tdStyle}>Trail-Archive (Flugrouten)</td><td style={tdStyle}>7 Tage (via <code>expires_at</code>)</td><td style={tdStyle}>eigener Manager</td></tr>
+          </tbody>
+        </table>
+        <p>
+          <strong>„Jetzt aufräumen"</strong>-Button triggert den Cleanup sofort. Eingabewerte &lt;&nbsp;1 oder &gt;&nbsp;365 werden serverseitig auf
+          den gültigen Bereich geklemmt — ein versehentliches <code>0</code> löscht damit nie alle Daten.
+        </p>
+        <InfoBox type="info">
+          <strong>Nicht gelöscht werden:</strong> Empfänger, Mandanten, Benutzer, Flugzonen, Adressbuch,
+          Service-Tokens, Schema-Migrationen, Firmware-Historie. Das sind Dimension-/Config-Daten, nicht Zeitreihen.
+        </InfoBox>
+      </div>
+
+      <div id="service-tokens">
+        <h3>Service-Tokens</h3>
+        <p>
+          Unter <strong>Administration → Einstellungen → Service-Tokens</strong> werden API-Schlüssel für <strong>externe Monitore</strong>
+          verwaltet (z. B. scheduled Remote-Agents, Uptime-Checker). Sie sind <em>Mandanten-scoped</em>, als <strong>SHA-256-Hash</strong>
+          gespeichert (nie im Klartext) und auf den Scope <code>health_read</code> begrenzt — lesen, nie ändern.
+        </p>
+        <h4>Token erstellen</h4>
+        <ol>
+          <li>Namen eingeben (z. B. <code>daily-health-check</code>)</li>
+          <li>„Token erstellen" klicken — der Wert wird <strong>einmalig</strong> angezeigt und ist <code>flightarc_svc_…</code>-Prefix</li>
+          <li>Wert sofort in den externen Monitor kopieren — er wird danach nicht mehr im Klartext angezeigt, nur noch das Präfix</li>
+        </ol>
+        <h4>Verwendung</h4>
+        <p>
+          Aufruf via <code>Authorization: Bearer &lt;token&gt;</code>-Header (funktioniert auch durch den Hub-Live-View-Proxy,
+          der <code>X-*</code>-Header filtert). Endpoint: <code>GET /api/receivers/health-summary</code> liefert alle Telemetrie-Felder
+          aller Empfänger des Mandanten, Audit-Snapshot der letzten 24 h sowie <code>db_stats</code> (Zeilenzahlen, Dateigröße,
+          effektive Retention-Tage).
+        </p>
+        <h4>Widerruf</h4>
+        <p>
+          „Widerrufen" setzt <code>revoked_at</code> und der Token wird sofort abgelehnt (403). Die Audit-Spur bleibt erhalten.
+          „Löschen" entfernt den Token hart — nutze lieber Widerrufen.
+        </p>
+      </div>
     </div>
   );
 }
@@ -1087,7 +1164,7 @@ function SectionReceivers() {
         </div>
       </details>
       <details className="help-sub" id="telemetrie-daten">
-        <summary style={h3SummaryStyle}><span className="help-caret">&#9654;</span> Telemetrie-Daten</summary>
+        <summary style={h3SummaryStyle}><span className="help-caret">&#9654;</span> Telemetrie-Daten &amp; Health-Panel</summary>
         <div style={subContentStyle}>
           <p>Jeder Empfänger sendet regelmäßig folgende Daten ans Backend:</p>
           <table style={tableStyle}>
@@ -1099,6 +1176,23 @@ function SectionReceivers() {
               <tr><td style={tdStyle}>Ingest</td><td style={tdStyle}>2s</td><td style={tdStyle}>Drohnen-Erkennungen mit ID, Position, Höhe, Speed, Heading, Pilot-Position, Operator-ID, ID-Typ, Quelle (BLE/WiFi/NAN)</td></tr>
             </tbody>
           </table>
+          <h4>Klick-Details: Health-Panel</h4>
+          <p>
+            Klick auf eine Empfänger-Zeile (Desktop-Tabelle) bzw. auf den Kartenkopf (Mobile-Card) öffnet
+            das <strong>Health-Panel</strong> mit dem kompletten Telemetrie-Zustand:
+          </p>
+          <ul>
+            <li><strong>Status-Pill</strong> oben — online / stale / offline, mit Alter des letzten Heartbeats</li>
+            <li><strong>Alert-Banner</strong> (nur bei Problemen) — WiFi schwach, AP-Modus aktiv, Heap niedrig, Fehlerzähler hoch, Firmware veraltet</li>
+            <li><strong>Verbindung</strong> — SSID, Kanal, IP, RSSI als farbige Signalstärke-Leiste</li>
+            <li><strong>Laufzeit</strong> — Firmware, Uptime, Erkennungen (boot/total), Heap als Leiste mit HW-spezifischer Kapazität (320/200/80&nbsp;KB für S3/C3/8266)</li>
+            <li><strong>Backend-Kommunikation</strong> — Fehlerzähler (vom Controller gemeldet), letzter HTTP-Code, OTA-Zustand, AP-Modus</li>
+            <li><strong>Checks-Liste</strong> — dieselben Regeln wie der tägliche Remote-Health-Agent (`flightarc-daily-health`): ✓/⚠/✗ pro Kriterium</li>
+          </ul>
+          <p>
+            Dieselben Daten sind auch extern via <code>GET /api/receivers/health-summary</code> (siehe <em>Service-Tokens</em>) abrufbar
+            — inklusive Backup-Rotation-Status und DB-Größe.
+          </p>
         </div>
       </details>
       <details className="help-sub" id="firmware-versionierung">
@@ -1142,7 +1236,15 @@ function SectionReceivers() {
       <details className="help-sub" id="auto-refresh">
         <summary style={h3SummaryStyle}><span className="help-caret">&#9654;</span> Auto-Refresh</summary>
         <div style={subContentStyle}>
-          <p>Die Empfänger-Liste aktualisiert sich automatisch alle 30 Sekunden. Das Connection Log pollt alle 3 Sekunden wenn aktiv und sichtbar.</p>
+          <p>Die Empfänger-Liste aktualisiert sich automatisch alle <strong>15 Sekunden</strong> — zusammen mit dem 30-Sekunden-Heartbeat-Takt der Controller bedeutet das: eine Status-Änderung (online → offline oder umgekehrt) ist spätestens nach <strong>135 Sekunden</strong> in der UI sichtbar.</p>
+          <p>Oben rechts neben „Remote-ID · Mesh" zeigt eine Refresh-Pille den Zustand:</p>
+          <ul>
+            <li><span style={{ color: '#22c55e' }}>●</span> <strong>Grüner Dot + „vor Xs"</strong> — frische Daten (letzter Poll &lt; 20s)</li>
+            <li><span style={{ color: 'var(--text-muted)' }}>●</span> <strong>Grauer Dot + „vor X min"</strong> — älter als 20s, zählt in Echtzeit hoch</li>
+            <li><span style={{ color: 'var(--accent)' }}>●</span> <strong>Cyan pulsierend + „lädt…"</strong> — gerade wird aktualisiert</li>
+          </ul>
+          <p>Klick auf die Pille erzwingt einen sofortigen Refresh — nützlich nach einem Reboot oder OTA-Update, wenn man nicht auf den nächsten Poll warten will.</p>
+          <p>Das Connection Log pollt zusätzlich alle 3 Sekunden, wenn es sichtbar und aktiv ist.</p>
         </div>
       </details>
       <details className="help-sub" id="empfaenger-abdeckung">
@@ -1196,7 +1298,8 @@ function SectionReceivers() {
           </p>
           <h4>Ablauf</h4>
           <ol>
-            <li><strong>Zone definieren</strong> — Polygon auf der Karte zeichnen (Klick-für-Punkt) oder eine bestehende Flugzone auswählen</li>
+            <li><strong>Zone definieren</strong> — Polygon auf der Karte zeichnen (Klick-für-Punkt) oder eine bestehende Flugzone auswählen. Mindestens 3 Punkte.</li>
+            <li><strong>Polygon bearbeiten</strong> — Punkte sind interaktiv: <strong>ziehen</strong> zum Verschieben (Fläche folgt live), <strong>Doppelklick</strong> (Handy: langer Druck) zum Entfernen. Die Buttons „↶ Letzten Punkt" und „✕ Alle löschen" setzen zurück.</li>
             <li><strong>Konfigurieren</strong> — Antennentyp wählen (bestimmt den Abdeckungsradius), optional Radius manuell anpassen, Namens-Prefix festlegen</li>
             <li><strong>Berechnen</strong> — Algorithmus berechnet optimale Positionen (Hexagonal-Grid)</li>
             <li><strong>Ergebnis prüfen</strong> — Karte zeigt geplante Positionen mit Abdeckungskreisen, Statistik (Anzahl, Fläche)</li>
@@ -1765,12 +1868,23 @@ function SectionOta() {
             <li>Gehe zu <strong>Administration → Empfänger</strong></li>
             <li>Klappe den gewünschten Empfänger auf (Klick auf die Zeile)</li>
             <li>Klicke auf <strong>„OTA Update senden"</strong></li>
-            <li>Das Progress-Modal öffnet sich und zeigt den Build-Fortschritt</li>
+            <li>Das Progress-Modal öffnet sich mit <strong>4 Schritten</strong>: <em>Build → Trigger → Warten → Fertig</em>. Der aktive Schritt leuchtet in Signal-Cyan, abgeschlossene in Grün.</li>
             <li>Nach erfolgreichem Build wird das OTA-Update automatisch ausgelöst</li>
             <li>Beim nächsten Heartbeat (alle 30 Sekunden) erhält der ESP das Update-Signal</li>
             <li>Der ESP lädt die neue Firmware herunter, schreibt sie in den inaktiven OTA-Slot und startet neu</li>
             <li>Nach dem Neustart sendet der ESP die neue Firmware-Version im Heartbeat — das Backend erkennt das Update als erfolgreich und setzt das OTA-Flag zurück</li>
           </ol>
+          <InfoBox type="info">
+            <strong>Abbrechen während Build/Warten:</strong> Im Modal-Header erscheint ein roter <strong>„Abbrechen"</strong>-Button, sobald
+            das Update aktiv ist. Ein Klick fordert eine Bestätigung an, ruft dann <code>cancelOtaUpdate()</code>
+            und schließt das Modal. Ein bereits gestarteter Build läuft im Hintergrund zu Ende, wird aber nicht mehr ausgeliefert.
+          </InfoBox>
+          <InfoBox type="warning">
+            <strong>Fehler „Backend-URL ist eine lokale Adresse":</strong> Das passiert bei Empfängern, die vor der Einführung
+            der zentralen Firmware-Backend-URL-Einstellung geflasht wurden. Prüfe in den Einstellungen, ob die URL auf die
+            externe Live-View-URL gesetzt ist (nicht <code>http://192.168.*</code> oder <code>localhost</code>). Ab dem nächsten
+            Build bzw. OTA wird der Wert automatisch korrekt geschrieben.
+          </InfoBox>
           <InfoBox type="info">
             <strong>Sicherheit:</strong> OTA nutzt eine Dual-Slot Partition (app0/app1). Die neue Firmware wird in den
             inaktiven Slot geschrieben. Bei einem Fehler bleibt die alte Firmware im aktiven Slot erhalten — es gibt

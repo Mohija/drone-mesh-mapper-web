@@ -2,7 +2,7 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-04-24 (Firmware 1.5.3: Backend-Watchdog + WiFi-Reconnect-Fix)
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-04-24 (Redesign + UX-Polish: Space Grotesk / Signal Cyan, Health-Panel, Planner-DnD, Auto-Refresh)
 - **Typ:** Projekt | **Status:** Development
 
 ## Offene Aufgaben
@@ -24,6 +24,106 @@
 - [ ] Docker Deployment Package
 
 ## Änderungshistorie
+
+### 2026-04-24 - PlanningTab: Drag-and-Drop + Doppelklick-Remove für Polygon-Punkte (5953e6a)
+**Änderungen:**
+- `components/admin/PlanningTab.tsx`: Statisches `L.circleMarker` → interaktives `L.marker` mit `draggable: true` und `L.divIcon`-Dot (cyan + white ring + soft shadow).
+- **Drag-live-Update**: während des Drags wird `polygon.setLatLngs()` direkt aufgerufen (kein React re-render pro Frame) — 60 fps. State-Sync nur bei `dragend`.
+- **Punkt entfernen**: `dblclick` (Desktop), `contextmenu` (Long-press auf Mobile, rechter Mausklick Desktop) — beide rufen denselben Handler auf, da synthesized-dblclick auf Touch unreliabel ist.
+- UI-Text erweitert: Hinweis auf Drag/Doppelklick/Long-press im Info-Paragraphen. Neuer „✕ Alle löschen"-Button neben „↶ Letzten Punkt". Grüner Badge „✓ genug für Polygon" ab 3 Punkten.
+- `index.css`: `.planning-vertex` + Wrapper mit Hover-Scale + cyan glow. `touch-action: none` auf dem Drag-Target (Leaflet bekommt die Geste statt Browser).
+
+**Dateien:** `frontend/src/components/admin/PlanningTab.tsx`, `frontend/src/index.css`.
+
+### 2026-04-24 - ReceiverList: sichtbarer Auto-Refresh + 15s Polling + Refresh-Button (0ebdf37)
+**Änderungen:**
+- Poll-Intervall von 30s → **15s** (ein Heartbeat-Zyklus + ein Poll = max. 135s zwischen „offline" in DB und „offline" in UI).
+- Neuer Refresh-Indikator in der Header-Zeile (rechts vom „Remote-ID · Mesh"-Subtitle):
+  - **Pulsierender cyan Dot** wenn ein Poll läuft
+  - **Grüner Dot** wenn letzter Refresh < 20s her, grauer sonst
+  - **„vor Xs" / „vor X min"** Counter zählt jede Sekunde hoch (1-Sekunden-`ageTick`-State)
+  - Klickbar für sofortigen Refresh, während laufendem Request deaktiviert
+- Mobile-tauglich: 40px min-height, `touch-action: manipulation`, Whitespace-nowrap.
+
+**Dateien:** `frontend/src/components/admin/ReceiverList.tsx`.
+
+### 2026-04-24 - Fix: OTA-Flow akzeptierte stale LAN-URL aus last_build_config (8e7c115)
+**Anlass:** OTA-Update auf dev-Phil scheiterte mit „Backend-URL ist eine lokale Adresse", obwohl die TenantSettings korrekt die externe Live-View-URL enthielt.
+
+**Ursache:** `handleOtaFlow` nahm `backend_url: buildConfig?.backend_url || window.location.origin`. dev-Phil hatte im `last_build_config` noch die alte `http://192.168.120.85:3020` vom manuellen Flash (vor Einführung der Settings-Zentrale). Der Server-seitige LAN-Guard hat das korrekt abgelehnt.
+
+**Fix:** OTA-Flow sendet jetzt `backend_url: firmwareBackendUrl || ''` — leer triggert den Server-Fallback auf `TenantSettings.firmware_backend_url`. Zusätzlich One-Off-SQL-Cleanup der stale `backend_url`-Keys in allen `last_build_config`-Zeilen mit LAN-IP (nur dev-Phil betroffen).
+
+**Dateien:** `frontend/src/components/admin/ReceiverList.tsx`, `backend/data/flightarc.db`.
+
+### 2026-04-24 - UX-Polish-Pass: Hierarchie, Workflow, Touch-Targets (ef3b9f6)
+Basierend auf dem Frontend-Audit (drei Reibungspunkte + Nebenbefunde) in einem kombinierten Commit umgesetzt:
+
+**MapPage Top-Bar — visuelle Hierarchie:**
+- Drohnen-Counter als **Hero** (accent-border, tabular-figure in Signal-Cyan, FlightArc-Wortmarke + Version + „Live Tracking"-Micro-Label, Divider zur Zahl). Sekundäre Controls bleiben flach.
+- Desktop + Mobile identisches Treatment, Mobile-Hero flex-1 zwischen Hamburger und Admin-Button.
+
+**StatusPanel — Mobile-Informationsdichte:**
+- `Section`-Komponente collapsible über native `<details>`/`<summary>` mit rotierendem Chevron + `.fa-micro`-Label.
+- Desktop: alles open (back-compat via `defaultOpen=true`). Mobile: Signal + Position + NFZ offen, Sekundär-Blöcke (Batterie, Pilot, FAA, OGN, Flugroute) collapsed via `defaultOpen={!isMobile}`.
+
+**OTA-Flow — Abbrechen + Signal-Cyan Progress:**
+- Neuer **Abbrechen-Button** während `building / triggering / waiting` (mit Confirm-Dialog, ruft existierenden `cancelOtaUpdate`, schließt Modal). 44px min-height.
+- Step-Circles in Brand-Palette: active = Signal-Cyan mit Outer-Glow (`box-shadow`-Ring), past = `var(--status-active)`, error = rot, pending = `bg-tertiary`. Labels via `.fa-micro`.
+- Close-X ebenfalls auf 44px min-height.
+
+**NoFly-Zones-Panel — Touch-Target-Fixes:**
+- „Alle an/aus"-Button: 36 → 40px min-height, dunkler Text auf Signal-Cyan wenn active.
+- Kategorie-Reihen: 44px Tap-Area mit `touch-action: manipulation`.
+- Toggle-Switches: 28×16 → 36×20 (Knob 12→16), iOS-Look mit Knob-Shadow.
+- Layer-Checkboxen: 14 → 18px mit Brand-Tick (`✓` in dark).
+
+**ReceiverList-Create — Inline-Validation:**
+- Live-Feedback unter Namen-Input: „Mindestens 2 Zeichen" → „⚠ Zu kurz" → „⚠ Name bereits vergeben" → „✓ Name verfügbar". Border-Color folgt dem Status.
+
+**Empty-States:**
+- `ReceiverList` leer: `.fa-card--hero` mit 📡-Icon, Erklärung, CTA-Button + Handbuch-Link.
+- `FlightZonesPanel` leer: dashed-cyan Card mit ✦ + Draw-Hint statt muted-gray.
+
+**LoginPage — disambiguierte Fehler:**
+- Pattern-Match auf raw error → fünf konkrete Cases (missing field, network, bad creds, tenant nicht gefunden, user deaktiviert) mit nutzbaren Handlungsanweisungen.
+
+**Dateien:** `frontend/src/index.css`, `frontend/src/components/{MapPage,StatusPanel,NoFlyZonesPanel,LoginPage,FlightZonesPanel,admin/ReceiverList}.tsx`.
+
+### 2026-04-24 - gitignore: WAL/SHM aus Git tracken (e6cc072)
+`backend/data/*.db-wal` und `*.db-shm` sind transient (werden beim Backend-Restart neu erzeugt) und zeigten sich nach jedem `git status` als „dirty". Jetzt ignoriert. Die Haupt-`.db` bleibt weiter im Git als Rettungsanker (siehe `DATABASE_LIFECYCLE.md`).
+
+### 2026-04-24 - Mobile + Tablet Responsive-Fixes für den Redesign (5d2e438)
+**Änderungen in `index.css`:**
+- `@media (max-width: 768px)`: `background-attachment: scroll` (iOS Safari Scroll-Lag-Fix), `.fa-btn-primary` padding 12×20 mit `min-height: 44px`, `.fa-micro` letter-spacing 0.14em → 0.10em.
+- `@media (max-width: 480px)`: `.fa-display` `font-size: clamp(20px, 6vw, 26px) !important` (überschreibt inline fontSize 32 auf iPhones). `.fa-card` borderRadius 12 → 10, `::before` left/right 16 → 10.
+
+**Inline-Fixes:**
+- `SettingsTab` + `ReceiverList` Admin-Hero: auf Mobile `flexDirection: column`, Micro-Label mit horizontal top-border-Accent statt vertikalem left-border, fontSize 32 → 24.
+- `ReceiverList` Mobile-Card-Header: `min-height: 44`, `touch-action: manipulation` (HIG-Tap-Target + 300ms double-tap-delay-Fix).
+
+**Dateien:** `frontend/src/index.css`, `frontend/src/components/admin/{SettingsTab,ReceiverList}.tsx`.
+
+### 2026-04-24 - Frontend-Redesign: Space Grotesk + Signal Cyan (1fa3c81)
+Basierend auf dem Frontend-Design-Audit (SKILL: `frontend-design@claude-plugins-official`) vom AI-Slop-System-Font zu einer eigenständigen visuellen Identität.
+
+**Typografie:**
+- Self-hosted **Space Grotesk** via `@fontsource/space-grotesk` (DSGVO-konform, 32 WOFF/WOFF2-Dateien in `dist/assets/`). Body-Font-Stack `'Space Grotesk', -apple-system, …`.
+- Drei neue Utility-Klassen in `index.css`: `.fa-display` (tight tracking −0.02em, weight 700), `.fa-micro` (uppercase, 0.14em tracking, 10px), `.fa-tabular` (`tnum`).
+- Hero-Headings umgestellt: SettingsPage (28px), SettingsTab (32px mit accent-divided Untertitel), ReceiverList („Empfänger" mit „Remote-ID · Mesh" Micro-Label), alle h3-Section-Titel in SettingsTab (17px). ReceiverHealthPanel-Panels (Verbindung / Laufzeit / Backend-Kommunikation / Checks) mit `.fa-micro`.
+
+**Farbidentität:**
+- `--accent` von Tailwind sky-500 `#3b82f6` → **Signal Cyan** `#00d4aa` (dark) / `#00a887` (light).
+- Zusätzlich `--accent-dim`, `--accent-hot`, `--gradient-accent` (135° linear), `--gradient-hero` (radial dual-gradient auf body-background).
+- Funktionale Status-Farben (green/red/yellow) unverändert.
+
+**Tiefe + Motion:**
+- Shadow-Variablen `--shadow-{sm,md,lg,elevated,accent-glow}`.
+- `.fa-card` mit layered Shadow + accent-tintetem 1px top-highlight (`::before`-Pseudo-Element).
+- Primary-Buttons zu `.fa-btn-primary`: dunkler Text auf Cyan mit Accent-Glow, Hover lift via `translateY(-1px)` + brighter Cyan.
+- Status-Pill im ReceiverHealthPanel: concentric box-shadow glow + inner LED-Dot-Shadow.
+
+**Dateien:** `frontend/package.json` (+ `@fontsource/space-grotesk`), `frontend/src/index.css`, `frontend/src/components/{SettingsPage,admin/SettingsTab,admin/ReceiverList,admin/ReceiverHealthPanel}.tsx`.
 
 ### 2026-04-24 - Frontend: Health-Panel pro Controller (Klick-to-Expand)
 **Ziel:** Dedicated Health-Ansicht beim Klick auf einzelnen Controller in der Admin-Empfänger-Liste — dieselben Regeln wie der Remote-Agent, visuell aufbereitet.
