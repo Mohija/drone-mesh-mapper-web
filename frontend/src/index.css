@@ -366,6 +366,50 @@ button.fa-btn-primary:disabled {
   to { opacity: 1; transform: translate(-50%, -100%); }
 }
 
+/* Help page (user manual) — responsive rules scoped to the main content so
+   they don't leak to admin tables or map overlays. The structure: dense
+   documentation with many wide tables + inline SVG diagrams + code blocks. */
+.help-content table {
+  /* Tables with many columns (hardware comparison, source feature matrix)
+     would otherwise overflow the 800px column. Block + scroll gives users
+     a horizontal swipe on mobile and a thin scrollbar on desktop. */
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.help-content table tbody,
+.help-content table thead,
+.help-content table tr {
+  display: table;
+  width: 100%;
+  table-layout: auto;
+}
+.help-content svg {
+  /* Illustrative diagrams were authored at fixed viewBox sizes. Let them
+     scale fluidly on narrow viewports while preserving aspect ratio. */
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+.help-content pre,
+.help-content code {
+  /* Long code paths / commands break the layout if they're a single word. */
+  overflow-x: auto;
+  max-width: 100%;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+@media (max-width: 768px) {
+  .help-content table { font-size: 12px; }
+  .help-content th, .help-content td { padding: 8px 10px !important; }
+  /* Inputs + buttons in the search + back-to-top area — ensure HIG tap-target. */
+  .help-content input[type="search"],
+  .help-content input[type="text"] { min-height: 44px; padding: 10px 12px; }
+  .help-content button { min-height: 44px; touch-action: manipulation; }
+}
+
 /* Planning tool — draggable polygon vertex markers. Rendered via L.divIcon
    on a Leaflet map; the outer .planning-vertex-wrapper is sized to 18x18 so
    there's a generous touch area, while the visible dot stays small. */

@@ -161,7 +161,7 @@ function AppLayoutDiagram() {
       <rect x="2" y="2" width="696" height="336" rx="10" fill="#0f172a" stroke="#334155" strokeWidth="2" />
       {/* Header bar */}
       <rect x="10" y="10" width="680" height="44" rx="8" fill="url(#hdr)" stroke="#475569" />
-      <text x="24" y="37" fill="#14b8a6" fontWeight="700" fontSize="15" fontFamily="monospace">FlightArc</text>
+      <text x="24" y="37" fill="#00d4aa" fontWeight="700" fontSize="15" fontFamily="monospace">FlightArc</text>
       <text x="110" y="37" fill="#64748b" fontSize="11" fontFamily="sans-serif">v1.5</text>
       <text x="150" y="37" fill="#94a3b8" fontSize="12" fontFamily="sans-serif">12 Drohnen</text>
       {/* Refresh rate */}
@@ -188,7 +188,7 @@ function AppLayoutDiagram() {
       <text x="300" y="180" fill="#334155" fontSize="16" fontFamily="sans-serif" textAnchor="middle">Karte (Leaflet.js)</text>
       {/* Drone markers */}
       <circle cx="200" cy="140" r="8" fill="#3b82f6" opacity="0.8" />
-      <circle cx="350" cy="180" r="8" fill="#14b8a6" opacity="0.8" />
+      <circle cx="350" cy="180" r="8" fill="#00d4aa" opacity="0.8" />
       <circle cx="480" cy="120" r="8" fill="#f59e0b" opacity="0.8" />
       <circle cx="550" cy="200" r="8" fill="#8b5cf6" opacity="0.8" />
       {/* Flight zone */}
@@ -254,18 +254,18 @@ function NetworkArchDiagram() {
     <svg viewBox="0 0 660 280" style={{ width: '100%', maxWidth: 660, margin: '16px 0' }}>
       <rect x="2" y="2" width="656" height="276" rx="8" fill="#0f172a" stroke="#334155" />
       {/* ESP Nodes */}
-      <rect x="20" y="20" width="120" height="60" rx="8" fill="#14b8a6" fillOpacity="0.15" stroke="#14b8a6" />
-      <text x="80" y="45" fill="#14b8a6" fontWeight="600" fontSize="11" textAnchor="middle" fontFamily="sans-serif">ESP32-S3</text>
+      <rect x="20" y="20" width="120" height="60" rx="8" fill="#00d4aa" fillOpacity="0.15" stroke="#00d4aa" />
+      <text x="80" y="45" fill="#00d4aa" fontWeight="600" fontSize="11" textAnchor="middle" fontFamily="sans-serif">ESP32-S3</text>
       <text x="80" y="62" fill="#5eead4" fontSize="9" textAnchor="middle" fontFamily="sans-serif">BLE + WiFi ODID</text>
-      <rect x="20" y="95" width="120" height="60" rx="8" fill="#14b8a6" fillOpacity="0.15" stroke="#14b8a6" />
-      <text x="80" y="120" fill="#14b8a6" fontWeight="600" fontSize="11" textAnchor="middle" fontFamily="sans-serif">ESP32-C3</text>
+      <rect x="20" y="95" width="120" height="60" rx="8" fill="#00d4aa" fillOpacity="0.15" stroke="#00d4aa" />
+      <text x="80" y="120" fill="#00d4aa" fontWeight="600" fontSize="11" textAnchor="middle" fontFamily="sans-serif">ESP32-C3</text>
       <text x="80" y="137" fill="#5eead4" fontSize="9" textAnchor="middle" fontFamily="sans-serif">BLE + WiFi ODID</text>
       <rect x="20" y="170" width="120" height="60" rx="8" fill="#eab308" fillOpacity="0.15" stroke="#eab308" />
       <text x="80" y="195" fill="#eab308" fontWeight="600" fontSize="11" textAnchor="middle" fontFamily="sans-serif">ESP8266</text>
       <text x="80" y="212" fill="#fde047" fontSize="9" textAnchor="middle" fontFamily="sans-serif">Nur WiFi (Light)</text>
       {/* Arrows to backend */}
-      <line x1="140" y1="50" x2="230" y2="130" stroke="#14b8a6" strokeWidth="1.5" strokeDasharray="4,3" />
-      <line x1="140" y1="125" x2="230" y2="130" stroke="#14b8a6" strokeWidth="1.5" strokeDasharray="4,3" />
+      <line x1="140" y1="50" x2="230" y2="130" stroke="#00d4aa" strokeWidth="1.5" strokeDasharray="4,3" />
+      <line x1="140" y1="125" x2="230" y2="130" stroke="#00d4aa" strokeWidth="1.5" strokeDasharray="4,3" />
       <line x1="140" y1="200" x2="230" y2="140" stroke="#eab308" strokeWidth="1.5" strokeDasharray="4,3" />
       <text x="180" y="92" fill="#475569" fontSize="9" fontFamily="sans-serif" transform="rotate(-25,180,92)">HTTP/HTTPS</text>
       {/* Backend */}
@@ -315,11 +315,11 @@ function EspSetupDiagram() {
       {/* Arrow */}
       <text x="155" y="60" fill="#475569" fontSize="20">→</text>
       {/* Step 2 */}
-      <rect x="175" y="20" width="120" height="80" rx="8" fill="#14b8a6" fillOpacity="0.15" stroke="#14b8a6" />
-      <text x="235" y="44" fill="#14b8a6" fontWeight="700" fontSize="24" textAnchor="middle">2</text>
+      <rect x="175" y="20" width="120" height="80" rx="8" fill="#00d4aa" fillOpacity="0.15" stroke="#00d4aa" />
+      <text x="235" y="44" fill="#00d4aa" fontWeight="700" fontSize="24" textAnchor="middle">2</text>
       <text x="235" y="64" fill="#94a3b8" fontSize="10" textAnchor="middle" fontFamily="sans-serif">Flash-Wizard</text>
       <text x="235" y="78" fill="#94a3b8" fontSize="10" textAnchor="middle" fontFamily="sans-serif">starten</text>
-      <text x="235" y="92" fill="#14b8a6" fontSize="9" textAnchor="middle" fontFamily="sans-serif">(Firmware bauen)</text>
+      <text x="235" y="92" fill="#00d4aa" fontSize="9" textAnchor="middle" fontFamily="sans-serif">(Firmware bauen)</text>
       {/* Arrow */}
       <text x="310" y="60" fill="#475569" fontSize="20">→</text>
       {/* Step 3 */}
@@ -353,7 +353,7 @@ function SourceColorLegend() {
     { name: 'ADS-B.fi', color: '#8b5cf6' },
     { name: 'ADS-B.lol', color: '#ec4899' },
     { name: 'OGN', color: '#10b981' },
-    { name: 'Empfänger', color: '#14b8a6' },
+    { name: 'Empfänger', color: 'var(--accent)' },
   ];
   return (
     <svg viewBox="0 0 500 50" style={{ width: '100%', maxWidth: 500, margin: '12px 0' }}>
@@ -1066,7 +1066,7 @@ function SectionReceivers() {
             <li><span style={{ color: '#22c55e' }}>●</span> <strong>Online</strong> — Letzter Heartbeat &lt;120 Sekunden</li>
             <li><span style={{ color: '#eab308' }}>●</span> <strong>Verzögert</strong> — Letzter Heartbeat 120–300 Sekunden</li>
             <li><span style={{ color: '#6b7280' }}>●</span> <strong>Offline</strong> — Kein Heartbeat seit &gt;300 Sekunden</li>
-            <li><span style={{ color: '#14b8a6' }}>●</span> <strong>Erkennungen</strong> — Gesamtzahl aller Drohnen-Erkennungen</li>
+            <li><span style={{ color: 'var(--accent)' }}>●</span> <strong>Erkennungen</strong> — Gesamtzahl aller Drohnen-Erkennungen</li>
           </ul>
         </div>
       </details>
@@ -1515,7 +1515,7 @@ esptool.py --chip esp8266 --port /dev/ttyUSB0 \\
 # Windows: --port COM3 (o.ä.) statt /dev/ttyUSB0`}</CodeBlock>
       <h4>Option B: Web Serial (Chrome/Edge)</h4>
       <p>
-        Öffne <a href="https://web.esphome.io" target="_blank" rel="noopener" style={{ color: '#14b8a6' }}>web.esphome.io</a> →
+        Öffne <a href="https://web.esphome.io" target="_blank" rel="noopener" style={{ color: 'var(--accent)' }}>web.esphome.io</a> →
         „Install" → Wähle die heruntergeladene .bin Datei → Flash.
       </p>
         </div>
@@ -1612,18 +1612,9 @@ esptool.py --chip esp8266 --port /dev/ttyUSB0 \\
       <details className="help-sub" id="led-anzeige">
         <summary style={h3SummaryStyle}><span className="help-caret">&#9654;</span> LED-Anzeige</summary>
         <div style={subContentStyle}>
-      <table style={tableStyle}>
-        <thead>
-          <tr><th style={thStyle}>Muster</th><th style={thStyle}>Farbe (S3)</th><th style={thStyle}>Bedeutung</th></tr>
-        </thead>
-        <tbody>
-          <tr><td style={tdStyle}>Schnelles Blinken (100ms)</td><td style={tdStyle}>Blau</td><td style={tdStyle}>Boot — versucht sich mit WiFi zu verbinden</td></tr>
-          <tr><td style={tdStyle}>Langsames Pulsieren (300ms an, 1200ms aus)</td><td style={tdStyle}>Gelb</td><td style={tdStyle}>Kein WLAN — Hotspot aktiv, wartet auf WiFi-Konfiguration über Captive Portal</td></tr>
-          <tr><td style={tdStyle}>Doppelblinken (2x 200ms, Pause)</td><td style={tdStyle}>Orange</td><td style={tdStyle}>WiFi verbunden, Backend nicht erreichbar</td></tr>
-          <tr><td style={tdStyle}>Dauerhaft an</td><td style={tdStyle}>Grün</td><td style={tdStyle}>Online — verbunden mit FlightArc Backend</td></tr>
-          <tr><td style={tdStyle}>Kurzes Aufblitzen (80ms)</td><td style={tdStyle}>Weiß</td><td style={tdStyle}>Drohne erkannt!</td></tr>
-        </tbody>
-      </table>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
+            Die vollständige LED-Signal-Tabelle (5 Muster) steht im Abschnitt <a href="#erstinbetriebnahme" style={{ color: 'var(--accent)' }}>Erstinbetriebnahme → LED-Signale</a> weiter oben.
+          </p>
         </div>
       </details>
       <details className="help-sub" id="wifi-einschraenkungen">
@@ -1722,9 +1713,9 @@ esptool.py --chip esp8266 --port /dev/ttyUSB0 \\
 
       <InfoBox type="info">
         <strong>ODID-Erkennung:</strong> Die Firmware nutzt die vollständige{' '}
-        <a href="https://github.com/opendroneid" target="_blank" rel="noopener" style={{ color: '#14b8a6' }}>OpenDroneID</a>-Library
+        <a href="https://github.com/opendroneid" target="_blank" rel="noopener" style={{ color: 'var(--accent)' }}>OpenDroneID</a>-Library
         und basiert auf dem Open-Source-Projekt{' '}
-        <a href="https://github.com/colonelpanichacks/drone-mesh-mapper" target="_blank" rel="noopener" style={{ color: '#14b8a6' }}>drone-mesh-mapper</a>{' '}
+        <a href="https://github.com/colonelpanichacks/drone-mesh-mapper" target="_blank" rel="noopener" style={{ color: 'var(--accent)' }}>drone-mesh-mapper</a>{' '}
         von colonelpanichacks. Unterstützt werden WiFi Beacon (2 OUIs), WiFi NAN Action Frames (DJI u.a.),
         BLE ODID und MessagePack — alle 7 ODID Message-Typen inkl. Pilot-Position und Operator-ID.
       </InfoBox>
@@ -1953,7 +1944,7 @@ function SectionOta() {
 esptool.py --chip esp32s3 write_flash 0x0 flightarc-esp32-s3-XXXX-merged.bin`}</CodeBlock>
           <h4>Flashen mit Web-Flasher</h4>
           <p>
-            Öffne <a href="https://web.esphome.io" target="_blank" rel="noopener" style={{ color: '#14b8a6' }}>web.esphome.io</a> →
+            Öffne <a href="https://web.esphome.io" target="_blank" rel="noopener" style={{ color: 'var(--accent)' }}>web.esphome.io</a> →
             „Install" → Wähle die <strong>Merged</strong>-Datei → Flash. Da Bootloader und Partitionen enthalten sind,
             funktioniert das Flashen fehlerfrei.
           </p>
@@ -2194,17 +2185,18 @@ function SectionTips() {
 
 function InfoBox({ type, children }: { type: 'info' | 'warning' | 'tip' | 'danger'; children: React.ReactNode }) {
   const colorMap = {
-    info:    { bg: 'rgba(59,130,246,0.1)',  border: '#3b82f6', text: '#60a5fa',  icon: '\u2139\uFE0F ' },
-    warning: { bg: 'rgba(234,179,8,0.1)',   border: '#eab308', text: '#eab308',  icon: '\u26A0 ' },
-    tip:     { bg: 'rgba(34,197,94,0.1)',   border: '#22c55e', text: '#4ade80',  icon: '\uD83D\uDCA1 ' },
-    danger:  { bg: 'rgba(239,68,68,0.1)',   border: '#ef4444', text: '#f87171',  icon: '\uD83D\uDED1 ' },
+    info:    { bg: 'rgba(0,212,170,0.08)',  border: 'var(--accent)',       text: 'var(--text-primary)', icon: '\u2139\uFE0F ' },
+    warning: { bg: 'rgba(234,179,8,0.10)',  border: '#eab308',             text: 'var(--text-primary)', icon: '\u26A0 ' },
+    tip:     { bg: 'rgba(34,197,94,0.10)',  border: 'var(--status-active)', text: 'var(--text-primary)', icon: '\uD83D\uDCA1 ' },
+    danger:  { bg: 'rgba(239,68,68,0.10)',  border: 'var(--status-error)', text: 'var(--text-primary)', icon: '\uD83D\uDED1 ' },
   };
   const colors = colorMap[type];
   return (
     <div style={{
       background: colors.bg, border: `1px solid ${colors.border}`,
-      borderRadius: 8, padding: '12px 16px', margin: '12px 0',
+      borderRadius: 10, padding: '12px 16px', margin: '12px 0',
       fontSize: 13, color: colors.text, lineHeight: 1.6,
+      boxShadow: 'var(--shadow-sm)',
     }}>
       {colors.icon}{children}
     </div>
@@ -2258,13 +2250,13 @@ const tdStyle: React.CSSProperties = {
 
 const linkBadgeStyle: React.CSSProperties = {
   display: 'inline-block', marginLeft: 6, padding: '1px 6px', borderRadius: 4,
-  fontSize: 10, fontWeight: 600, background: 'rgba(20,184,166,0.15)',
-  color: '#14b8a6', textDecoration: 'none', verticalAlign: 'middle',
+  fontSize: 10, fontWeight: 600, background: 'rgba(0,212,170,0.15)',
+  color: 'var(--accent)', textDecoration: 'none', verticalAlign: 'middle',
 };
 
 const groupRowStyle: React.CSSProperties = {
-  borderLeft: '3px solid #3b82f6',
-  background: 'rgba(59,130,246,0.04)',
+  borderLeft: '3px solid var(--accent)',
+  background: 'rgba(0,212,170,0.06)',
 };
 
 const groupBadgeStyle: React.CSSProperties = {
@@ -2394,7 +2386,7 @@ function SearchModal({ open, onClose, onSelect, sections }: {
               style={{
                 display: 'flex', alignItems: 'center', gap: 10,
                 width: '100%', padding: '10px 16px', border: 'none', textAlign: 'left',
-                background: i === selectedIdx ? 'rgba(20,184,166,0.1)' : 'transparent',
+                background: i === selectedIdx ? 'rgba(0,212,170,0.1)' : 'transparent',
                 color: 'var(--text-primary)', cursor: 'pointer', fontSize: 13,
               }}
             >
@@ -2402,7 +2394,7 @@ function SearchModal({ open, onClose, onSelect, sections }: {
               <div>
                 <div style={{ fontWeight: 500 }}>{r.sectionTitle}</div>
                 {r.subTitle && (
-                  <div style={{ fontSize: 11, color: '#14b8a6', marginTop: 1 }}>{r.subTitle}</div>
+                  <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 1 }}>{r.subTitle}</div>
                 )}
               </div>
             </button>
@@ -2450,9 +2442,9 @@ function MiniTOC({ subs, activeSubId, onSubClick }: {
           display: 'block', width: '100%', padding: '4px 0 4px 10px',
           border: 'none', background: 'transparent', cursor: 'pointer',
           textAlign: 'left', fontSize: 12, lineHeight: 1.5,
-          color: activeSubId === sub.id ? '#14b8a6' : 'var(--text-muted)',
+          color: activeSubId === sub.id ? 'var(--accent)' : 'var(--text-muted)',
           fontWeight: activeSubId === sub.id ? 600 : 400,
-          borderLeft: activeSubId === sub.id ? '2px solid #14b8a6' : '2px solid transparent',
+          borderLeft: activeSubId === sub.id ? '2px solid var(--accent)' : '2px solid transparent',
         }}>
           {sub.title}
         </button>
@@ -2635,10 +2627,10 @@ export default function HelpPage() {
           <button key={s.id} onClick={() => handleSectionChange(s.id)} style={{
             display: 'flex', alignItems: 'center', gap: 10,
             width: '100%', padding: '10px 16px', border: 'none',
-            background: active === s.id ? 'rgba(20,184,166,0.1)' : 'transparent',
-            color: active === s.id ? '#14b8a6' : 'var(--text-secondary)',
+            background: active === s.id ? 'rgba(0,212,170,0.1)' : 'transparent',
+            color: active === s.id ? 'var(--accent)' : 'var(--text-secondary)',
             fontWeight: active === s.id ? 600 : 400,
-            borderLeft: active === s.id ? '3px solid #14b8a6' : '3px solid transparent',
+            borderLeft: active === s.id ? '3px solid var(--accent)' : '3px solid transparent',
             cursor: 'pointer', fontSize: 13, textAlign: 'left',
           }}>
             <span style={{ fontSize: 16 }}>{s.icon}</span>
@@ -2708,13 +2700,14 @@ export default function HelpPage() {
         <div style={{ height: 3, background: 'var(--bg-tertiary)', flexShrink: 0 }}>
           <div style={{
             height: '100%', width: `${scrollProgress * 100}%`,
-            background: '#14b8a6', transition: 'width 0.1s ease',
+            background: 'var(--accent)', transition: 'width 0.1s ease',
           }} />
         </div>
 
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-          {/* Main content */}
-          <main ref={contentRef} style={{
+          {/* Main content — className 'help-content' scopes responsive rules
+              like horizontal-scroll on tables and fluid SVGs to this page only. */}
+          <main ref={contentRef} className="help-content" style={{
             flex: 1, overflow: 'auto',
             padding: isMobile ? '60px 16px 24px' : '24px 40px',
             maxWidth: 800, lineHeight: 1.7, fontSize: 14,
@@ -2744,15 +2737,17 @@ export default function HelpPage() {
         </div>
       </div>
 
-      {/* Back to top */}
+      {/* Back to top — 44px minimum (HIG) on touch devices, accent border for
+          consistency with the rest of the app. */}
       {showBackToTop && (
-        <button onClick={() => contentRef.current?.scrollTo({ top: 0, behavior: 'smooth' })} style={{
-          position: 'fixed', bottom: 24, right: 24,
-          width: 40, height: 40, borderRadius: '50%',
-          background: 'var(--bg-secondary)', border: '1px solid var(--border)',
-          cursor: 'pointer', fontSize: 18, color: 'var(--text-secondary)',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.2)', zIndex: 100,
+        <button onClick={() => contentRef.current?.scrollTo({ top: 0, behavior: 'smooth' })} aria-label="Nach oben" style={{
+          position: 'fixed', bottom: 20, right: 20,
+          width: 44, height: 44, borderRadius: '50%',
+          background: 'var(--bg-secondary)', border: '1px solid var(--accent)',
+          cursor: 'pointer', fontSize: 18, color: 'var(--accent)',
+          boxShadow: 'var(--shadow-lg), var(--shadow-accent-glow)', zIndex: 100,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
+          touchAction: 'manipulation',
         }}>
           &uarr;
         </button>
