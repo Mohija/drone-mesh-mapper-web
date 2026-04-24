@@ -410,6 +410,8 @@ export default function MapPage() {
         pendingPoints={flightZones.pendingPoints}
         snappable={flightZones.snappable}
         onMapClickForZone={flightZones.addPoint}
+        onPendingPointMove={flightZones.updatePendingPoint}
+        onPendingPointRemove={flightZones.removePendingPoint}
         focusPosition={focusPosition}
         receiverCoverage={receiverCoverage}
         showReceiverCoverage={showReceiverCoverage}

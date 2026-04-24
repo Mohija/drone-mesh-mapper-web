@@ -284,6 +284,8 @@ interface Props {
   pendingPoints?: [number, number][];
   snappable?: boolean;
   onMapClickForZone?: (lat: number, lon: number) => boolean | void;
+  onPendingPointMove?: (index: number, lat: number, lon: number) => void;
+  onPendingPointRemove?: (index: number) => void;
   focusPosition?: { lat: number; lon: number } | null;
   receiverCoverage?: ReceiverCoverage[];
   showReceiverCoverage?: boolean;
@@ -309,7 +311,7 @@ const TILE_URLS = {
   light: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
 };
 
-export default function MapComponent({ drones, selectedDrone, userLocation, onDroneClick, activeNoFlyLayers, nfzBounds, nfzRadiusCenter, nfzRadiusMeters, droneRadiusCenter, droneRadiusMeters, trails = [], flightZones = [], drawingMode = false, pendingPoints = [], snappable = false, onMapClickForZone, focusPosition, receiverCoverage = [], showReceiverCoverage = false, editingZoneId = null, editingPolygon, onEditVertexMove, onEditVertexRemove }: Props) {
+export default function MapComponent({ drones, selectedDrone, userLocation, onDroneClick, activeNoFlyLayers, nfzBounds, nfzRadiusCenter, nfzRadiusMeters, droneRadiusCenter, droneRadiusMeters, trails = [], flightZones = [], drawingMode = false, pendingPoints = [], snappable = false, onMapClickForZone, onPendingPointMove, onPendingPointRemove, focusPosition, receiverCoverage = [], showReceiverCoverage = false, editingZoneId = null, editingPolygon, onEditVertexMove, onEditVertexRemove }: Props) {
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
@@ -328,7 +330,7 @@ export default function MapComponent({ drones, selectedDrone, userLocation, onDr
   const zonePolygonsRef = useRef<Map<string, L.Polygon>>(new Map());
   const zoneLabelsRef = useRef<Map<string, L.Tooltip>>(new Map());
   const drawingPolylineRef = useRef<L.Polyline | null>(null);
-  const drawingMarkersRef = useRef<L.CircleMarker[]>([]);
+  const drawingMarkersRef = useRef<L.Marker[]>([]);
   const editVertexMarkersRef = useRef<L.Marker[]>([]);
   const rcCoverageCirclesRef = useRef<Map<string, L.Circle>>(new Map());
   const rcCoverageMarkersRef = useRef<Map<string, L.CircleMarker>>(new Map());
@@ -871,19 +873,60 @@ export default function MapComponent({ drones, selectedDrone, userLocation, onDr
       interactive: false,
     }).addTo(map);
 
-    // Draw point markers
+    // Draggable point markers. The first point, when snappable, gets a
+    // green visual and a click handler that closes the polygon — regular
+    // points only drag / dblclick. All clicks stop propagation so they
+    // don't create phantom map-click points behind the marker.
     pendingPoints.forEach((p, i) => {
       const isFirst = i === 0;
       const showSnap = isFirst && snappable;
-      const marker = L.circleMarker([p[0], p[1]], {
-        radius: showSnap ? 9 : 5,
-        fillColor: isFirst ? '#22c55e' : '#3b82f6',
-        color: showSnap ? '#22c55e' : '#fff',
-        weight: showSnap ? 3 : 2,
-        fillOpacity: showSnap ? 0.5 : 1,
-        interactive: false,
-        className: showSnap ? 'drone-marker-pulse' : undefined,
+      const color = isFirst ? '#22c55e' : '#3b82f6';
+      const extraClass = showSnap ? ' drone-marker-pulse' : '';
+      const icon = L.divIcon({
+        html: `<div class="planning-vertex${extraClass}" style="background:${color}"></div>`,
+        className: 'planning-vertex-wrapper',
+        iconSize: [18, 18],
+        iconAnchor: [9, 9],
+      });
+      const marker = L.marker([p[0], p[1]], {
+        icon,
+        draggable: true,
+        autoPan: true,
+        autoPanPadding: [40, 40],
+        title: showSnap
+          ? 'Klicken zum Schließen · Ziehen zum Verschieben · Doppelklick zum Entfernen'
+          : 'Ziehen zum Verschieben · Doppelklick zum Entfernen',
       }).addTo(map);
+
+      marker.on('drag', (e) => {
+        const ll = (e.target as L.Marker).getLatLng();
+        if (drawingPolylineRef.current) {
+          const nextLatlngs = pendingPoints.map((pp, j) => (
+            j === i ? L.latLng(ll.lat, ll.lng) : L.latLng(pp[0], pp[1])
+          ));
+          if (pendingPoints.length >= 3) nextLatlngs.push(nextLatlngs[0]);
+          drawingPolylineRef.current.setLatLngs(nextLatlngs);
+        }
+      });
+      marker.on('dragend', (e) => {
+        const ll = (e.target as L.Marker).getLatLng();
+        onPendingPointMove?.(i, ll.lat, ll.lng);
+      });
+
+      const removeSelf = (e: L.LeafletEvent) => {
+        L.DomEvent.stopPropagation(e as unknown as Event);
+        onPendingPointRemove?.(i);
+      };
+      marker.on('dblclick', removeSelf);
+      marker.on('contextmenu', removeSelf);
+
+      marker.on('click', (e) => {
+        L.DomEvent.stopPropagation(e as unknown as Event);
+        if (showSnap && onMapClickForZone) {
+          onMapClickForZone(p[0], p[1]);
+        }
+      });
+
       drawingMarkersRef.current.push(marker);
     });
 
@@ -895,7 +938,7 @@ export default function MapComponent({ drones, selectedDrone, userLocation, onDr
       drawingMarkersRef.current.forEach(m => m.remove());
       drawingMarkersRef.current = [];
     };
-  }, [drawingMode, pendingPoints, snappable]);
+  }, [drawingMode, pendingPoints, snappable, onPendingPointMove, onPendingPointRemove, onMapClickForZone]);
 
   // Render draggable vertex markers for the zone currently being edited.
   // Mirrors the PlanningTab pattern: live drag updates the polygon layer
