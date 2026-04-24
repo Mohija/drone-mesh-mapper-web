@@ -10,3 +10,9 @@ venv/
 test-results/
 tsconfig.tsbuildinfo
 frontend/e2e/.auth/
+
+# SQLite transient files — the main .db is checkpointed on graceful shutdown
+# and committed as source of truth. WAL/SHM exist only while a process
+# holds the DB open and would otherwise show as dirty after every restart.
+backend/data/*.db-wal
+backend/data/*.db-shm
