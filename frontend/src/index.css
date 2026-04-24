@@ -366,6 +366,28 @@ button.fa-btn-primary:disabled {
   to { opacity: 1; transform: translate(-50%, -100%); }
 }
 
+/* Planning tool — draggable polygon vertex markers. Rendered via L.divIcon
+   on a Leaflet map; the outer .planning-vertex-wrapper is sized to 18x18 so
+   there's a generous touch area, while the visible dot stays small. */
+.planning-vertex-wrapper {
+  cursor: grab;
+  touch-action: none;   /* let Leaflet handle pan gestures on the map itself */
+}
+.planning-vertex-wrapper:active { cursor: grabbing; }
+.planning-vertex {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.35), 0 2px 6px rgba(0,0,0,0.5);
+  margin: 3px;
+  transition: transform 0.1s ease, box-shadow 0.15s ease;
+}
+.planning-vertex-wrapper:hover .planning-vertex {
+  transform: scale(1.25);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.35), 0 0 8px 2px currentColor;
+}
+
 /* Collapsible section chevrons (StatusPanel, etc.) — default list marker off,
    native <details>/<summary> rotate the caret on open. */
 details > summary {

@@ -40,7 +40,10 @@ export default function PlanningTab() {
   const mapRef = useRef<L.Map | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const polygonLayerRef = useRef<L.Polygon | null>(null);
-  const pointMarkersRef = useRef<L.CircleMarker[]>([]);
+  // Draggable vertex markers — L.Marker (not CircleMarker) because only Marker
+  // supports the `draggable` option. We use a divIcon so the visual stays a
+  // small cyan dot instead of Leaflet's default blue pin.
+  const pointMarkersRef = useRef<L.Marker[]>([]);
   const resultMarkersRef = useRef<L.CircleMarker[]>([]);
   const resultCirclesRef = useRef<L.Circle[]>([]);
 
@@ -112,23 +115,66 @@ export default function PlanningTab() {
     for (const c of resultCirclesRef.current) map.removeLayer(c);
     resultCirclesRef.current = [];
 
-    // Draw polygon
+    // Draw polygon. Even with 2 points we draw a polyline hint so users see
+    // the edge forming — but the filled polygon only kicks in at 3+.
     if (polygon.length >= 3) {
       polygonLayerRef.current = L.polygon(
         polygon.map(p => [p[0], p[1]] as L.LatLngTuple),
-        { color: '#3b82f6', weight: 2, fillOpacity: 0.15 },
+        { color: 'var(--accent)', weight: 2, fillOpacity: 0.18 },
       ).addTo(map);
+      // Leaflet needs a real color, not a CSS variable — read it once.
+      const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#00d4aa';
+      polygonLayerRef.current.setStyle({ color: accent, fillColor: accent });
     }
 
-    // Draw point markers (in draw mode)
+    // Draggable vertex markers in draw mode. Each marker knows its index so
+    // drag / dblclick / contextmenu can mutate the correct slot.
     if (step === 'draw') {
-      for (const pt of polygon) {
-        const marker = L.circleMarker([pt[0], pt[1]], {
-          radius: 6, color: '#3b82f6', fillColor: '#3b82f6',
-          fillOpacity: 1, weight: 2,
+      const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#00d4aa';
+      polygon.forEach((pt, idx) => {
+        const icon = L.divIcon({
+          html: `<div class="planning-vertex" style="background:${accent}"></div>`,
+          className: 'planning-vertex-wrapper',
+          iconSize: [18, 18],
+          iconAnchor: [9, 9],
+        });
+        const marker = L.marker([pt[0], pt[1]], {
+          icon,
+          draggable: true,
+          autoPan: true,
+          autoPanPadding: [40, 40],
+          title: 'Ziehen zum Verschieben · Doppelklick zum Entfernen',
         }).addTo(map);
+
+        // Live-drag: push new position into the polygon shape directly (no
+        // state update) so the fill moves with the cursor at 60fps. State is
+        // only synced at dragend.
+        marker.on('drag', (e) => {
+          const ll = (e.target as L.Marker).getLatLng();
+          if (polygonLayerRef.current) {
+            const latlngs = polygon.map((p, i) => (
+              i === idx ? L.latLng(ll.lat, ll.lng) : L.latLng(p[0], p[1])
+            ));
+            polygonLayerRef.current.setLatLngs(latlngs);
+          }
+        });
+        marker.on('dragend', (e) => {
+          const ll = (e.target as L.Marker).getLatLng();
+          setPolygon(prev => prev.map((p, i) => (i === idx ? [ll.lat, ll.lng] : p)));
+        });
+
+        // Desktop: double-click the dot to remove it. On touch devices
+        // Leaflet fires a synthesized dblclick from two quick taps, but
+        // that's unreliable — contextmenu (long-press) is the safe path.
+        const removeSelf = (e: L.LeafletEvent) => {
+          L.DomEvent.stopPropagation(e as unknown as Event);
+          setPolygon(prev => prev.filter((_, i) => i !== idx));
+        };
+        marker.on('dblclick', removeSelf);
+        marker.on('contextmenu', removeSelf);
+
         pointMarkersRef.current.push(marker);
-      }
+      });
     }
 
     // Draw result positions
@@ -356,27 +402,47 @@ export default function PlanningTab() {
                 </div>
               ) : (
                 <div>
-                  <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--text-muted)' }}>
-                    Klicken Sie auf die Karte, um ein Polygon zu zeichnen.
-                    Mindestens 3 Punkte erforderlich.
+                  <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                    Klicke auf die Karte, um Punkte hinzuzufügen (min. 3).
+                    <br />
+                    <strong style={{ color: 'var(--text-secondary)' }}>Ziehen</strong> zum Verschieben,
+                    {' '}<strong style={{ color: 'var(--text-secondary)' }}>Doppelklick</strong>{' '}
+                    (Handy: langer Druck) zum Entfernen — die Fläche passt sich automatisch an.
                   </p>
                   <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
-                    Punkte: <strong>{polygon.length}</strong>
+                    Punkte: <strong className="fa-tabular">{polygon.length}</strong>
+                    {polygon.length >= 3 && (
+                      <span style={{ color: 'var(--status-active)', marginLeft: 8 }}>✓ genug für Polygon</span>
+                    )}
                   </div>
                   {polygon.length > 0 && (
-                    <button
-                      onClick={handleUndoPoint}
-                      style={{
-                        padding: '6px 12px', borderRadius: 6,
-                        border: '1px solid var(--border)',
-                        background: 'var(--bg-tertiary)',
-                        color: 'var(--text-secondary)',
-                        cursor: 'pointer', fontSize: 12,
-                        marginBottom: 8,
-                      }}
-                    >
-                      Letzten Punkt entfernen
-                    </button>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+                      <button
+                        onClick={handleUndoPoint}
+                        style={{
+                          padding: '6px 12px', borderRadius: 6,
+                          border: '1px solid var(--border)',
+                          background: 'var(--bg-tertiary)',
+                          color: 'var(--text-secondary)',
+                          cursor: 'pointer', fontSize: 12,
+                        }}
+                      >
+                        ↶ Letzten Punkt
+                      </button>
+                      <button
+                        onClick={() => setPolygon([])}
+                        title="Alle Punkte entfernen"
+                        style={{
+                          padding: '6px 12px', borderRadius: 6,
+                          border: '1px solid var(--border)',
+                          background: 'var(--bg-tertiary)',
+                          color: 'var(--status-error)',
+                          cursor: 'pointer', fontSize: 12,
+                        }}
+                      >
+                        ✕ Alle löschen
+                      </button>
+                    </div>
                   )}
                 </div>
               )}
