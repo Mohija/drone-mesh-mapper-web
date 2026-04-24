@@ -262,6 +262,9 @@ export default function ReceiverList() {
   const [changelog, setChangelog] = useState<FirmwareChangelogEntry[]>([]);
   const [firmwareBackendUrl, setFirmwareBackendUrl] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);           // in-flight poll
+  const [lastRefreshAt, setLastRefreshAt] = useState<number | null>(null); // wall-clock of last successful poll
+  const [ageTick, setAgeTick] = useState(0);                     // forces re-render every second so the "vor Xs" label updates
   const [error, setError] = useState<string | null>(null);
 
   // Create form
@@ -321,6 +324,7 @@ export default function ReceiverList() {
   }, [expandedId, receivers]);
 
   const loadData = useCallback(async () => {
+    setRefreshing(true);
     try {
       const [r, s, cl, settings] = await Promise.all([
         fetchReceivers(),
@@ -332,11 +336,13 @@ export default function ReceiverList() {
       setStats(s);
       setChangelog(cl.versions);
       setFirmwareBackendUrl(settings.firmware_backend_url || '');
+      setLastRefreshAt(Date.now());
       setError(null);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Laden fehlgeschlagen');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
@@ -351,9 +357,20 @@ export default function ReceiverList() {
   useEffect(() => {
     loadData();
     loadLog();
-    const interval = setInterval(loadData, 30000);
+    // 15s poll — receiver heartbeats are every 30s; 15s ensures the UI flips
+    // to "offline" no more than one threshold-window (120s) + one poll (15s)
+    // after the last missed heartbeat. Users can also click the manual
+    // refresh button for an immediate update.
+    const interval = setInterval(loadData, 15000);
     return () => clearInterval(interval);
   }, [loadData, loadLog]);
+
+  // 1-second ticker so the "zuletzt aktualisiert vor Xs" label keeps counting
+  // up in real time without hitting the API.
+  useEffect(() => {
+    const t = setInterval(() => setAgeTick(v => v + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
 
   // Poll log when visible and enabled
   useEffect(() => {
@@ -612,6 +629,44 @@ export default function ReceiverList() {
             }
           >Remote-ID · Mesh</span>
         </div>
+        {/* Refresh indicator — reference ageTick so the re-render happens each
+            second even though the value itself isn't consumed. */}
+        {(() => {
+          void ageTick;
+          const ageSec = lastRefreshAt ? Math.floor((Date.now() - lastRefreshAt) / 1000) : null;
+          return (
+            <button
+              data-testid="receiver-refresh"
+              onClick={() => { loadData(); }}
+              disabled={refreshing}
+              title="Jetzt aktualisieren"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '8px 12px', minHeight: 40,
+                background: refreshing ? 'rgba(0,212,170,0.08)' : 'transparent',
+                border: '1px solid var(--border)',
+                borderRadius: 8,
+                color: 'var(--text-secondary)',
+                fontSize: 11,
+                cursor: refreshing ? 'wait' : 'pointer',
+                touchAction: 'manipulation',
+                whiteSpace: 'nowrap',
+                transition: 'background 0.15s',
+              }}
+            >
+              <span
+                aria-hidden
+                style={{
+                  display: 'inline-block', width: 10, height: 10, borderRadius: '50%',
+                  background: refreshing ? 'var(--accent)' : (ageSec != null && ageSec < 20 ? 'var(--status-active)' : 'var(--text-muted)'),
+                  boxShadow: refreshing ? '0 0 6px var(--accent)' : 'none',
+                  animation: refreshing ? 'pulse 1.4s ease-in-out infinite' : undefined,
+                }}
+              />
+              {refreshing ? 'lädt…' : ageSec == null ? 'Aktualisieren' : ageSec < 60 ? `vor ${ageSec}s` : `vor ${Math.floor(ageSec / 60)} min`}
+            </button>
+          );
+        })()}
         <AdminTooltip
           brief="Neuen Hardware-Empfänger registrieren"
           detail={"Erstellt einen neuen Empfänger-Eintrag in der Datenbank. Du wählst einen Namen und den Hardware-Typ (ESP32-S3, ESP32-C3 oder ESP8266).\nNach dem Erstellen kannst du die Firmware bauen und auf den Mikrocontroller flashen.\nEs wird eine Einkaufsliste mit allen benötigten Teilen und Links angezeigt."}
