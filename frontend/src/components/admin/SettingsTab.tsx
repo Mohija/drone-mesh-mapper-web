@@ -7,19 +7,17 @@ import {
   type MissionZoneDefaults, type TenantWifiNetwork, type ServiceToken,
 } from '../../api';
 import { useIsMobile } from '../../useIsMobile';
-import HelpLink from '../HelpLink';
+import HelpFab from '../HelpFab';
 
-// Tiny helper: render a section heading with an inline "?" help anchor.
-// Keeps the pair of elements (h3 + button) inline without forcing every
-// call site to repeat the flex wrapper.
-function SectionTitle({ children, helpSub }: { children: React.ReactNode; helpSub: string }) {
+// Section heading used across the settings page. Kept as a stand-alone
+// helper so per-section styling stays consistent even though the inline
+// help icons have moved to a single floating action button at the bottom
+// of the page.
+function SectionTitle({ children }: { children: React.ReactNode; helpSub?: string }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-      <h3 className="fa-display" style={{ margin: 0, fontSize: 17, fontWeight: 700, letterSpacing: '-0.01em' }}>
-        {children}
-      </h3>
-      <HelpLink section="admin" sub={helpSub} title={`Hilfe: ${String(children)}`} size={18} />
-    </div>
+    <h3 className="fa-display" style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 700, letterSpacing: '-0.01em' }}>
+      {children}
+    </h3>
   );
 }
 
@@ -900,6 +898,7 @@ export default function SettingsTab() {
         Standardwerte für Radius, Farbe und Höhengrenzen verwendet.
         WiFi-Netzwerke werden beim Firmware-Build automatisch als Vorgabe übernommen.
       </div>
+      <HelpFab section="admin" sub="einstellungen" title="Hilfe: Einstellungen" />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import HelpLink from '../HelpLink';
+import HelpFab from '../HelpFab';
 import { useAuth } from '../../AuthContext';
 import { fetchTenants, fetchUsers, fetchReceiverStats } from '../../api';
 import type { Tenant, UserAdmin, ReceiverStats } from '../../api';
@@ -44,7 +44,7 @@ export default function AdminDashboard() {
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}><h1 style={{ margin: '0 0 24px', fontSize: 22, fontWeight: 700 }}>Dashboard</h1><HelpLink section="admin" sub="dashboard" title="Hilfe: Dashboard" size={18} /></div>
+      <h1 style={{ margin: '0 0 24px', fontSize: 22, fontWeight: 700 }}>Dashboard</h1>
 
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 32 }}>
         {cards.map(card => (
@@ -118,6 +118,7 @@ export default function AdminDashboard() {
           </div>
         </>
       )}
+      <HelpFab section="admin" sub="dashboard" title="Hilfe: Dashboard" />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import HelpLink from '../HelpLink';
+import HelpFab from '../HelpFab';
 import {
   fetchAuditLogs, fetchAuditActions, fetchAuditResourceTypes,
   type AuditLogEntry, authFetch, API_BASE,
@@ -202,7 +202,6 @@ export default function AuditLogTab() {
           <span style={{ marginRight: 8, fontSize: isMobile ? 18 : 20 }}>&#x1f6e1;</span>
           Sicherheits-Audit
         </h1>
-        <HelpLink section="admin" sub="sicherheits-audit" title="Hilfe: Sicherheits-Audit" size={18} />
         <AdminTooltip
           brief="Audit-Log"
           detail="Protokolliert alle sicherheitsrelevanten Aktionen: Anmeldungen, Änderungen an Zonen, Empfängern, Benutzern und Einstellungen. Nicht löschbar."
@@ -511,6 +510,7 @@ export default function AuditLogTab() {
           </div>
         )}
       </div>
+      <HelpFab section="admin" sub="sicherheits-audit" title="Hilfe: Sicherheits-Audit" />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import HelpLink from '../HelpLink';
+import HelpFab from '../HelpFab';
 import { useAuth } from '../../AuthContext';
 import { fetchUsers, fetchTenants, createUser, deleteUser, resetUserPassword, updateUser } from '../../api';
 import type { UserAdmin, Tenant } from '../../api';
@@ -216,7 +216,7 @@ export default function UserList() {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}><h1 style={{ margin: 0, fontSize: isMobile ? 18 : 22, fontWeight: 700, flex: 1 }}>Benutzer</h1><HelpLink section="admin" sub="benutzer-verwaltung" title="Hilfe: Benutzer" size={18} /></div>
+        <h1 style={{ margin: 0, fontSize: isMobile ? 18 : 22, fontWeight: 700, flex: 1 }}>Benutzer</h1>
         <AdminTooltip
           brief="Neuen Benutzer anlegen"
           detail={"Erstellt einen neuen Benutzer im System.\nFelder: Benutzername, E-Mail, Passwort, Anzeigename, Rolle.\n\nRollen:\n- Benutzer: Kann die Karte sehen und Einstellungen ändern\n- Mandanten-Admin: Kann Benutzer und Empfänger im eigenen Mandanten verwalten\n- Super-Admin: Vollzugriff auf alle Mandanten und Systemeinstellungen"}
@@ -468,6 +468,7 @@ export default function UserList() {
           </table>
         </div>
       )}
+      <HelpFab section="admin" sub="benutzer-verwaltung" title="Hilfe: Benutzer" />
     </div>
   );
 }

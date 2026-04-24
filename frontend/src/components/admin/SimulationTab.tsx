@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import HelpLink from '../HelpLink';
+import HelpFab from '../HelpFab';
 import {
   fetchSimulators, createSimulator, deleteSimulator,
   startSimulator, stopSimulator, stopAllSimulators,
@@ -128,7 +128,7 @@ export default function SimulationTab() {
         display: 'flex', alignItems: 'center', gap: 12,
         marginBottom: 20, flexWrap: 'wrap',
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}><h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Simulation</h1><HelpLink section="simulation" title="Hilfe: Simulation" size={18} /></div>
+        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Simulation</h1>
         <div style={{ flex: 1 }} />
         {runningCount > 0 && (
           <AdminTooltip
@@ -316,6 +316,7 @@ export default function SimulationTab() {
         Die Drohnen erscheinen auf der Karte wenn die Quelle "Empfänger" in den Einstellungen aktiviert ist.
         Simulatoren sind flüchtig — nach einem Server-Neustart sind sie weg, die erzeugten Empfänger-Einträge ([SIM]) bleiben aber in der Datenbank.
       </div>
+      <HelpFab section="simulation" title="Hilfe: Simulation" />
     </div>
   );
 }

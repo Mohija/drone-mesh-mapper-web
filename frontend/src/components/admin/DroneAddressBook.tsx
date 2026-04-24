@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import HelpLink from '../HelpLink';
+import HelpFab from '../HelpFab';
 import {
   fetchAddressBook,
   createAddressBookEntry,
@@ -371,7 +371,6 @@ export default function DroneAddressBook() {
         <h2 style={{ margin: 0, fontSize: isMobile ? 18 : 20, fontWeight: 700 }}>
           Drohnen-Adressbuch
         </h2>
-        <HelpLink section="drones" title="Hilfe: Adressbuch" size={18} />
         <button onClick={openAdd} style={btnPrimary}>
           + Hinzufügen
         </button>
@@ -594,6 +593,7 @@ export default function DroneAddressBook() {
       )}
 
       {renderDialog()}
+      <HelpFab section="drones" title="Hilfe: Adressbuch" />
     </div>
   );
 }

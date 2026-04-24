@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import HelpLink from '../HelpLink';
+import HelpFab from '../HelpFab';
 import {
   fetchLogs, fetchLogLevel, setLogLevel, clearLogs, fetchLogModules,
   type SystemLogEntry,
@@ -119,7 +119,6 @@ export default function LogViewerTab() {
         marginBottom: 16, flexWrap: 'wrap',
       }}>
         <h1 style={{ margin: 0, fontSize: isMobile ? 18 : 20, fontWeight: 700 }}>System-Logs</h1>
-        <HelpLink section="admin" sub="log-viewer" title="Hilfe: System-Logs" size={18} />
         <AdminTooltip
           brief="Mandanten-Logs"
           detail="Systemweite Log-Einträge für diesen Mandanten. Log-Level bestimmt, welche Einträge erfasst werden. Debug zeigt alle Details, Error nur Fehler."
@@ -384,6 +383,7 @@ export default function LogViewerTab() {
           </div>
         )}
       </div>
+      <HelpFab section="admin" sub="log-viewer" title="Hilfe: System-Logs" />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import HelpLink from '../HelpLink';
+import HelpFab from '../HelpFab';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
@@ -287,7 +287,7 @@ export default function PlanningTab() {
         display: 'flex', alignItems: 'center', gap: 12,
         marginBottom: 16, flexWrap: 'wrap',
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}><h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Empfänger-Platzierung</h1><HelpLink section="receivers" sub="empfaenger-planung" title="Hilfe: Empfänger-Planung" size={18} /></div>
+        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Empfänger-Platzierung</h1>
         <span style={{
           fontSize: 11, fontWeight: 600, padding: '3px 8px',
           borderRadius: 4, background: 'rgba(59,130,246,0.15)',
@@ -625,6 +625,7 @@ export default function PlanningTab() {
           )}
         </div>
       </div>
+      <HelpFab section="receivers" sub="empfaenger-planung" title="Hilfe: Empfänger-Planung" />
     </div>
   );
 }
