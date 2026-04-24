@@ -752,6 +752,9 @@ export interface ReceiverNode {
   gpsSatellites: number | null;
   gpsHdop: number | null;
   gpsLastFixAgeSeconds: number | null;
+  gpsMessagesParsed: number | null;
+  gpsLastMessageAgeSeconds: number | null;
+  gpsSatsInView: number | null;
   totalDetections: number;
   detectionsSinceBoot: number;
   coverageRadius: number | null;

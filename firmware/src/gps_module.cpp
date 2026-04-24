@@ -51,9 +51,19 @@ long GpsModule::lastFixAgeSeconds() const {
     return (long)((millis() - _lastFixMs) / 1000);
 }
 
+long GpsModule::lastMessageAgeSeconds() const {
+    if (_lastMessageMs == 0) return -1;
+    return (long)((millis() - _lastMessageMs) / 1000);
+}
+
 void GpsModule::_handleSentence(char* line) {
     if (line[0] != '$') return;
     if (!_verifyChecksum(line)) return;
+
+    // Activity heartbeat: a passing checksum proves the module is alive on
+    // the UART line even if we don't recognise the sentence type.
+    _lastMessageMs = millis();
+    _messagesParsed++;
 
     // Drop the checksum suffix so strtok_r can tokenise cleanly.
     char* star = strchr(line, '*');
@@ -67,6 +77,8 @@ void GpsModule::_handleSentence(char* line) {
         _handleGGA(line + 7);
     } else if (strncmp(type, "RMC", 3) == 0) {
         _handleRMC(line + 7);
+    } else if (strncmp(type, "GSV", 3) == 0) {
+        _handleGSV(line + 7);
     }
 }
 
@@ -109,6 +121,28 @@ void GpsModule::_handleRMC(char* body) {
     _speedKmh = knots * 1.852f;
     // RMC also carries lat/lon but GGA already updated them — keep GGA as the
     // authority since it also gives altitude + sats.
+}
+
+// $xxGSV,totalMsgs,msgNum,satsInView,[sv1,elev,az,cno,...]*CC
+// We only need the third field — the rest describes individual satellites.
+// ATGM336H sends multiple talker-IDs (GP/GL/BD); we take the max across
+// them so the total reflects all constellations the chip is tracking.
+void GpsModule::_handleGSV(char* body) {
+    char* save = nullptr;
+    char* tokens[4] = { nullptr };
+    int i = 0;
+    for (char* tok = strtok_r(body, ",", &save); tok && i < 4; tok = strtok_r(nullptr, ",", &save)) {
+        tokens[i++] = tok;
+    }
+    if (i < 3) return;
+    int sats = tokens[2] ? atoi(tokens[2]) : 0;
+    // First GSV in a burst: reset the view count; subsequent talkers during
+    // the same 1s NMEA cycle accumulate via max(). Cheap approximation —
+    // using "max seen in last 2s" so the counter doesn't zero out between
+    // bursts.
+    if (sats > _satsInView || (millis() - _lastMessageMs) > 2000) {
+        _satsInView = sats;
+    }
 }
 
 bool GpsModule::_verifyChecksum(const char* line) {

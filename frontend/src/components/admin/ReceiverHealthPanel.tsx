@@ -191,20 +191,35 @@ function Pill({ color, label }: { color: string; label: string }) {
 }
 
 function GpsStatusLine({ node }: { node: ReceiverNode }) {
-  // Status derivation:
-  //   Fix          → grün
-  //   Satelliten aber kein Fix → gelb (Sky-View-Problem)
-  //   0 Satelliten → rot (Kabel/Pin falsch oder Modul defekt)
+  // Three-layer diagnostic — ordered from "worst" to "best":
+  //   1. Modul stumm           → rot    (keine NMEA-Bytes, Verdrahtung defekt)
+  //   2. Modul aktiv, kein Sat → orange (UART ok, aber Antenne sieht nichts)
+  //   3. Satelliten sichtbar   → gelb   (Sky-View ok, braucht nur 4+ sats für Fix)
+  //   4. Fix                   → grün
+  const messagesParsed = node.gpsMessagesParsed ?? 0;
+  const lastMsgAge = node.gpsLastMessageAgeSeconds;
+  const moduleActive = messagesParsed > 0 && lastMsgAge != null && lastMsgAge >= 0 && lastMsgAge < 10;
+  const satsInView = node.gpsSatsInView ?? 0;
+
   let color = '#6b7280', label = 'unbekannt';
   if (node.gpsHasFix) {
     color = '#22c55e';
     label = 'Fix';
-  } else if ((node.gpsSatellites ?? 0) > 0) {
+  } else if (!moduleActive && messagesParsed === 0) {
+    color = '#ef4444';
+    label = 'Modul stumm — keine NMEA-Daten';
+  } else if (!moduleActive) {
+    color = '#ef4444';
+    label = 'Modul inaktiv — Verbindung verloren';
+  } else if (satsInView === 0) {
+    color = '#f97316';
+    label = 'Aktiv, aber keine Satelliten';
+  } else if ((node.gpsSatellites ?? 0) === 0) {
+    color = '#eab308';
+    label = `${satsInView} Sat sichtbar — noch kein Fix`;
+  } else {
     color = '#eab308';
     label = 'Kein Fix — sucht Satelliten';
-  } else {
-    color = '#ef4444';
-    label = 'Keine Satelliten';
   }
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
@@ -328,19 +343,34 @@ export default function ReceiverHealthPanel({ node, expectedFirmware }: Props) {
             <div className="fa-micro" style={{ marginBottom: 10 }}>GPS-Modul</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12 }}>
               <GpsStatusLine node={node} />
-              <div><span style={{ color: 'var(--text-muted)' }}>Satelliten:</span>{' '}
+              <div><span style={{ color: 'var(--text-muted)' }}>NMEA-Nachrichten:</span>{' '}
                 <span style={{
                   fontWeight: 600,
-                  color: (node.gpsSatellites ?? 0) >= 4 ? '#22c55e'
-                    : (node.gpsSatellites ?? 0) >= 1 ? '#eab308' : '#ef4444',
+                  color: (node.gpsMessagesParsed ?? 0) > 0 ? '#22c55e' : '#ef4444',
                 }}>
-                  {node.gpsSatellites ?? 0}
+                  {node.gpsMessagesParsed ?? 0}
                 </span>
-                {(node.gpsSatellites ?? 0) === 0 && (
+                {node.gpsLastMessageAgeSeconds != null && node.gpsLastMessageAgeSeconds >= 0 && (
                   <span style={{ marginLeft: 6, color: 'var(--text-muted)', fontSize: 11 }}>
-                    (keine Verbindung zum Modul?)
+                    (letzte vor {node.gpsLastMessageAgeSeconds}s)
                   </span>
                 )}
+              </div>
+              <div><span style={{ color: 'var(--text-muted)' }}>Sichtbar / im Fix:</span>{' '}
+                <span style={{
+                  fontWeight: 600,
+                  color: (node.gpsSatsInView ?? 0) >= 4 ? '#22c55e'
+                    : (node.gpsSatsInView ?? 0) >= 1 ? '#eab308' : '#ef4444',
+                }}>
+                  {node.gpsSatsInView ?? 0}
+                </span>
+                <span style={{ color: 'var(--text-muted)' }}> / </span>
+                <span style={{ fontWeight: 600 }}>
+                  {node.gpsSatellites ?? 0}
+                </span>
+                <span style={{ marginLeft: 6, color: 'var(--text-muted)', fontSize: 11 }}>
+                  Satelliten
+                </span>
               </div>
               <div><span style={{ color: 'var(--text-muted)' }}>HDOP:</span>{' '}
                 {node.gpsHdop != null && node.gpsHdop < 99

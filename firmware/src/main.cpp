@@ -246,6 +246,9 @@ void loop() {
         gpsTel.satellites = gps.satellites();
         gpsTel.hdop = gps.hdop();
         gpsTel.lastFixAgeSeconds = gps.lastFixAgeSeconds();
+        gpsTel.messagesParsed = gps.messagesParsed();
+        gpsTel.lastMessageAgeSeconds = gps.lastMessageAgeSeconds();
+        gpsTel.satellitesInView = gps.satellitesInView();
 #endif
 
         OtaInfo ota = client.sendHeartbeat(

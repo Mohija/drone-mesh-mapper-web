@@ -20,6 +20,9 @@ struct GpsTelemetry {
     int satellites = 0;         // satellites used in the last fix (GGA field 7)
     float hdop = 0.0f;          // horizontal dilution of precision
     long lastFixAgeSeconds = -1; // -1 = never had a fix since boot
+    uint32_t messagesParsed = 0; // checksum-valid NMEA sentences since boot
+    long lastMessageAgeSeconds = -1; // -1 = no NMEA ever received
+    int satellitesInView = 0;    // sats currently visible (from GSV)
 };
 
 class FlightArcClient {

@@ -164,6 +164,9 @@ OtaInfo FlightArcClient::sendHeartbeat(const char* fwVersion, const char* hwType
         doc["gps_satellites"] = gps->satellites;
         doc["gps_hdop"] = gps->hdop;
         doc["gps_last_fix_age_seconds"] = gps->lastFixAgeSeconds;
+        doc["gps_messages_parsed"] = gps->messagesParsed;
+        doc["gps_last_message_age_seconds"] = gps->lastMessageAgeSeconds;
+        doc["gps_sats_in_view"] = gps->satellitesInView;
     }
 
     String body;

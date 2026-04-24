@@ -344,6 +344,10 @@ class ReceiverNode(db.Model):
     gps_satellites = db.Column(db.Integer, nullable=True)        # sats in last GGA
     gps_hdop = db.Column(db.Float, nullable=True)                # horizontal DOP
     gps_last_fix_age_seconds = db.Column(db.Integer, nullable=True)  # -1 = never
+    # Activity indicators (migration 014)
+    gps_messages_parsed = db.Column(db.Integer, nullable=True)   # count of checksum-valid NMEA sentences
+    gps_last_message_age_seconds = db.Column(db.Integer, nullable=True)  # -1 = no NMEA yet
+    gps_sats_in_view = db.Column(db.Integer, nullable=True)      # sats currently visible (GSV)
 
     # Detection counters
     total_detections = db.Column(db.Integer, default=0, nullable=False)
@@ -410,6 +414,9 @@ class ReceiverNode(db.Model):
             "gpsSatellites": self.gps_satellites,
             "gpsHdop": self.gps_hdop,
             "gpsLastFixAgeSeconds": self.gps_last_fix_age_seconds,
+            "gpsMessagesParsed": self.gps_messages_parsed,
+            "gpsLastMessageAgeSeconds": self.gps_last_message_age_seconds,
+            "gpsSatsInView": self.gps_sats_in_view,
             "totalDetections": self.total_detections,
             "detectionsSinceBoot": self.detections_since_boot,
             "status": self.status,

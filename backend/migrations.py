@@ -175,6 +175,15 @@ MIGRATIONS: list[dict[str, Any]] = [
             "ALTER TABLE receiver_nodes ADD COLUMN gps_last_fix_age_seconds INTEGER",
         ],
     },
+    {
+        "version": "014_receiver_gps_activity",
+        "description": "GPS activity indicators — messages_parsed, last_message_age, sats_in_view — so the UI can tell 'module silent' apart from 'module running, no sky view'",
+        "statements": [
+            "ALTER TABLE receiver_nodes ADD COLUMN gps_messages_parsed INTEGER",
+            "ALTER TABLE receiver_nodes ADD COLUMN gps_last_message_age_seconds INTEGER",
+            "ALTER TABLE receiver_nodes ADD COLUMN gps_sats_in_view INTEGER",
+        ],
+    },
 ]
 
 

@@ -532,6 +532,21 @@ def heartbeat():
             node.gps_last_fix_age_seconds = int(data["gps_last_fix_age_seconds"])
         except (TypeError, ValueError):
             pass
+    if "gps_messages_parsed" in data:
+        try:
+            node.gps_messages_parsed = int(data["gps_messages_parsed"])
+        except (TypeError, ValueError):
+            pass
+    if "gps_last_message_age_seconds" in data:
+        try:
+            node.gps_last_message_age_seconds = int(data["gps_last_message_age_seconds"])
+        except (TypeError, ValueError):
+            pass
+    if "gps_sats_in_view" in data:
+        try:
+            node.gps_sats_in_view = int(data["gps_sats_in_view"])
+        except (TypeError, ValueError):
+            pass
 
     db.session.commit()
 

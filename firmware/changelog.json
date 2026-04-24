@@ -1,6 +1,16 @@
 {
   "versions": [
     {
+      "version": "1.6.2",
+      "date": "2026-04-24",
+      "hardware": ["esp32-s3-gps"],
+      "changes": [
+        "GPS-Aktivitätsanzeige: Zählt jede gültige NMEA-Nachricht (gps_messages_parsed) und meldet Alter der letzten Nachricht (gps_last_message_age_seconds) — macht sichtbar, ob das Modul überhaupt mit dem ESP spricht, auch wenn es keinen Fix bekommt",
+        "Sichtbare Satelliten per GSV-Parser: gps_sats_in_view zeigt wie viele Satelliten die Antenne am Himmel sieht (anders als gps_satellites, das nur zählt was der Fix nutzt). Werte zwischen \"Modul ist still (Verdrahtung?)\", \"Modul spricht aber keine Satelliten (Antenne?)\" und \"Satelliten ok, nur kein Fix\" werden so unterscheidbar",
+        "Admin-UI: GPS-Karte zeigt Aktivitäts-Badge (Stumm/Aktiv), NMEA-Nachrichtenzähler, Satelliten-in-Sicht + Satelliten-im-Fix getrennt, Alter der letzten NMEA-Nachricht"
+      ]
+    },
+    {
       "version": "1.6.1",
       "date": "2026-04-24",
       "hardware": ["esp32-s3-gps"],
