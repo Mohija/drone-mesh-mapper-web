@@ -1,11 +1,41 @@
-"""Shared pytest fixtures for backend tests."""
+"""Shared pytest fixtures for backend tests.
+
+SAFETY: These tests DELETE non-default tenants and non-admin users between runs.
+They MUST NOT run against the production DB. We redirect DATABASE_URL to a
+throw-away temp file BEFORE importing the app — once a production-DB URI
+reaches the app module it is too late to swap.
+"""
 
 import sys
 import os
+import tempfile
+import atexit
 import pytest
 
 # Add backend dir to path so imports work
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+# --- DB isolation (must happen before importing `app`) --------------------
+_test_db_fd, _test_db_path = tempfile.mkstemp(prefix="flightarc-test-", suffix=".db")
+os.close(_test_db_fd)
+os.environ["DATABASE_URL"] = f"sqlite:///{_test_db_path}"
+
+def _cleanup_test_db():
+    for suffix in ("", "-wal", "-shm"):
+        p = _test_db_path + suffix
+        try:
+            os.remove(p)
+        except OSError:
+            pass
+atexit.register(_cleanup_test_db)
+
+# Sanity check — blow up loudly rather than silently trashing production data
+_PRODUCTION_DB = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "data", "flightarc.db"
+)
+_PRODUCTION_DB = os.path.realpath(_PRODUCTION_DB)
+assert os.path.realpath(_test_db_path) != _PRODUCTION_DB, \
+    "Test DB must not be the production file"
 
 from database import db, init_db
 from drone_simulator import DroneFleet, DroneSimulator
@@ -43,7 +73,15 @@ def setup_test_db():
 
     yield
 
-    # Clean up test data after each test
+    # Clean up test data after each test.
+    # Hard-guard: refuse to run this destructive cleanup against the production DB.
+    active_uri = flask_app.config.get("SQLALCHEMY_DATABASE_URI", "")
+    if _PRODUCTION_DB in active_uri:
+        pytest.exit(
+            f"Refusing to run test cleanup — DB URI points at production file:\n  {active_uri}\n"
+            "Make sure DATABASE_URL is overridden before `app` is imported."
+        )
+
     with flask_app.app_context():
         from models import FlightZone, TrailArchive as TrailArchiveModel, User, Tenant, TenantSettings, SystemLog
         # Delete zones, archives, and logs for default tenant

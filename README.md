@@ -82,6 +82,24 @@ python3 install.py
 
 **Die Datenbank mit allen Benutzern und Daten bleibt beim Update immer erhalten.**
 
+### Update- und Backup-Prozess (verbindlich)
+
+Ausführliche Dokumentation + Rollback-Anleitung in [`DATABASE_LIFECYCLE.md`](DATABASE_LIFECYCLE.md).
+Kurzfassung:
+
+- Beim App-Start wird automatisch ein Snapshot nach `backend/data/backups/` gelegt; die letzten 30 bleiben.
+- Schema-Änderungen laufen versioniert über `backend/migrations.py` (additiv, idempotent). Vor jeder neuen Migration wird ein weiteres Backup gezogen.
+- Management-CLI:
+  ```bash
+  ./backend/venv/bin/python backend/manage.py backup manual-pre-update
+  ./backend/venv/bin/python backend/manage.py list-backups
+  ./backend/venv/bin/python backend/manage.py migrate status
+  ./backend/venv/bin/python backend/manage.py migrate run
+  ./backend/venv/bin/python backend/manage.py verify-data
+  ./backend/venv/bin/python backend/manage.py restore <backup.db> --confirm
+  ```
+- Tests laufen isoliert gegen `/tmp/flightarc-test-*.db`; `backend/tests/conftest.py` setzt `DATABASE_URL` vor jedem Import und hat einen Hard-Guard gegen Production-DB-Aktionen.
+
 ### Update mit Datenbank-Reset
 
 > **ACHTUNG:** Alle Benutzer, Mandanten und Flugdaten werden gelöscht!

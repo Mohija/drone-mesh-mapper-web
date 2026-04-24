@@ -127,6 +127,9 @@ export interface DataSourceConfig {
 
 export interface DataSourceSettings {
   sources: Record<string, DataSourceConfig>;
+  firmware_backend_url?: string;
+  retention_system_logs_days?: number | null;
+  retention_audit_logs_days?: number | null;
 }
 
 // ─── Tracking ────────────────────────────────────────────

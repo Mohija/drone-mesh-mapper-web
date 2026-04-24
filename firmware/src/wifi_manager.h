@@ -54,6 +54,8 @@ private:
     unsigned long _staConnectedAt = 0;
     unsigned long _bootTime = 0;
     int _staConnectAttempts = 0;
+    // Slow reconnect while AP is up — prevents AP-dead-end after WiFi outage
+    unsigned long _lastApStaRetry = 0;
 
     void _addNetwork(const char* ssid, const char* pass);
     int _findBestNetwork();  // Scan-based: returns index of best matching network

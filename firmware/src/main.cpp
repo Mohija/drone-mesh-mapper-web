@@ -31,6 +31,10 @@ LedStatus led;
 unsigned long lastIngest = 0;
 unsigned long lastHeartbeat = 0;
 int detectionsSinceBoot = 0;
+// Watchdog: how long we've been connected to WiFi without ever reaching the backend.
+// If WiFi stays up but heartbeats never land, the backend URL is likely wrong/dead —
+// a reboot re-resolves DNS and resets TLS/socket state.
+unsigned long staReachableSinceMs = 0;
 
 void setup() {
     Serial.begin(115200);
@@ -131,9 +135,48 @@ void loop() {
         }
     }
 
+    // Track when WiFi became available — used by the watchdog below
+    if (wifiMgr.isStaConnected() && staReachableSinceMs == 0) {
+        staReachableSinceMs = now;
+    } else if (!wifiMgr.isStaConnected()) {
+        staReachableSinceMs = 0;
+    }
+
+    // ── Backend watchdog ───────────────────────────────────────
+    // If WiFi has been up for longer than BACKEND_DEAD_REBOOT_MS without a single
+    // successful request, the backend is unreachable (DNS, TLS, wrong URL, dead host).
+    // Reboot so DNS/TLS/sockets are fully reinitialized — no manual intervention
+    // needed. Gate on staReachableSinceMs so we never reboot during boot before
+    // WiFi even had a chance to come up.
+    if (wifiMgr.isStaConnected() && staReachableSinceMs > 0
+        && (now - staReachableSinceMs > BACKEND_DEAD_REBOOT_MS)
+        && client.getLastSuccessMs() == 0) {
+        Serial.println("[Watchdog] Backend unreachable > 10 min since boot — rebooting");
+        delay(500);
+        ESP.restart();
+    }
+    // Or: we had contact once, but it broke down for > BACKEND_DEAD_REBOOT_MS
+    if (wifiMgr.isStaConnected() && client.getLastSuccessMs() > 0
+        && (now - client.getLastSuccessMs() > BACKEND_DEAD_REBOOT_MS)) {
+        Serial.println("[Watchdog] No successful backend contact for 10 min — rebooting");
+        delay(500);
+        ESP.restart();
+    }
+    // Retry-count based reboot (catches rapid-fire failures before 10 min elapse)
+    if (client.getRetryCount() >= BACKEND_RETRY_REBOOT) {
+        Serial.printf("[Watchdog] %d consecutive backend failures — rebooting\n",
+                      client.getRetryCount());
+        delay(500);
+        ESP.restart();
+    }
+
     // Send heartbeat every HEARTBEAT_INTERVAL_MS
     if (wifiMgr.isStaConnected() && (now - lastHeartbeat >= HEARTBEAT_INTERVAL_MS)) {
         lastHeartbeat = now;
+
+        // Pre-flight health probe so a dead backend surfaces on the LED immediately
+        // instead of waiting for the 10s heartbeat POST timeout.
+        client.checkHealth(BACKEND_HEALTH_PROBE_MS);
 
         float lat = portal.hasLocation() ? portal.getLatitude() : 0;
         float lon = portal.hasLocation() ? portal.getLongitude() : 0;

@@ -29,9 +29,15 @@ public:
     // Perform OTA firmware update (ESP32 only)
     bool performOtaUpdate(const String& otaUrl);
 
+    // Cheap GET /health probe — returns true if backend answered 2xx within timeout
+    bool checkHealth(unsigned long timeoutMs = 3000);
+
     bool isBackendReachable() const { return _lastSuccess; }
     int getRetryCount() const { return _retryCount; }
     int getLastHttpCode() const { return _lastHttpCode; }
+    // millis() of last successful POST/probe — 0 if never succeeded since boot.
+    // Callers use this for watchdog-style reboot decisions.
+    unsigned long getLastSuccessMs() const { return _lastSuccessMs; }
 
 private:
     String _backendUrl;
@@ -39,6 +45,7 @@ private:
     bool _lastSuccess = false;
     int _retryCount = 0;
     int _lastHttpCode = 0;
+    unsigned long _lastSuccessMs = 0;
 
     bool _httpPost(const String& path, const String& body);
     String _httpPostWithResponse(const String& path, const String& body);

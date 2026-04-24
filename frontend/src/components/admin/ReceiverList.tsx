@@ -17,9 +17,11 @@ import {
   updateReceiverCoverage,
   fetchFirmwareChangelog,
   fetchWifiNetworks,
+  fetchSettings,
 } from '../../api';
 import type { ReceiverNode, ReceiverStats, ConnectionLogEntry, FirmwareChangelogEntry } from '../../api';
 import ReceiverFlashWizard from './ReceiverFlashWizard';
+import ReceiverHealthPanel from './ReceiverHealthPanel';
 import AdminTooltip from './AdminTooltip';
 import { useIsMobile } from '../../useIsMobile';
 
@@ -258,6 +260,7 @@ export default function ReceiverList() {
   const [receivers, setReceivers] = useState<ReceiverNode[]>([]);
   const [stats, setStats] = useState<ReceiverStats | null>(null);
   const [changelog, setChangelog] = useState<FirmwareChangelogEntry[]>([]);
+  const [firmwareBackendUrl, setFirmwareBackendUrl] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -319,14 +322,16 @@ export default function ReceiverList() {
 
   const loadData = useCallback(async () => {
     try {
-      const [r, s, cl] = await Promise.all([
+      const [r, s, cl, settings] = await Promise.all([
         fetchReceivers(),
         fetchReceiverStats(),
         fetchFirmwareChangelog().catch(() => ({ versions: [] as FirmwareChangelogEntry[] })),
+        fetchSettings().catch(() => ({ sources: {}, firmware_backend_url: '' })),
       ]);
       setReceivers(r);
       setStats(s);
       setChangelog(cl.versions);
+      setFirmwareBackendUrl(settings.firmware_backend_url || '');
       setError(null);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Laden fehlgeschlagen');
@@ -687,6 +692,39 @@ export default function ReceiverList() {
         </div>
       )}
 
+      {/* Firmware Backend URL — shows which URL gets baked into controllers */}
+      <div data-testid="firmware-backend-url-banner" style={{
+        marginBottom: 12,
+        padding: '10px 14px',
+        background: firmwareBackendUrl ? 'var(--bg-secondary)' : 'rgba(239, 68, 68, 0.10)',
+        border: `1px solid ${firmwareBackendUrl ? 'var(--border)' : 'var(--status-error)'}`,
+        borderRadius: 8,
+        fontSize: 12,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        flexWrap: 'wrap',
+      }}>
+        <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>Firmware Backend-URL:</span>
+        {firmwareBackendUrl ? (
+          <code style={{
+            fontSize: 11,
+            color: 'var(--text-primary)',
+            background: 'var(--bg-tertiary)',
+            padding: '2px 6px',
+            borderRadius: 4,
+            wordBreak: 'break-all',
+          }}>{firmwareBackendUrl}</code>
+        ) : (
+          <span style={{ color: 'var(--status-error)', fontStyle: 'italic' }}>
+            Nicht gesetzt — in Einstellungen eintragen, sonst schlägt der Firmware-Build fehl.
+          </span>
+        )}
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>
+          wird beim Build in jeden Empfänger eingebrannt
+        </span>
+      </div>
+
       {/* Firmware Changelog */}
       {changelog.length > 0 && (
         <details style={{ marginBottom: 16, background: 'var(--bg-secondary)', borderRadius: 8, border: '1px solid var(--border)', overflow: 'hidden' }}>
@@ -1033,8 +1071,12 @@ export default function ReceiverList() {
               borderRadius: 10, padding: 14, opacity: node.isActive ? 1 : 0.5,
               borderLeft: `3px solid ${STATUS_COLORS[node.status]}`,
             }}>
-              {/* Card header */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              {/* Card header — clickable to toggle Health-Detail expand */}
+              <div
+                data-testid={`receiver-card-header-${node.id}`}
+                onClick={() => setExpandedId(expandedId === node.id ? null : node.id)}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, cursor: 'pointer' }}
+              >
                 <span data-testid={`receiver-status-${node.id}`} style={{
                   width: 10, height: 10, borderRadius: '50%', flexShrink: 0,
                   background: STATUS_COLORS[node.status],
@@ -1044,7 +1086,17 @@ export default function ReceiverList() {
                 <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                   {node.hardwareType.toUpperCase()}
                 </span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4 }}>
+                  {expandedId === node.id ? '▾' : '▸'}
+                </span>
               </div>
+
+              {/* Health detail panel (mobile) */}
+              {expandedId === node.id && (
+                <div data-testid={`receiver-detail-mobile-${node.id}`} style={{ marginBottom: 12 }}>
+                  <ReceiverHealthPanel node={node} />
+                </div>
+              )}
 
               {/* Card stats */}
               <div style={{ display: 'flex', gap: 12, fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12, flexWrap: 'wrap' }}>
@@ -1327,16 +1379,7 @@ export default function ReceiverList() {
                   {expandedId === node.id && (
                     <tr key={`${node.id}-detail`} data-testid={`receiver-detail-${node.id}`}>
                       <td colSpan={6} style={{ padding: '12px 16px', background: 'var(--bg-primary)' }}>
-                        <div data-testid={`receiver-detail-grid-${node.id}`} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '8px 16px', fontSize: 12 }}>
-                          <div><span style={{ color: 'var(--text-muted)' }}>ID:</span> <code style={{ fontSize: 11 }}>{node.id}</code></div>
-                          <div><span style={{ color: 'var(--text-muted)' }}>Firmware:</span> {node.firmwareVersion || '-'}</div>
-                          <div><span style={{ color: 'var(--text-muted)' }}>IP:</span> {node.lastIp || '-'}</div>
-                          <div><span style={{ color: 'var(--text-muted)' }}>WiFi:</span> {node.wifiSsid || '-'} {node.wifiRssi != null && `(${node.wifiRssi} dBm)`}</div>
-                          <div><span style={{ color: 'var(--text-muted)' }}>Heap:</span> {node.freeHeap != null ? `${(node.freeHeap / 1024).toFixed(0)} KB` : '-'}</div>
-                          <div><span style={{ color: 'var(--text-muted)' }}>Uptime:</span> {formatUptime(node.uptimeSeconds)}</div>
-                          <div><span style={{ color: 'var(--text-muted)' }}>Standort:</span> {node.lastLatitude != null ? `${node.lastLatitude.toFixed(5)}, ${node.lastLongitude?.toFixed(5)}` : '-'}</div>
-                          <div><span style={{ color: 'var(--text-muted)' }}>Seit Boot:</span> {node.detectionsSinceBoot}</div>
-                        </div>
+                        <ReceiverHealthPanel node={node} />
                         {/* Firmware build info */}
                         {node.lastBuildAt && (
                           <div style={{

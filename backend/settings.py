@@ -110,6 +110,9 @@ class SettingsManager:
                 "mission_zone_min_alt_agl": ts.mission_zone_min_alt_agl,
                 "mission_zone_max_alt_agl": ts.mission_zone_max_alt_agl,
                 "log_level": ts.log_level or "info",
+                "firmware_backend_url": ts.firmware_backend_url or "",
+                "retention_system_logs_days": ts.retention_system_logs_days,
+                "retention_audit_logs_days": ts.retention_audit_logs_days,
             }
         return {"sources": _deep_copy(DEFAULT_SOURCES)}
 
@@ -204,6 +207,21 @@ class SettingsManager:
                 ts.mission_zone_max_alt_agl = updates["mission_zone_max_alt_agl"]
             if "log_level" in updates:
                 ts.log_level = updates["log_level"]
+            if "firmware_backend_url" in updates:
+                url = (updates["firmware_backend_url"] or "").strip()
+                ts.firmware_backend_url = url or None
+            for days_key, attr in (("retention_system_logs_days", "retention_system_logs_days"),
+                                    ("retention_audit_logs_days", "retention_audit_logs_days")):
+                if days_key in updates:
+                    v = updates[days_key]
+                    if v is None or v == "":
+                        setattr(ts, attr, None)
+                    else:
+                        try:
+                            iv = int(v)
+                            setattr(ts, attr, max(1, min(iv, 365)))
+                        except (TypeError, ValueError):
+                            pass  # ignore malformed input
             db.session.commit()
 
     def get_mission_zone_defaults(self, tenant_id=None) -> dict:

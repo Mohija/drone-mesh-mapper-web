@@ -41,8 +41,11 @@ except ImportError:
 INGEST_INTERVAL_S = 0.5     # Event-based: send every 0.5s (firmware sends on detection, min 100ms)
 HEARTBEAT_INTERVAL_S = 30   # Send heartbeat every 30 seconds
 MAX_DETECTIONS = 50         # Ring buffer size
-FIRMWARE_VERSION = "1.5.0-dummy"
+FIRMWARE_VERSION = "1.5.3-dummy"
 AP_SSID_PREFIX = "FlightArc-"
+BACKEND_HEALTH_PROBE_S = 3      # GET /health timeout before heartbeat
+BACKEND_DEAD_REBOOT_S = 600     # Simulate reboot after 10 min without backend
+BACKEND_RETRY_REBOOT = 20       # Simulate reboot after 20 consecutive failures
 
 # Pre-configured dummy API key (matching the "Dummy Simulator" receiver in the DB)
 DUMMY_API_KEY = "dummy_receiver_test_key_0000000000000000000000000000000000000000"
@@ -329,10 +332,32 @@ class FlightArcClient:
         self._retry_count = 0
         self._last_http_code = 0
         self._last_success = False
+        self._last_success_at = 0.0  # epoch seconds of last successful request
 
     @property
     def is_backend_reachable(self) -> bool:
         return self._last_success
+
+    @property
+    def last_success_at(self) -> float:
+        return self._last_success_at
+
+    @property
+    def retry_count(self) -> int:
+        return self._retry_count
+
+    def check_health(self, timeout: float = BACKEND_HEALTH_PROBE_S) -> bool:
+        """GET /health probe — matching firmware checkHealth()."""
+        try:
+            resp = requests.get(self._url + "/health", timeout=timeout)
+            if 200 <= resp.status_code < 300:
+                self._last_success_at = time.time()
+                return True
+            print(f"  [HTTP] /health probe failed: {resp.status_code}")
+            return False
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+            print(f"  [HTTP] /health probe error: {exc.__class__.__name__}")
+            return False
 
     def send_ingest(self, detections: list[OdidDetection],
                     node_lat: float = 0.0, node_lon: float = 0.0) -> bool:
@@ -411,6 +436,7 @@ class FlightArcClient:
                     pass
             else:
                 self._retry_count = 0
+                self._last_success_at = time.time()
 
             return self._last_success
         except requests.exceptions.ConnectionError:
@@ -573,6 +599,7 @@ Beispiele:
     start_time = time.time()
     last_ingest = 0.0
     last_heartbeat = 0.0
+    sta_reachable_since = time.time()  # Simulated STA-up timestamp (matches firmware watchdog)
     active_drones = set(range(len(drones)))  # All drones active initially
 
     try:
@@ -610,9 +637,35 @@ Beispiele:
                     if client.send_ingest(detections, node_lat, node_lon):
                         detections_since_boot += len(detections)
 
+            # ── Backend watchdog (matches firmware main.cpp) ──
+            # If we've been running for 10 minutes without a single successful request,
+            # or the last success was 10 minutes ago, simulate a reboot.
+            watchdog_reboot = False
+            if client.last_success_at == 0.0 and uptime > BACKEND_DEAD_REBOOT_S:
+                watchdog_reboot = True
+                print("[Watchdog] Backend unreachable > 10 min since boot — simulating reboot")
+            elif client.last_success_at > 0 and (now - client.last_success_at) > BACKEND_DEAD_REBOOT_S:
+                watchdog_reboot = True
+                print("[Watchdog] No successful backend contact for 10 min — simulating reboot")
+            elif client.retry_count >= BACKEND_RETRY_REBOOT:
+                watchdog_reboot = True
+                print(f"[Watchdog] {client.retry_count} consecutive failures — simulating reboot")
+            if watchdog_reboot:
+                start_time = time.time()
+                sta_reachable_since = start_time
+                detections_since_boot = 0
+                last_heartbeat = 0.0
+                last_ingest = 0.0
+                client._retry_count = 0
+                client._last_success_at = 0.0
+                continue
+
             # ── Send heartbeat every HEARTBEAT_INTERVAL_S (matching firmware) ──
             if now - last_heartbeat >= HEARTBEAT_INTERVAL_S:
                 last_heartbeat = now
+
+                # Pre-flight health probe (matches firmware)
+                client.check_health()
 
                 # Simulate ESP32 system stats
                 free_heap = random.randint(120000, 180000)  # ~150KB typical

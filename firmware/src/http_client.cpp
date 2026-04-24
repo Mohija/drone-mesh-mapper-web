@@ -24,6 +24,60 @@ void FlightArcClient::begin(const char* backendUrl, const char* apiKey) {
     Serial.printf("[HTTP] Backend: %s\n", _backendUrl.c_str());
 }
 
+bool FlightArcClient::checkHealth(unsigned long timeoutMs) {
+    // Lightweight GET /health probe — confirms backend is actually reachable
+    // before we attempt a heartbeat. Updates _lastSuccessMs on success so the
+    // watchdog in main.cpp can distinguish "WiFi up, backend gone" from a
+    // transient POST failure.
+    String url = _backendUrl + "/health";
+
+#ifdef ESP32
+  #if HAS_TLS
+    if (url.startsWith("https")) {
+        WiFiClientSecure client;
+        client.setInsecure();
+        HTTPClient http;
+        http.begin(client, url);
+        http.setTimeout(timeoutMs);
+        int code = http.GET();
+        http.end();
+        if (code >= 200 && code < 300) {
+            _lastSuccessMs = millis();
+            return true;
+        }
+        Serial.printf("[HTTP] /health probe failed: %d\n", code);
+        return false;
+    }
+  #endif
+    {
+        HTTPClient http;
+        http.begin(url);
+        http.setTimeout(timeoutMs);
+        int code = http.GET();
+        http.end();
+        if (code >= 200 && code < 300) {
+            _lastSuccessMs = millis();
+            return true;
+        }
+        Serial.printf("[HTTP] /health probe failed: %d\n", code);
+        return false;
+    }
+#else
+    WiFiClient client;
+    HTTPClient http;
+    http.begin(client, url);
+    http.setTimeout(timeoutMs);
+    int code = http.GET();
+    http.end();
+    if (code >= 200 && code < 300) {
+        _lastSuccessMs = millis();
+        return true;
+    }
+    Serial.printf("[HTTP] /health probe failed: %d\n", code);
+    return false;
+#endif
+}
+
 bool FlightArcClient::sendIngest(OdidDetection* detections, int count,
                                   float nodeLat, float nodeLon) {
     if (count == 0) return true;
@@ -166,6 +220,7 @@ bool FlightArcClient::_httpPost(const String& path, const String& body) {
             Serial.printf("[HTTP] HTTPS POST %s failed: %d (retry %d)\n", path.c_str(), code, _retryCount);
         } else {
             _retryCount = 0;
+            _lastSuccessMs = millis();
         }
         return _lastSuccess;
     }
@@ -186,6 +241,7 @@ bool FlightArcClient::_httpPost(const String& path, const String& body) {
         Serial.printf("[HTTP] POST %s failed: %d (retry %d)\n", path.c_str(), code, _retryCount);
     } else {
         _retryCount = 0;
+        _lastSuccessMs = millis();
     }
     return _lastSuccess;
 #else
@@ -206,6 +262,7 @@ bool FlightArcClient::_httpPost(const String& path, const String& body) {
         Serial.printf("[HTTP] POST %s failed: %d (retry %d)\n", path.c_str(), code, _retryCount);
     } else {
         _retryCount = 0;
+        _lastSuccessMs = millis();
     }
     return _lastSuccess;
 #endif
@@ -232,6 +289,7 @@ String FlightArcClient::_httpPostWithResponse(const String& path, const String& 
         if (_lastSuccess) {
             response = http.getString();
             _retryCount = 0;
+            _lastSuccessMs = millis();
         } else {
             _retryCount++;
             Serial.printf("[HTTP] HTTPS POST %s failed: %d (retry %d)\n", path.c_str(), code, _retryCount);
@@ -253,6 +311,7 @@ String FlightArcClient::_httpPostWithResponse(const String& path, const String& 
         if (_lastSuccess) {
             response = http.getString();
             _retryCount = 0;
+            _lastSuccessMs = millis();
         } else {
             _retryCount++;
         }
@@ -272,6 +331,7 @@ String FlightArcClient::_httpPostWithResponse(const String& path, const String& 
     if (_lastSuccess) {
         response = http.getString();
         _retryCount = 0;
+        _lastSuccessMs = millis();
     } else {
         _retryCount++;
     }

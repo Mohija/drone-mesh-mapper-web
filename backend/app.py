@@ -66,6 +66,15 @@ CORS(app, origins=[
 # Initialize database
 init_db(app)
 
+# Startup snapshot backup — safety net for every restart.
+# Runs BEFORE any schema work so a broken migration leaves a known-good copy
+# behind. See DATABASE_LIFECYCLE.md.
+with app.app_context():
+    from backup import create_backup as _startup_backup
+    _uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
+    if _uri.startswith("sqlite:///"):
+        _startup_backup("startup", db_path=_uri[len("sqlite:///"):])
+
 # Create tables and default tenant
 with app.app_context():
     from models import Tenant, TenantSettings, User, UserTenantMembership
@@ -113,98 +122,31 @@ with app.app_context():
             logger.info("Created membership for user %s in tenant %s (role=%s)", u.username, u.tenant_id, u.role)
     db.session.commit()
 
-    # Migration: add OTA and merged binary columns to receiver_nodes
-    for col_stmt in [
-        "ALTER TABLE receiver_nodes ADD COLUMN last_build_version VARCHAR(20)",
-        "ALTER TABLE receiver_nodes ADD COLUMN last_build_merged_size INTEGER",
-        "ALTER TABLE receiver_nodes ADD COLUMN ota_update_pending BOOLEAN DEFAULT 0 NOT NULL",
-        "ALTER TABLE receiver_nodes ADD COLUMN ota_last_attempt REAL",
-        "ALTER TABLE receiver_nodes ADD COLUMN ota_last_result VARCHAR(100)",
-    ]:
-        try:
-            db.session.execute(db.text(col_stmt))
-        except Exception:
-            pass  # Column already exists
-    db.session.commit()
+    # Schema migrations — versioned, additive, with automatic pre-migration
+    # backup. Registry lives in backend/migrations.py. Do not inline ALTER
+    # statements here — append them to MIGRATIONS instead. See
+    # DATABASE_LIFECYCLE.md for the contract.
+    from migrations import run_migrations
+    from backup import create_backup
 
-    # Migration: add mission zone default columns to tenant_settings
-    for col_stmt in [
-        "ALTER TABLE tenant_settings ADD COLUMN mission_zone_radius REAL",
-        "ALTER TABLE tenant_settings ADD COLUMN mission_zone_color VARCHAR(20)",
-        "ALTER TABLE tenant_settings ADD COLUMN mission_zone_min_alt_agl REAL",
-        "ALTER TABLE tenant_settings ADD COLUMN mission_zone_max_alt_agl REAL",
-    ]:
-        try:
-            db.session.execute(db.text(col_stmt))
-        except Exception:
-            pass  # Column already exists
-    db.session.commit()
+    def _backup(reason: str):
+        # Use the engine's URL to locate the actual sqlite file. Tests run
+        # against a temp file (see tests/conftest.py) — we want to back up
+        # *that* file in tests, not the production path.
+        uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
+        if uri.startswith("sqlite:///"):
+            db_path = uri[len("sqlite:///"):]
+        else:
+            db_path = None
+        return create_backup(reason, db_path=db_path) if db_path else None
 
-    # Migration: add log_level, build_config, zone created_by/updated_by
-    for col_stmt in [
-        "ALTER TABLE tenant_settings ADD COLUMN log_level VARCHAR(10)",
-        "ALTER TABLE receiver_nodes ADD COLUMN last_build_config TEXT",
-        "ALTER TABLE flight_zones ADD COLUMN created_by VARCHAR(100)",
-        "ALTER TABLE flight_zones ADD COLUMN updated_by VARCHAR(100)",
-    ]:
-        try:
-            db.session.execute(db.text(col_stmt))
-        except Exception:
-            pass  # Column already exists
-    db.session.commit()
+    run_migrations(db, backup_fn=_backup)
 
-    # Migration: add coverage_radius and antenna_type to receiver_nodes
-    for col_stmt in [
-        "ALTER TABLE receiver_nodes ADD COLUMN coverage_radius INTEGER",
-        "ALTER TABLE receiver_nodes ADD COLUMN antenna_type VARCHAR(30)",
-    ]:
-        try:
-            db.session.execute(db.text(col_stmt))
-        except Exception:
-            pass  # Column already exists
-    db.session.commit()
-
-    # Migration: add firmware_history to receiver_nodes
-    for col_stmt in [
-        "ALTER TABLE receiver_nodes ADD COLUMN firmware_history TEXT",
-    ]:
-        try:
-            db.session.execute(db.text(col_stmt))
-        except Exception:
-            pass  # Column already exists
-    db.session.commit()
-
-    # Migration: add wifi_networks + audit_enabled to tenant_settings
-    for col_stmt in [
-        "ALTER TABLE tenant_settings ADD COLUMN wifi_networks TEXT",
-        "ALTER TABLE tenant_settings ADD COLUMN audit_enabled BOOLEAN DEFAULT 0",
-    ]:
-        try:
-            db.session.execute(db.text(col_stmt))
-        except Exception:
-            pass  # Column already exists
-    db.session.commit()
-
-    # Migration: audit_logs table
-    try:
-        db.session.execute(db.text("""
-            CREATE TABLE IF NOT EXISTS audit_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                tenant_id VARCHAR(8) NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-                timestamp REAL NOT NULL,
-                user_id VARCHAR(8) NOT NULL,
-                username VARCHAR(100) NOT NULL,
-                action VARCHAR(50) NOT NULL,
-                resource_type VARCHAR(50) NOT NULL,
-                resource_id VARCHAR(100),
-                resource_name VARCHAR(200),
-                details TEXT,
-                ip_address VARCHAR(45)
-            )
-        """))
-        db.session.commit()
-    except Exception:
-        db.session.rollback()
+# Retention: prune old system/audit logs + expired trail archives in the
+# background (hourly). Runs once at startup and then every hour. See
+# backend/retention.py + DATABASE_LIFECYCLE.md.
+from retention import start_retention_thread
+start_retention_thread(app)
 
 # Attach database logging handler
 from services.db_logger import DatabaseLogHandler

@@ -481,3 +481,123 @@ def delete_membership(membership_id):
     db.session.commit()
     logger.info("Membership deleted: %s", membership_id)
     return jsonify({"status": "deleted"})
+
+
+# ─── Service Tokens (tenant-scoped API keys for external monitors) ─────
+
+@admin_bp.route("/service-tokens", methods=["GET"])
+@login_required
+@role_required("tenant_admin")
+def list_service_tokens():
+    """List this tenant's service tokens. Token value itself is never returned."""
+    from models import ServiceToken
+    tokens = (ServiceToken.query
+              .filter_by(tenant_id=g.tenant_id)
+              .order_by(ServiceToken.created_at.desc())
+              .all())
+    return jsonify([t.to_dict() for t in tokens])
+
+
+@admin_bp.route("/service-tokens", methods=["POST"])
+@login_required
+@role_required("tenant_admin")
+def create_service_token():
+    """Create a new service token. The raw token is returned ONCE — store it now."""
+    import hashlib
+    import secrets
+    import time
+    from models import ServiceToken
+
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "Name erforderlich"}), 400
+    if len(name) > 100:
+        return jsonify({"error": "Name zu lang (max 100)"}), 400
+
+    requested = data.get("scopes") or ["health_read"]
+    scopes = [s for s in requested if s in ServiceToken.VALID_SCOPES]
+    if not scopes:
+        return jsonify({"error": f"Ungültige Scopes. Erlaubt: {sorted(ServiceToken.VALID_SCOPES)}"}), 400
+
+    raw = "flightarc_svc_" + secrets.token_hex(32)
+    token_hash = hashlib.sha256(raw.encode()).hexdigest()
+
+    username = getattr(g, "username", None) or getattr(getattr(g, "user", None), "username", None)
+    token = ServiceToken(
+        tenant_id=g.tenant_id,
+        name=name,
+        token_hash=token_hash,
+        token_prefix=raw[:12],
+        scopes=",".join(scopes),
+        created_by=username,
+    )
+    db.session.add(token)
+    audit_log("create", "service_token", token.id, name, {"scopes": scopes})
+    db.session.commit()
+    logger.info("Service token created for tenant %s: %s (scopes=%s)", g.tenant_id, name, scopes)
+    return jsonify(token.to_dict(include_raw_token=raw)), 201
+
+
+@admin_bp.route("/service-tokens/<token_id>/revoke", methods=["POST"])
+@login_required
+@role_required("tenant_admin")
+def revoke_service_token(token_id):
+    """Revoke a service token — cannot be re-activated, create a new one instead."""
+    import time
+    from models import ServiceToken
+    tok = ServiceToken.query.filter_by(id=token_id, tenant_id=g.tenant_id).first()
+    if not tok:
+        return jsonify({"error": "Token nicht gefunden"}), 404
+    if tok.revoked_at:
+        return jsonify({"error": "Bereits widerrufen"}), 400
+    tok.revoked_at = time.time()
+    audit_log("update", "service_token", tok.id, tok.name, {"action": "revoke"})
+    db.session.commit()
+    logger.info("Service token revoked: %s (tenant %s)", tok.id, g.tenant_id)
+    return jsonify(tok.to_dict())
+
+
+@admin_bp.route("/service-tokens/<token_id>", methods=["DELETE"])
+@login_required
+@role_required("tenant_admin")
+def delete_service_token(token_id):
+    """Hard-delete a service token. Revoke is usually preferred — DELETE loses the audit trail link."""
+    from models import ServiceToken
+    tok = ServiceToken.query.filter_by(id=token_id, tenant_id=g.tenant_id).first()
+    if not tok:
+        return jsonify({"error": "Token nicht gefunden"}), 404
+    name = tok.name
+    audit_log("delete", "service_token", token_id, name)
+    db.session.delete(tok)
+    db.session.commit()
+    logger.info("Service token deleted: %s (tenant %s)", token_id, g.tenant_id)
+    return jsonify({"status": "deleted"})
+
+
+# ─── Retention / DB stats (manual trigger + stats snapshot) ─────
+
+@admin_bp.route("/retention/run", methods=["POST"])
+@login_required
+@role_required("tenant_admin")
+def run_retention_now():
+    """Run the retention prune immediately for all tenants."""
+    from flask import current_app
+    from retention import run_retention
+    stats = run_retention(current_app._get_current_object())
+    audit_log("update", "retention", None, "Manual retention run", {
+        "system_logs_pruned": stats.get("system_logs_pruned", 0),
+        "audit_logs_pruned": stats.get("audit_logs_pruned", 0),
+    })
+    db.session.commit()
+    return jsonify(stats)
+
+
+@admin_bp.route("/db-stats", methods=["GET"])
+@login_required
+@role_required("tenant_admin")
+def get_db_stats():
+    """Row counts per relevant table + SQLite file size."""
+    from flask import current_app
+    from retention import db_stats
+    return jsonify(db_stats(current_app._get_current_object()))

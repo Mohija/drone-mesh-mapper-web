@@ -16,7 +16,7 @@ import time
 
 from flask import Blueprint, Response, g, jsonify, request, send_file
 from database import db
-from auth import login_required, role_required, node_auth_required
+from auth import login_required, role_required, node_auth_required, service_token_required
 from models import ReceiverNode
 from services.audit import audit_log
 
@@ -479,7 +479,9 @@ def heartbeat():
     node = g.receiver_node
     data = request.get_json(silent=True) or {}
 
-    node.last_heartbeat = time.time()
+    now_ts = time.time()
+    node.last_heartbeat = now_ts
+    node.last_telemetry_at = now_ts
     node.last_ip = data.get("wifi_ip") or request.remote_addr
 
     if "firmware_version" in data:
@@ -491,12 +493,20 @@ def heartbeat():
         node.wifi_ssid = data["wifi_ssid"]
     if "wifi_rssi" in data:
         node.wifi_rssi = data["wifi_rssi"]
+    if "wifi_channel" in data:
+        node.wifi_channel = data["wifi_channel"]
     if "free_heap" in data:
         node.free_heap = data["free_heap"]
     if "uptime_seconds" in data:
         node.uptime_seconds = data["uptime_seconds"]
     if "detections_since_boot" in data:
         node.detections_since_boot = data["detections_since_boot"]
+    if "ap_active" in data:
+        node.ap_active = bool(data["ap_active"])
+    if "error_count" in data:
+        node.last_error_count = int(data["error_count"])
+    if "last_http_code" in data:
+        node.last_http_code_reported = int(data["last_http_code"])
 
     # Update location if provided
     if data.get("latitude") is not None and data.get("longitude") is not None:
@@ -667,6 +677,26 @@ def _record_firmware_history(node, version, method):
         "method": method,
     })
     node.firmware_history = history[:50]
+
+
+def _resolve_backend_url(request_url: str, tenant_id: str) -> tuple[str, str | None]:
+    """Resolve the URL to bake into firmware.
+
+    Priority: explicit request value → tenant-wide setting. Returns (url, error).
+    Rejects obvious LAN IPs to prevent the 1.5.3 dead-end where a rebuilt
+    controller can't reach the backend once it leaves the local network.
+    """
+    from models import TenantSettings
+    url = (request_url or "").strip()
+    if not url:
+        ts = TenantSettings.query.filter_by(tenant_id=tenant_id).first()
+        url = (ts.firmware_backend_url or "").strip() if ts else ""
+    if not url:
+        return "", "Backend-URL nicht gesetzt. Trage sie in den Einstellungen ein (muss extern erreichbar sein, z. B. Live-View-URL)."
+    low = url.lower()
+    if any(low.startswith(p) for p in ("http://192.168.", "http://10.", "http://172.", "http://localhost", "http://127.")):
+        return url, "Backend-URL ist eine lokale Adresse. Controller müssen von überall erreichen können — nutze die öffentliche Live-View-URL."
+    return url, None
 
 
 def _resolve_wifi_networks(request_networks, tenant_id):
@@ -953,7 +983,6 @@ def build_firmware():
 
     node_id = data.get("node_id", "")
     hardware_type = data.get("hardware_type", "")
-    backend_url = data.get("backend_url", "")
     regenerate_key = data.get("regenerate_key", False)
     wifi_networks = data.get("wifi_networks", [])
     # Backward compat: single wifi_ssid/wifi_password still works
@@ -981,8 +1010,9 @@ def build_firmware():
     if hw not in ENV_MAP:
         return jsonify({"error": f"Ungültiger Hardware-Typ: {hw}"}), 400
 
-    if not backend_url:
-        return jsonify({"error": "backend_url erforderlich"}), 400
+    backend_url, url_err = _resolve_backend_url(data.get("backend_url", ""), g.tenant_id)
+    if url_err:
+        return jsonify({"error": url_err}), 400
 
     env_name = ENV_MAP[hw]
     pio_bin = os.path.join(VENV_BIN, "pio")
@@ -1124,7 +1154,6 @@ def build_firmware_stream():
     data = request.get_json(silent=True) or {}
     node_id = data.get("node_id", "")
     hardware_type = data.get("hardware_type", "")
-    backend_url = data.get("backend_url", "")
     regenerate_key = data.get("regenerate_key", False)
     wifi_networks = data.get("wifi_networks", [])
     if not wifi_networks:
@@ -1144,8 +1173,9 @@ def build_firmware_stream():
     hw = hardware_type or node.hardware_type
     if hw not in ENV_MAP:
         return jsonify({"error": f"Ungültiger Hardware-Typ: {hw}"}), 400
-    if not backend_url:
-        return jsonify({"error": "backend_url erforderlich"}), 400
+    backend_url, url_err = _resolve_backend_url(data.get("backend_url", ""), g.tenant_id)
+    if url_err:
+        return jsonify({"error": url_err}), 400
 
     if regenerate_key:
         node.api_key = secrets.token_hex(32)
@@ -1324,7 +1354,6 @@ def build_firmware_async():
     data = request.get_json(silent=True) or {}
     node_id = data.get("node_id", "")
     hardware_type = data.get("hardware_type", "")
-    backend_url = data.get("backend_url", "")
     regenerate_key = data.get("regenerate_key", False)
     wifi_networks = data.get("wifi_networks", [])
     if not wifi_networks:
@@ -1342,8 +1371,9 @@ def build_firmware_async():
     hw = hardware_type or node.hardware_type
     if hw not in ENV_MAP:
         return jsonify({"error": f"Ungültiger Hardware-Typ: {hw}"}), 400
-    if not backend_url:
-        return jsonify({"error": "backend_url erforderlich"}), 400
+    backend_url, url_err = _resolve_backend_url(data.get("backend_url", ""), g.tenant_id)
+    if url_err:
+        return jsonify({"error": url_err}), 400
 
     # Check if build already running
     if node_id in _build_jobs and _build_jobs[node_id].get("status") == "building":
@@ -1548,3 +1578,130 @@ def clear_connection_log():
 def get_board_info():
     """Return board-specific flash configuration for all hardware types."""
     return jsonify(BOARD_INFO)
+
+
+# ─── External Health Summary (service-token auth) ───────────
+
+@receiver_bp.route("/health-summary", methods=["GET"])
+@service_token_required("health_read")
+def health_summary():
+    """Return all persisted controller telemetry + status aggregates for this tenant.
+
+    Auth: X-Service-Token header (see /api/admin/service-tokens). Designed for
+    non-interactive callers (scheduled remote agents, external monitors).
+
+    The response includes EVERY field the firmware sends in its heartbeat plus
+    derived status (online/stale/offline), a compact audit snapshot for the last
+    24h, and the on-disk backup rotation state so the caller can verify the
+    backend is healthy end-to-end without needing filesystem access.
+    """
+    from models import ReceiverNode, AuditLog
+    nodes = ReceiverNode.query.filter_by(tenant_id=g.tenant_id).all()
+
+    now_ts = time.time()
+    receivers_out = []
+    for n in nodes:
+        age = int(now_ts - n.last_heartbeat) if n.last_heartbeat else None
+        status = n.status  # uses ONLINE_THRESHOLD=120, STALE_THRESHOLD=300
+        receivers_out.append({
+            "id": n.id,
+            "name": n.name,
+            "hardware_type": n.hardware_type,
+            "firmware_version": n.firmware_version,
+            "is_active": n.is_active,
+            "status": status,
+            "last_heartbeat": n.last_heartbeat,
+            "last_heartbeat_age_seconds": age,
+            "last_telemetry_at": n.last_telemetry_at,
+            # WiFi / network
+            "wifi_ssid": n.wifi_ssid,
+            "wifi_rssi": n.wifi_rssi,
+            "wifi_channel": n.wifi_channel,
+            "last_ip": n.last_ip,
+            "ap_active": n.ap_active,
+            # Runtime
+            "uptime_seconds": n.uptime_seconds,
+            "free_heap": n.free_heap,
+            "detections_since_boot": n.detections_since_boot,
+            "total_detections": n.total_detections,
+            # Error counters from the controller itself
+            "last_error_count": n.last_error_count,
+            "last_http_code_reported": n.last_http_code_reported,
+            # GPS
+            "latitude": n.last_latitude,
+            "longitude": n.last_longitude,
+            "location_accuracy": n.last_location_accuracy,
+            # OTA state
+            "ota_update_pending": n.ota_update_pending,
+            "ota_last_attempt": n.ota_last_attempt,
+            "ota_last_result": n.ota_last_result,
+            # Build metadata
+            "last_build_at": n.last_build_at,
+            "last_build_version": n.last_build_version,
+            "last_build_sha256": n.last_build_sha256,
+            "coverage_radius": n.coverage_radius,
+            "antenna_type": n.antenna_type,
+            "firmware_history": n.firmware_history or [],
+        })
+
+    # Audit snapshot: potentially destructive events in the last 24 h
+    cutoff = now_ts - 86400
+    audit_rows = (AuditLog.query
+                  .filter(AuditLog.tenant_id == g.tenant_id)
+                  .filter(AuditLog.timestamp >= cutoff)
+                  .filter(AuditLog.action.in_(["delete", "update"]))
+                  .filter(AuditLog.resource_type.in_(["tenant", "user", "receiver", "service_token"]))
+                  .order_by(AuditLog.timestamp.desc())
+                  .limit(50)
+                  .all())
+    audit_out = [{
+        "timestamp": a.timestamp,
+        "username": a.username,
+        "action": a.action,
+        "resource_type": a.resource_type,
+        "resource_name": a.resource_name,
+        "details": a.details,
+    } for a in audit_rows]
+
+    # Backup rotation state — helps the monitor detect a dead backend
+    try:
+        from backup import list_backups
+        backups = list_backups()
+        backup_summary = {
+            "count": len(backups),
+            "latest": backups[0] if backups else None,
+            "latest_age_seconds": int(now_ts - backups[0]["mtime"]) if backups else None,
+        }
+    except Exception as exc:
+        backup_summary = {"error": str(exc)}
+
+    # Aggregate counts
+    counts = {"online": 0, "stale": 0, "offline": 0}
+    for r in receivers_out:
+        counts[r["status"]] = counts.get(r["status"], 0) + 1
+
+    # DB stats + retention config — helps the agent spot runaway growth
+    try:
+        from retention import db_stats, DEFAULT_SYSTEM_LOG_DAYS, DEFAULT_AUDIT_LOG_DAYS
+        from flask import current_app
+        from models import TenantSettings
+        db_info = db_stats(current_app)
+        ts = TenantSettings.query.filter_by(tenant_id=g.tenant_id).first()
+        db_info["retention_days"] = {
+            "system_logs": ts.retention_system_logs_days if (ts and ts.retention_system_logs_days) else DEFAULT_SYSTEM_LOG_DAYS,
+            "audit_logs": ts.retention_audit_logs_days if (ts and ts.retention_audit_logs_days) else DEFAULT_AUDIT_LOG_DAYS,
+        }
+    except Exception as exc:
+        db_info = {"error": str(exc)}
+
+    return jsonify({
+        "tenant_id": g.tenant_id,
+        "server_time": now_ts,
+        "online_threshold_seconds": ReceiverNode.ONLINE_THRESHOLD,
+        "stale_threshold_seconds": ReceiverNode.STALE_THRESHOLD,
+        "counts": {"total": len(receivers_out), **counts},
+        "receivers": receivers_out,
+        "audit_24h": audit_out,
+        "backups": backup_summary,
+        "db_stats": db_info,
+    })

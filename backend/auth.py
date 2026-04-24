@@ -181,6 +181,65 @@ def node_auth_required(f):
     return decorated
 
 
+def service_token_required(required_scope: str = "health_read"):
+    """Decorator: requires a valid `X-Service-Token` header with the given scope.
+
+    Service tokens are tenant-scoped API keys meant for non-interactive callers
+    (scheduled agents, external monitors). They live in the `service_tokens`
+    table, are stored as SHA-256 hashes, and can be revoked without affecting
+    user accounts. On success, sets `g.tenant_id` and `g.service_token`.
+    """
+    import hashlib
+    from functools import wraps
+
+    def wrapper(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            # Accept either X-Service-Token (preferred) or Authorization: Bearer
+            # — the latter survives reverse proxies / the LabCore Live-View proxy
+            # that strip unknown X-* headers. Also allow ?service_token= for
+            # quick curl debugging (not recommended for production use).
+            raw = request.headers.get("X-Service-Token", "")
+            if not raw:
+                auth_hdr = request.headers.get("Authorization", "")
+                if auth_hdr.lower().startswith("bearer "):
+                    candidate = auth_hdr[7:].strip()
+                    # Only accept bearer tokens that look like our own service-token
+                    # format — avoids accidentally treating a stray JWT as a service
+                    # token (JWTs fail hash lookup anyway, but this is cleaner).
+                    if candidate.startswith("flightarc_svc_"):
+                        raw = candidate
+            if not raw:
+                raw = request.args.get("service_token", "")
+            if not raw:
+                return jsonify({"error": "Service-Token fehlt (X-Service-Token oder Authorization: Bearer)"}), 401
+            token_hash = hashlib.sha256(raw.encode()).hexdigest()
+
+            from models import ServiceToken, Tenant
+            st = ServiceToken.query.filter_by(token_hash=token_hash).first()
+            if not st:
+                return jsonify({"error": "Ungültiger Service-Token"}), 401
+            if st.revoked_at:
+                return jsonify({"error": "Service-Token widerrufen"}), 403
+            scopes = {s.strip() for s in (st.scopes or "").split(",") if s.strip()}
+            if required_scope not in scopes:
+                return jsonify({"error": f"Token-Scope '{required_scope}' fehlt"}), 403
+
+            tenant = db.session.get(Tenant, st.tenant_id)
+            if not tenant or not tenant.is_active:
+                return jsonify({"error": "Mandant deaktiviert"}), 403
+
+            import time as _t
+            st.last_used_at = _t.time()
+            db.session.commit()
+
+            g.tenant_id = st.tenant_id
+            g.service_token = st
+            return f(*args, **kwargs)
+        return decorated
+    return wrapper
+
+
 def seed_super_admin(app):
     """Create default super_admin user if none exists."""
     from models import User

@@ -250,11 +250,36 @@ void WiFiManager::loop() {
         }
     }
 
-    // ── STA reconnect: SKIP entirely when AP is active ──────
-    // WiFi.begin() disrupts the AP radio on ESP32-S3, making the AP
-    // invisible/unstable. Once AP is up, new credentials come only via
-    // captive portal (setStaCredentials). Reboot triggers a fresh scan.
-    if (_apActive) return;
+    // ── STA reconnect while AP is active (slow cadence) ─────
+    // Previously this path returned early, leaving the controller stuck in AP mode
+    // forever after a WiFi outage (router reboot, weak signal). Now we retry STA
+    // every WIFI_AP_STA_RETRY_MS and bring the AP down on success.
+    // WiFi.begin() can disrupt the AP radio briefly on ESP32-S3, so we use a slow
+    // cadence to keep the captive portal usable between retries.
+    if (_apActive) {
+        if (_staConfigured && _activeSsid.length() > 0
+            && (now - _lastApStaRetry > WIFI_AP_STA_RETRY_MS)) {
+            _lastApStaRetry = now;
+            Serial.printf("[WiFi] AP-mode STA retry: %s\n", _activeSsid.c_str());
+            WiFi.mode(WIFI_AP_STA);
+            WiFi.begin(_activeSsid.c_str(), _activePass.c_str());
+            // Short non-blocking wait — main loop handles portal DNS in parallel next tick
+            unsigned long start = millis();
+            while (millis() - start < 3000) {
+                if (WiFi.status() == WL_CONNECTED) {
+                    Serial.printf("[WiFi] AP-mode STA retry SUCCESS: %s\n", _activeSsid.c_str());
+                    _staConnectAttempts = 0;
+                    // Leave AP up — main loop's AP-shutdown path will retire it cleanly
+                    return;
+                }
+                delay(50);
+            }
+            // Failed — revert to AP-only to save heap and keep portal responsive
+            WiFi.mode(WIFI_AP);
+            Serial.println("[WiFi] AP-mode STA retry failed, back to AP-only");
+        }
+        return;
+    }
 
     if (_staConfigured && !connected && (now - _lastReconnectAttempt > WIFI_RECONNECT_MS)) {
         _lastReconnectAttempt = now;

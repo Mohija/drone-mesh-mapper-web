@@ -67,6 +67,10 @@
 #define WIFI_AP_TIMEOUT_MS      8000    // Start AP after 8s without STA connection
 #define WIFI_AP_SHUTDOWN_DELAY  5000    // Min grace period: wait 5s after STA connects before checking clients
 #define WIFI_AP_MAX_LINGER_MS   20000   // Max 20s AP alive after STA connected (even with clients)
+#define WIFI_AP_STA_RETRY_MS    30000   // While AP active: retry STA connection every 30s (stops AP-dead-end after signal loss)
+#define BACKEND_HEALTH_PROBE_MS 3000    // Timeout for GET /health pre-heartbeat probe
+#define BACKEND_DEAD_REBOOT_MS  600000  // Reboot if no successful heartbeat for 10 min despite WiFi
+#define BACKEND_RETRY_REBOOT    20      // Reboot after 20 consecutive failed heartbeats
 #define MAX_DETECTIONS          50      // Ring buffer size
 #define AP_SSID_PREFIX          "FlightArc-"
 #define WEB_SERVER_PORT         80

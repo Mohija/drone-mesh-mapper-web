@@ -742,6 +742,11 @@ export interface ReceiverNode {
   wifiRssi: number | null;
   freeHeap: number | null;
   uptimeSeconds: number | null;
+  wifiChannel: number | null;
+  apActive: boolean | null;
+  lastErrorCount: number | null;
+  lastHttpCodeReported: number | null;
+  lastTelemetryAt: number | null;
   totalDetections: number;
   detectionsSinceBoot: number;
   coverageRadius: number | null;
@@ -1330,4 +1335,52 @@ export async function fetchAddressBookSuggestions(): Promise<AddressBookSuggesti
   const res = await authFetch(`${API_BASE}/addressbook/suggestions`);
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
+}
+
+// ─── Service Tokens (tenant-scoped API keys for external monitors) ─────
+
+export interface ServiceToken {
+  id: string;
+  tenantId: string;
+  name: string;
+  tokenPrefix: string;
+  scopes: string[];
+  createdAt: number;
+  createdBy: string | null;
+  lastUsedAt: number | null;
+  revokedAt: number | null;
+  token?: string;  // only present right after creation
+}
+
+export async function fetchServiceTokens(): Promise<ServiceToken[]> {
+  const res = await authFetch(`${API_BASE}/admin/service-tokens`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function createServiceToken(name: string, scopes: string[] = ['health_read']): Promise<ServiceToken> {
+  const res = await authFetch(`${API_BASE}/admin/service-tokens`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, scopes }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `API error: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function revokeServiceToken(id: string): Promise<ServiceToken> {
+  const res = await authFetch(`${API_BASE}/admin/service-tokens/${id}/revoke`, { method: 'POST' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `API error: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function deleteServiceToken(id: string): Promise<void> {
+  const res = await authFetch(`${API_BASE}/admin/service-tokens/${id}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
 }

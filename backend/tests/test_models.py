@@ -8,7 +8,7 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from database import db
-from models import Tenant, User, TenantSettings, FlightZone, TrailArchive
+from models import Tenant, User, TenantSettings, FlightZone, TrailArchive, ReceiverNode
 
 
 class TestTenantModel:
@@ -270,6 +270,97 @@ class TestTrailArchiveModel:
             d = t.to_dict(include_trail=False)
             assert "trail" not in d
             assert d["pointCount"] == 2
+
+
+class TestFirmwareBackendUrlResolution:
+    """_resolve_backend_url pulls from TenantSettings and rejects LAN URLs
+    to prevent rebuilt controllers from being unreachable once they roam."""
+
+    def test_request_url_wins_over_settings(self, app, default_tenant_id):
+        from routes.receiver_routes import _resolve_backend_url
+        from models import TenantSettings
+        with app.app_context():
+            ts = TenantSettings.query.filter_by(tenant_id=default_tenant_id).first()
+            ts.firmware_backend_url = "https://settings.example.com"
+            db.session.commit()
+            url, err = _resolve_backend_url("https://explicit.example.com", default_tenant_id)
+            assert err is None
+            assert url == "https://explicit.example.com"
+
+    def test_falls_back_to_tenant_settings(self, app, default_tenant_id):
+        from routes.receiver_routes import _resolve_backend_url
+        from models import TenantSettings
+        with app.app_context():
+            ts = TenantSettings.query.filter_by(tenant_id=default_tenant_id).first()
+            ts.firmware_backend_url = "https://hub.example.com/api/live/flight-arc"
+            db.session.commit()
+            url, err = _resolve_backend_url("", default_tenant_id)
+            assert err is None
+            assert url == "https://hub.example.com/api/live/flight-arc"
+
+    def test_rejects_missing_everywhere(self, app, default_tenant_id):
+        from routes.receiver_routes import _resolve_backend_url
+        from models import TenantSettings
+        with app.app_context():
+            ts = TenantSettings.query.filter_by(tenant_id=default_tenant_id).first()
+            ts.firmware_backend_url = None
+            db.session.commit()
+            url, err = _resolve_backend_url("", default_tenant_id)
+            assert err is not None
+            assert "Einstellungen" in err
+
+    def test_rejects_lan_ip(self, app, default_tenant_id):
+        from routes.receiver_routes import _resolve_backend_url
+        with app.app_context():
+            for bad in ["http://192.168.1.5:3020", "http://10.0.0.1", "http://localhost:3020", "http://127.0.0.1"]:
+                url, err = _resolve_backend_url(bad, default_tenant_id)
+                assert err is not None, f"should reject {bad}"
+                assert "lokale" in err.lower()
+
+
+class TestReceiverNodeStatus:
+    """ONLINE/STALE/OFFLINE thresholds — widened in firmware 1.5.3 to absorb
+    one HTTP timeout + one retry without flipping to stale."""
+
+    def test_threshold_values(self):
+        assert ReceiverNode.ONLINE_THRESHOLD == 120
+        assert ReceiverNode.STALE_THRESHOLD == 300
+
+    def test_status_offline_when_never_seen(self, app, default_tenant_id):
+        with app.app_context():
+            n = ReceiverNode(tenant_id=default_tenant_id, name="NeverSeen",
+                             hardware_type="esp32-s3")
+            assert n.status == "offline"
+
+    def test_status_online_within_threshold(self, app, default_tenant_id):
+        with app.app_context():
+            n = ReceiverNode(tenant_id=default_tenant_id, name="Fresh",
+                             hardware_type="esp32-s3",
+                             last_heartbeat=time.time() - 60)
+            assert n.status == "online"
+
+    def test_status_online_at_100s_after_15s_widening(self, app, default_tenant_id):
+        # 100s > old 90s threshold but < new 120s threshold — used to flip to stale,
+        # now still online. Locks in the fix for cosmetic flicker.
+        with app.app_context():
+            n = ReceiverNode(tenant_id=default_tenant_id, name="JustBarely",
+                             hardware_type="esp32-s3",
+                             last_heartbeat=time.time() - 100)
+            assert n.status == "online"
+
+    def test_status_stale_between_thresholds(self, app, default_tenant_id):
+        with app.app_context():
+            n = ReceiverNode(tenant_id=default_tenant_id, name="Stale",
+                             hardware_type="esp32-s3",
+                             last_heartbeat=time.time() - 180)
+            assert n.status == "stale"
+
+    def test_status_offline_past_stale(self, app, default_tenant_id):
+        with app.app_context():
+            n = ReceiverNode(tenant_id=default_tenant_id, name="Gone",
+                             hardware_type="esp32-s3",
+                             last_heartbeat=time.time() - 400)
+            assert n.status == "offline"
 
 
 class TestCascadeDelete:

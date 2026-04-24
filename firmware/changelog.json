@@ -1,6 +1,18 @@
 {
   "versions": [
     {
+      "version": "1.5.3",
+      "date": "2026-04-24",
+      "hardware": ["esp32-s3", "esp32-c3", "esp8266"],
+      "changes": [
+        "WiFi: STA-Reconnect läuft jetzt auch bei aktivem AP weiter (30s-Kadenz) — behebt Dead-End nach WiFi-Ausfall, bei dem der Controller für immer im AP-Modus hing",
+        "Backend-Watchdog: Nach 10 Minuten ohne erfolgreichen Kontakt zum Backend rebootet der Controller automatisch (DNS/TLS/Sockets werden frisch initialisiert)",
+        "Backend-Watchdog: Nach 20 aufeinanderfolgenden HTTP-Fehlern erfolgt sofortiger Reboot",
+        "Backend-Reachability: GET /health-Probe (3s Timeout) vor jedem Heartbeat — LED_NO_BACKEND erscheint sofort statt nach 10s Timeout",
+        "Backend: ONLINE_THRESHOLD von 90s auf 120s angehoben — verhindert kosmetisches Flackern bei einzelnen Timeouts"
+      ]
+    },
+    {
       "version": "1.5.2",
       "date": "2026-03-17",
       "hardware": ["esp32-s3", "esp32-c3", "esp8266"],

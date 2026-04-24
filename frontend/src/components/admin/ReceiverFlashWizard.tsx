@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { startBuildAsync, pollBuildStatus, downloadFirmware, fetchWifiNetworks } from '../../api';
+import { startBuildAsync, pollBuildStatus, downloadFirmware, fetchWifiNetworks, fetchSettings } from '../../api';
 import type { ReceiverNode, FirmwareCheck } from '../../api';
 
 interface Props {
@@ -257,7 +257,9 @@ function BootModeInstructions({ hardwareType, compact }: { hardwareType: string;
 
 export default function ReceiverFlashWizard({ node, onClose, regenerateKey: _regenKeyProp = false }: Props) {
   const [step, setStep] = useState<Step>('intro');
-  const [backendUrl, setBackendUrl] = useState(window.location.origin);
+  // Backend URL is managed centrally in Einstellungen (firmware_backend_url)
+  const [backendUrl, setBackendUrl] = useState('');
+  const [backendUrlLoaded, setBackendUrlLoaded] = useState(false);
   const [wifiNetworks, setWifiNetworks] = useState<WifiNetwork[]>([]);
   const [tenantNetworksLoaded, setTenantNetworksLoaded] = useState(false);
   // API key: only regenerate if user explicitly checks the box (or first build)
@@ -273,13 +275,17 @@ export default function ReceiverFlashWizard({ node, onClose, regenerateKey: _reg
   const isEsp8266 = node.hardwareType === 'esp8266';
   const flashInfo = FLASH_INFO[node.hardwareType] || FLASH_INFO['esp32-s3'];
 
-  // Load tenant WiFi networks on mount
+  // Load tenant WiFi networks + firmware backend URL on mount
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const tenantNets = await fetchWifiNetworks();
+        const [tenantNets, settings] = await Promise.all([
+          fetchWifiNetworks(),
+          fetchSettings().catch(() => ({ sources: {}, firmware_backend_url: '' })),
+        ]);
         if (cancelled) return;
+        setBackendUrl(settings.firmware_backend_url || '');
         if (tenantNets.length > 0) {
           setWifiNetworks(tenantNets.map(n => ({
             ssid: n.ssid,
@@ -295,7 +301,10 @@ export default function ReceiverFlashWizard({ node, onClose, regenerateKey: _reg
           setWifiNetworks([{ ssid: '', password: '' }]);
         }
       } finally {
-        if (!cancelled) setTenantNetworksLoaded(true);
+        if (!cancelled) {
+          setTenantNetworksLoaded(true);
+          setBackendUrlLoaded(true);
+        }
       }
     })();
     return () => { cancelled = true; };
@@ -528,14 +537,26 @@ export default function ReceiverFlashWizard({ node, onClose, regenerateKey: _reg
               mit dem stärksten verfügbaren.
             </div>
             <div style={{ marginBottom: 12 }}>
-              <label style={labelStyle}>Backend-URL *</label>
-              <input
+              <label style={labelStyle}>Backend-URL</label>
+              <div
                 data-testid="flash-backend-url"
-                value={backendUrl}
-                onChange={e => setBackendUrl(e.target.value)}
-                placeholder="https://your-server.de:3020"
-                style={inputStyle}
-              />
+                style={{
+                  ...inputStyle,
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  background: 'var(--bg-tertiary)', cursor: 'default',
+                  fontFamily: 'monospace', fontSize: 12,
+                  wordBreak: 'break-all',
+                  color: backendUrl ? 'var(--text-primary)' : 'var(--status-error)',
+                }}
+              >
+                {!backendUrlLoaded
+                  ? <span style={{ color: 'var(--text-muted)' }}>Lade…</span>
+                  : backendUrl || 'Nicht gesetzt — in Einstellungen eintragen'}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                Wird zentral unter <strong>Einstellungen → Firmware Backend-URL</strong> gepflegt.
+                Muss extern erreichbar sein (keine LAN-IP).
+              </div>
             </div>
 
             <div style={{ marginBottom: 16 }}>

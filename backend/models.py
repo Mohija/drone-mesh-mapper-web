@@ -157,6 +157,14 @@ class TenantSettings(db.Model):
     log_level = db.Column(db.String(10), nullable=True)
     wifi_networks = db.Column(JSON, nullable=True, default=list)  # [{ssid, password}] max 3
     audit_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    # External URL baked into firmware at build time. Must be reachable from
+    # anywhere a controller roams (public domain via Cloudflare tunnel, e.g.
+    # https://hub.dasilvafelix.de/api/live/flight-arc). Never a LAN IP.
+    firmware_backend_url = db.Column(db.String(255), nullable=True)
+    # Retention caps — tables grow without bound unless pruned. Applied by
+    # backend/retention.py at startup and hourly. See DATABASE_LIFECYCLE.md.
+    retention_system_logs_days = db.Column(db.Integer, nullable=True)  # default 14 (see retention.py)
+    retention_audit_logs_days = db.Column(db.Integer, nullable=True)   # default 90 (see retention.py)
     created_at = db.Column(db.Float, default=_now, nullable=False)
     updated_at = db.Column(db.Float, default=_now, onupdate=_now, nullable=False)
 
@@ -181,6 +189,9 @@ class TenantSettings(db.Model):
             "log_level": self.log_level or "info",
             "wifi_networks": masked_wifi,
             "audit_enabled": self.audit_enabled,
+            "firmware_backend_url": self.firmware_backend_url or "",
+            "retention_system_logs_days": self.retention_system_logs_days,
+            "retention_audit_logs_days": self.retention_audit_logs_days,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
@@ -293,8 +304,10 @@ class ReceiverNode(db.Model):
     __tablename__ = "receiver_nodes"
 
     HARDWARE_TYPES = ("esp32-s3", "esp32-c3", "esp8266")
-    # Status thresholds (seconds since last heartbeat)
-    ONLINE_THRESHOLD = 90
+    # Status thresholds (seconds since last heartbeat).
+    # Firmware sends every 30 s → 120 s gives four heartbeat periods of slack
+    # to absorb one transient HTTP timeout + one retry without flipping to stale.
+    ONLINE_THRESHOLD = 120
     STALE_THRESHOLD = 300
 
     id = db.Column(db.String(8), primary_key=True, default=_uuid8)
@@ -317,6 +330,13 @@ class ReceiverNode(db.Model):
     wifi_rssi = db.Column(db.Integer, nullable=True)
     free_heap = db.Column(db.Integer, nullable=True)
     uptime_seconds = db.Column(db.Integer, nullable=True)
+
+    # Full controller telemetry (added in migration 010, persisted from every heartbeat)
+    wifi_channel = db.Column(db.Integer, nullable=True)
+    ap_active = db.Column(db.Boolean, nullable=True)
+    last_error_count = db.Column(db.Integer, nullable=True)
+    last_http_code_reported = db.Column(db.Integer, nullable=True)
+    last_telemetry_at = db.Column(db.Float, nullable=True)  # latest heartbeat receive-time
 
     # Detection counters
     total_detections = db.Column(db.Integer, default=0, nullable=False)
@@ -373,6 +393,11 @@ class ReceiverNode(db.Model):
             "wifiRssi": self.wifi_rssi,
             "freeHeap": self.free_heap,
             "uptimeSeconds": self.uptime_seconds,
+            "wifiChannel": self.wifi_channel,
+            "apActive": self.ap_active,
+            "lastErrorCount": self.last_error_count,
+            "lastHttpCodeReported": self.last_http_code_reported,
+            "lastTelemetryAt": self.last_telemetry_at,
             "totalDetections": self.total_detections,
             "detectionsSinceBoot": self.detections_since_boot,
             "status": self.status,
@@ -394,6 +419,45 @@ class ReceiverNode(db.Model):
         if include_key:
             result["apiKey"] = self.api_key
         return result
+
+
+class ServiceToken(db.Model):
+    """Scoped API token for external systems (health-check agents, monitoring).
+
+    The raw token is never stored — only its SHA-256 hash. A short prefix is
+    kept to help the admin identify tokens in the UI. Scopes are a
+    comma-separated list; today we only ship `health_read`.
+    """
+    __tablename__ = "service_tokens"
+
+    VALID_SCOPES = {"health_read"}
+
+    id = db.Column(db.String(8), primary_key=True, default=_uuid8)
+    tenant_id = db.Column(db.String(8), db.ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    token_hash = db.Column(db.String(64), unique=True, nullable=False)
+    token_prefix = db.Column(db.String(12), nullable=False)  # first 8 chars of the raw token, shown in UI
+    scopes = db.Column(db.String(255), nullable=False, default="health_read")
+    created_at = db.Column(db.Float, default=_now, nullable=False)
+    created_by = db.Column(db.String(100), nullable=True)
+    last_used_at = db.Column(db.Float, nullable=True)
+    revoked_at = db.Column(db.Float, nullable=True)
+
+    def to_dict(self, include_raw_token: str | None = None):
+        return {
+            "id": self.id,
+            "tenantId": self.tenant_id,
+            "name": self.name,
+            "tokenPrefix": self.token_prefix,
+            "scopes": [s.strip() for s in (self.scopes or "").split(",") if s.strip()],
+            "createdAt": self.created_at,
+            "createdBy": self.created_by,
+            "lastUsedAt": self.last_used_at,
+            "revokedAt": self.revoked_at,
+            # The raw token is only ever returned at creation time; the caller
+            # passes it in here explicitly so the admin can copy it once.
+            **({"token": include_raw_token} if include_raw_token else {}),
+        }
 
 
 class DroneAddressBookEntry(db.Model):

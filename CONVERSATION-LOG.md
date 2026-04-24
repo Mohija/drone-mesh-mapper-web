@@ -2,7 +2,7 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-03-23 (Install/Update/Uninstall-Skripte)
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-04-24 (Firmware 1.5.3: Backend-Watchdog + WiFi-Reconnect-Fix)
 - **Typ:** Projekt | **Status:** Development
 
 ## Offene Aufgaben
@@ -24,6 +24,108 @@
 - [ ] Docker Deployment Package
 
 ## Änderungshistorie
+
+### 2026-04-24 - Frontend: Health-Panel pro Controller (Klick-to-Expand)
+**Ziel:** Dedicated Health-Ansicht beim Klick auf einzelnen Controller in der Admin-Empfänger-Liste — dieselben Regeln wie der Remote-Agent, visuell aufbereitet.
+
+**Änderungen:**
+- **`frontend/src/components/admin/ReceiverHealthPanel.tsx`** (neu): Kapselt die gesamte Health-Darstellung für einen einzelnen Controller.
+  - **Status-Pill** (online/stale/offline) mit Heartbeat-Alter (Sekunden → Minuten → Stunden → Tage).
+  - **Alert-Banner** (rot bei Fehlern, gelb bei Warnungen) listet nur dann auf, wenn Checks anschlagen.
+  - **3 Panels**: Verbindung (SSID, Kanal, IP, RSSI-Bar) · Laufzeit (FW, Uptime, Erkennungen, Heap-Bar mit Hardware-spezifischer Kapazität 80k/200k/320k KB) · Backend-Kommunikation (Fehlerzähler, HTTP-Code, OTA, AP-Modus).
+  - **Checks-Liste** mit ✓/⚠/✗-Icons — dieselben Schwellen wie der Scheduled Remote Agent (RSSI, Heap, Error-Counter, Firmware-Abweichung, AP-Modus, Heartbeat-Status, OTA).
+  - **Auxiliary-Row** (ID, Hardware, Standort, Abdeckung).
+- **`frontend/src/components/admin/ReceiverList.tsx`**: Alte Feldliste im Desktop-Expand und neu im Mobile-Card-Layout durch `<ReceiverHealthPanel node={node} />` ersetzt. Mobile-Card-Header wurde klickbar gemacht (toggelt Expand mit ▸/▾-Chevron), damit die Regel „bei isMobile-Weichen IMMER beide Layouts" erfüllt ist.
+- **Tests** `ReceiverHealthPanel.test.tsx`: 10 neue Vitest-Tests — healthy baseline, low RSSI warnung, very low RSSI error, AP-Modus, niedriger Heap, hoher Fehlerzähler, veraltete Firmware, offline-Status, nie-gesehen-Fall, Auxiliary-Info.
+
+**Test-Status:** 10/10 neue Vitest-Tests grün. Keine Regression in 81/83 übriger Tests (2 failing Tests in `noFlyZones.test.ts` waren bereits vorher kaputt, unabhängig).
+
+**Dateien:** `frontend/src/components/admin/ReceiverHealthPanel.tsx` (neu), `frontend/src/components/admin/ReceiverHealthPanel.test.tsx` (neu), `frontend/src/components/admin/ReceiverList.tsx`.
+
+### 2026-04-24 - Data-Retention Framework: Auto-Prune von system_logs + audit_logs
+**Anlass:** `system_logs` waren bei 20.000 Zeilen / 35 Tagen und wuchsen unkontrolliert (der vorhandene 10.000-Count-Limit im `DatabaseLogHandler` lief nicht zuverlässig, nur count-basiert, nicht zeitbasiert). `audit_logs`-Cleanup lief bisher nur via 2%-Random-Chance pro Audit-Call (ebenfalls unzuverlässig).
+
+**Änderungen:**
+- **`backend/retention.py`** (neu): zentrales `run_retention(app)` + `start_retention_thread(app)` (stündliches Prune + sofort beim Startup) + `db_stats(app)` (Zeilen + Dateigröße). Retention sowohl zeitbasiert (Tage) als auch count-basiert (Fail-Safe `SYSTEM_LOG_HARD_CAP=20000`).
+- **Migration 012** (`tenant_settings`): neue Spalten `retention_system_logs_days` (default 14 Tage), `retention_audit_logs_days` (default 90 Tage). Per-Tenant-Overrides möglich (1–365 Tage, clamp gegen 0/negative).
+- `backend/app.py`: Retention-Thread wird bei jedem Start gekickt. `settings.py`: `_read_from_db` + `_write_to_db` unterstützen die neuen Felder mit Validierung.
+- `backend/routes/admin_routes.py`: neue Endpoints `POST /api/admin/retention/run` (manueller Trigger) + `GET /api/admin/db-stats`.
+- `backend/routes/receiver_routes.py`: `/api/receivers/health-summary` liefert zusätzlich `db_stats` (Tabellen-Zeilen, Dateigröße, effektive Retention-Tage).
+- `backend/manage.py`: neue Subcommands `cleanup` (sofortiger Prune) und `db-stats` (Snapshot-Anzeige).
+- **Frontend `SettingsTab.tsx`**: neuer Block "Datenaufbewahrung" mit zwei Eingabefeldern (System-Logs, Audit-Logs, jeweils 1–365 Tage) + „Jetzt aufräumen"-Button.
+- **`DATABASE_LIFECYCLE.md`**: Abschnitt 6b "Datenaufbewahrung" ergänzt.
+- **Remote-Agent**-Prompt erweitert um DB-Size + system_logs-Counter-Alerts (FEHLER ab >50.000 system_logs oder DB >500 MB, WARNUNG ab >20.000 oder +50 MB Wachstum).
+- Tests: `test_retention.py` mit 7 neuen Tests (Zeit-Prune, Per-Tenant-Override, Audit-Prune, Hard-Count-Cap, 0-Tage-Clamp, db_stats, Health-Summary-Integration).
+- **Sofortiger Effekt beim ersten Migration-Run:** 19.722 alte `system_logs` in 0.087 s gelöscht, DB blieb 2.2 MB.
+
+**Test-Status:** 313/313 Backend-Tests grün.
+
+**Dateien:** `backend/retention.py`, `backend/migrations.py`, `backend/models.py`, `backend/app.py`, `backend/settings.py`, `backend/manage.py`, `backend/routes/admin_routes.py`, `backend/routes/receiver_routes.py`, `backend/tests/test_retention.py`, `frontend/src/types/drone.ts`, `frontend/src/components/admin/SettingsTab.tsx`, `DATABASE_LIFECYCLE.md`.
+
+### 2026-04-24 - Service-Tokens + /health-summary + Remote-Health-Agent
+**Ziel:** Täglicher externer Health-Check aller Controller (inkl. vollständiger Telemetrie) via Scheduled Remote Agent — ohne User-JWT, ohne lokalen Zugriff auf den Host.
+
+**Änderungen:**
+- Migration **010_receiver_full_telemetry**: neue Spalten `wifi_channel`, `ap_active`, `last_error_count`, `last_http_code_reported`, `last_telemetry_at` — persistieren jetzt ALLE Heartbeat-Felder, die der Controller sendet (vorher nur in-memory im Connection-Log).
+- Migration **011_service_tokens**: neue Tabelle `service_tokens` (tenant-scoped API-Keys mit Scope `health_read`, SHA-256 Hash statt Plaintext, revoke/delete separat).
+- `models.py`: `ReceiverNode` + neue Felder + `ServiceToken` Model.
+- `routes/receiver_routes.py`: `heartbeat()` speichert alle Telemetrie-Felder, neuer Endpoint `GET /api/receivers/health-summary` mit vollständigem JSON (Counts, Controller-Telemetrie, Audit-Snapshot 24 h, Backup-Rotation).
+- `auth.py`: neuer Decorator `service_token_required(scope)` akzeptiert `X-Service-Token` Header + `Authorization: Bearer` (Live-View-Proxy-kompatibel) + `?service_token=` (debug).
+- `routes/admin_routes.py`: CRUD für Service-Tokens (`GET/POST /api/admin/service-tokens`, `POST .../revoke`, `DELETE`).
+- Frontend:
+  - `api.ts`: neue Funktionen `fetchServiceTokens`/`createServiceToken`/`revokeServiceToken`/`deleteServiceToken`, `ReceiverNode` Typ um neue Telemetrie-Felder erweitert.
+  - `SettingsTab.tsx`: neuer Block "Service-Tokens" mit Liste/Erstellen (Wert wird nur einmalig angezeigt)/Widerrufen/Löschen.
+  - `ReceiverList.tsx`: Detail-View zeigt jetzt zusätzlich `wifi_channel`, `ap_active`, `last_error_count`, `last_http_code_reported`, `last_telemetry_at`, `total_detections`.
+  - `HelpPage.tsx`: Troubleshooting-Tabelle um Zeile für "Tägliche Health-Checks extern" erweitert.
+- Tests: neue Datei `test_health_summary.py` mit 9 Tests (Auth-Matrix: missing/wrong/revoked/wrong-scope/X-header/Bearer/non-service-bearer + Schema-Vollständigkeit + Heartbeat-Persistenz).
+- Scheduled Remote Agent `flightarc-daily-health` (Routine-ID `trig_01S4joJEyHXf6LR4CTzuBKjm`, Cron `0 7 * * *` = täglich 09:00 Europe/Berlin): ruft `/api/receivers/health-summary` über die Live-View-URL ab, analysiert Zustand (Watchdog-Reboot-Detektion, WiFi-Qualität, Fehlerzähler, Audit-Anomalien, Backup-Rotation), meldet OK/Warnung/Fehler.
+- Initial-Token `flightarc-daily-health-remote` für den Agenten in der DB (tenant `daba457f`).
+- 306/306 Backend-Tests grün.
+
+**Dateien:** `backend/migrations.py`, `backend/models.py`, `backend/auth.py`, `backend/routes/admin_routes.py`, `backend/routes/receiver_routes.py`, `backend/tests/test_health_summary.py`, `frontend/src/api.ts`, `frontend/src/components/admin/SettingsTab.tsx`, `frontend/src/components/admin/ReceiverList.tsx`, `frontend/src/components/HelpPage.tsx`.
+
+### 2026-04-24 - DB-Lifecycle: versionierte Migrationen, Auto-Backup, Management-CLI, Test-Isolation
+**Anlass:** Destruktiver pytest-Fixture in `conftest.py` löschte am selben Tag den Mandanten „FW Brake" und zwei User aus der Produktions-DB. Rettung durch `git checkout HEAD -- backend/data/flightarc.db`. Als Folge wurde ein vollständiges DB-Lifecycle-Konzept eingeführt, damit sich der Incident nicht wiederholt.
+
+**Änderungen:**
+- **`DATABASE_LIFECYCLE.md`** (neu, Projekt-Root) — verbindlicher Prozess: Grundprinzipien, Migrationen hinzufügen, Update-Prozess, Rollback, Notfall-Checkliste, Verbotene Muster.
+- **`backend/backup.py`** — `create_backup(reason)`, `list_backups()`, `restore_backup(name)`, `rotate_backups(max=30)`. Snapshots inkl. WAL+SHM unter `backend/data/backups/YYYYMMDD-HHMMSS-<reason>.db`.
+- **`backend/migrations.py`** — Registry + Runner. 9 Migrationen (alle bestehenden ad-hoc-ALTERs aus `app.py` überführt + `schema_migrations`-Tabelle). Additiv, idempotent, automatisch mit Pre-Migration-Backup.
+- **`backend/manage.py`** — CLI: `backup`, `list-backups`, `restore --confirm`, `migrate status|run`, `verify-data`.
+- **`backend/app.py`** — alle inline-ALTER-Statements entfernt, durch `run_migrations()` ersetzt; zusätzlicher Startup-Backup bei jedem Start.
+- **`backend/data/backups/.gitignore`** — Backups bleiben lokal.
+- **`backend/tests/conftest.py`** — `DATABASE_URL`-Override vor jedem App-Import, `atexit`-Cleanup der Temp-DB, Runtime-Hard-Guard `pytest.exit(...)` gegen Production-DB-Zugriff.
+- **`backend/tests/test_lifecycle.py`** — 7 neue Tests: Backup-Erstellung, Rotation, Skip-when-empty, Migration-Applied-Tracking, Idempotenz, Refuse-without-backup, Conftest-Guard.
+- **`README.md`** — neuer Abschnitt "Update- und Backup-Prozess".
+- **`~/.claude/rules/database-lifecycle.md`** (global) — projektübergreifende Regel für alle LabCore-Projekte mit DB.
+- Memory: `feedback_db_lifecycle.md`, `gotcha_tests_production_db.md`.
+
+**Test-Status:** 297/297 Backend-Tests grün (7 neue Lifecycle-Tests).
+
+**Dateien:** `DATABASE_LIFECYCLE.md`, `backend/backup.py`, `backend/migrations.py`, `backend/manage.py`, `backend/app.py`, `backend/data/backups/.gitignore`, `backend/tests/conftest.py`, `backend/tests/test_lifecycle.py`, `README.md`, `~/.claude/rules/database-lifecycle.md`, `~/.claude/CLAUDE.md`.
+
+### 2026-04-24 - Firmware Backend-URL zentral in Einstellungen + Anzeige
+**Änderungen:**
+- Neues Feld `TenantSettings.firmware_backend_url` (String, via Migration in `app.py`) — einzige Quelle für die URL, die beim Firmware-Build in Controller eingebrannt wird.
+- Backend `routes/receiver_routes.py`: Neuer `_resolve_backend_url()`-Helper; alle drei Build-Endpoints (`build_firmware`, `build_firmware_stream`, `build_firmware_async`) nehmen die URL primär aus TenantSettings (mit Request-Override-Option). LAN-IPs (192.168.*, 10.*, 127.*, localhost) werden abgewiesen, damit Controller nie mit einer nur lokal erreichbaren URL gebaut werden.
+- Frontend `SettingsPage.tsx`: Neues URL-Input-Feld „Firmware Backend-URL" mit Hilfetext und Beispiel-URL.
+- Frontend `ReceiverList.tsx`: Banner im Empfänger-Bereich zeigt die aktuell gesetzte URL (rot wenn leer).
+- Frontend `ReceiverFlashWizard.tsx`: URL ist jetzt read-only (nur Anzeige), da zentral in Einstellungen gepflegt.
+- 4 neue Backend-Tests in `test_models.py` für `_resolve_backend_url` (Request-Override, Fallback auf Settings, Fehler bei Fehlen, Ablehnung lokaler IPs).
+- Seed-Wert für Default-Tenant gesetzt: `https://hub.dasilvafelix.de/api/live/flight-arc`.
+
+**Dateien:** `backend/app.py`, `backend/models.py`, `backend/settings.py`, `backend/routes/receiver_routes.py`, `backend/tests/test_models.py`, `frontend/src/types/drone.ts`, `frontend/src/components/SettingsPage.tsx`, `frontend/src/components/admin/ReceiverList.tsx`, `frontend/src/components/admin/ReceiverFlashWizard.tsx`.
+
+### 2026-04-24 - Firmware 1.5.3: Backend-Watchdog, WiFi-Reconnect-Fix, ONLINE_THRESHOLD 120s
+**Änderungen:**
+- **Root Cause:** Controller fielen nach Tagen Laufzeit dauerhaft aus der Online-Anzeige. Zwei Ursachen: (1) `wifi_manager.cpp` stoppte den STA-Reconnect komplett sobald der AP aktiv war → Controller hing nach einem WiFi-Ausfall für immer im AP-Modus. (2) Kein Recovery-Pfad wenn WiFi steht, aber Backend nicht erreichbar ist.
+- **Fix A (WiFi-Reconnect bei aktivem AP):** `wifi_manager.cpp` retry alle 30s STA-Verbindung auch bei aktivem AP; bei Erfolg wird AP vom Haupt-Loop geordnet heruntergefahren.
+- **Fix B (Backend-Watchdog):** `main.cpp` + `http_client.h/cpp` — `_lastSuccessMs` wird bei jedem erfolgreichen POST/Probe gesetzt. Nach 10 min ohne erfolgreichen Kontakt trotz WiFi oder nach 20 aufeinanderfolgenden Fehlern ruft die Firmware `ESP.restart()` auf.
+- **Fix C (Health-Probe):** `checkHealth()` in `FlightArcClient` führt vor jedem Heartbeat einen `GET /health` (3s Timeout) aus — LED_NO_BACKEND erscheint sofort statt erst nach 10s HTTP-Timeout.
+- **Fix D (ONLINE_THRESHOLD):** `models.py` 90s → 120s. Vier Heartbeat-Perioden Toleranz statt drei — absorbiert einen einzelnen Timeout + einen Retry ohne Flackern.
+- `firmware/changelog.json` auf 1.5.3 hochgezählt. `dummy_receiver.py` + `simulation_manager.py` mit analogem Verhalten synchronisiert. `HelpPage.tsx` Troubleshooting-Tabelle + Status-Fenster-Schwelle aktualisiert. 5 neue Tests in `test_models.py` für `ReceiverNode.status`-Schwellen.
+
+**Dateien:** `firmware/src/config.h`, `firmware/src/wifi_manager.{h,cpp}`, `firmware/src/http_client.{h,cpp}`, `firmware/src/main.cpp`, `firmware/changelog.json`, `backend/models.py`, `backend/services/simulation_manager.py`, `backend/tests/test_models.py`, `examples/dummy_receiver.py`, `frontend/src/components/HelpPage.tsx`, `manifest.json`.
 
 ### 2026-03-23 - Install/Update/Uninstall-Skripte + Dokumentation
 - **Install-Skripte** (`install.py`, `install.ps1`): Automatische Neuinstallation oder Update. Erkennt bestehende Installation, zieht Git-Updates, aktualisiert Dependencies, baut Frontend. Datenbank bleibt bei Update IMMER erhalten, optional `--reset-db` für expliziten Reset mit Sicherheitsabfrage.

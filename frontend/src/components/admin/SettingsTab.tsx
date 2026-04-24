@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   fetchMissionZoneDefaults, updateMissionZoneDefaults,
   fetchWifiNetworks, updateWifiNetworks,
+  fetchServiceTokens, createServiceToken, revokeServiceToken, deleteServiceToken,
   authFetch, API_BASE,
-  type MissionZoneDefaults, type TenantWifiNetwork,
+  type MissionZoneDefaults, type TenantWifiNetwork, type ServiceToken,
 } from '../../api';
 import { useIsMobile } from '../../useIsMobile';
 
@@ -37,6 +38,26 @@ export default function SettingsTab() {
   const [wifiError, setWifiError] = useState<string | null>(null);
   const [wifiSuccess, setWifiSuccess] = useState<string | null>(null);
 
+  // Firmware Backend URL (baked into receiver controllers at build time)
+  const [firmwareBackendUrl, setFirmwareBackendUrl] = useState('');
+  const [firmwareUrlSaving, setFirmwareUrlSaving] = useState(false);
+  const [firmwareUrlError, setFirmwareUrlError] = useState<string | null>(null);
+  const [firmwareUrlSuccess, setFirmwareUrlSuccess] = useState<string | null>(null);
+
+  // Data retention caps
+  const [retentionSystemDays, setRetentionSystemDays] = useState<string>('');
+  const [retentionAuditDays, setRetentionAuditDays] = useState<string>('');
+  const [retentionSaving, setRetentionSaving] = useState(false);
+  const [retentionError, setRetentionError] = useState<string | null>(null);
+  const [retentionSuccess, setRetentionSuccess] = useState<string | null>(null);
+
+  // Service tokens (API keys for external health-check agents)
+  const [serviceTokens, setServiceTokens] = useState<ServiceToken[]>([]);
+  const [tokensLoading, setTokensLoading] = useState(true);
+  const [newTokenName, setNewTokenName] = useState('');
+  const [newlyCreatedToken, setNewlyCreatedToken] = useState<ServiceToken | null>(null);
+  const [tokenError, setTokenError] = useState<string | null>(null);
+
   const loadDefaults = useCallback(async () => {
     try {
       const data = await fetchMissionZoneDefaults();
@@ -67,6 +88,89 @@ export default function SettingsTab() {
     }
   }, []);
 
+  const loadFirmwareBackendUrl = useCallback(async () => {
+    try {
+      const res = await authFetch(`${API_BASE}/settings`);
+      if (res.ok) {
+        const data = await res.json();
+        setFirmwareBackendUrl(data.firmware_backend_url || '');
+        setRetentionSystemDays(data.retention_system_logs_days != null ? String(data.retention_system_logs_days) : '');
+        setRetentionAuditDays(data.retention_audit_logs_days != null ? String(data.retention_audit_logs_days) : '');
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  const handleRetentionSave = async () => {
+    setRetentionSaving(true);
+    setRetentionError(null);
+    setRetentionSuccess(null);
+    try {
+      const parseDays = (v: string): number | null => {
+        if (!v.trim()) return null;
+        const n = parseInt(v, 10);
+        if (isNaN(n) || n < 1 || n > 365) throw new Error('Tage müssen zwischen 1 und 365 liegen (leer = Default)');
+        return n;
+      };
+      const body = {
+        retention_system_logs_days: parseDays(retentionSystemDays),
+        retention_audit_logs_days: parseDays(retentionAuditDays),
+      };
+      const res = await authFetch(`${API_BASE}/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      setRetentionSuccess('Retention-Regeln gespeichert');
+      setTimeout(() => setRetentionSuccess(null), 3000);
+    } catch (e: unknown) {
+      setRetentionError(e instanceof Error ? e.message : 'Speichern fehlgeschlagen');
+    } finally {
+      setRetentionSaving(false);
+    }
+  };
+
+  const handleCleanupNow = async () => {
+    if (!window.confirm('Jetzt alte Logs nach den gesetzten Retention-Regeln löschen?')) return;
+    try {
+      const res = await authFetch(`${API_BASE}/admin/retention/run`, { method: 'POST' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setRetentionSuccess(`Bereinigt: ${data.system_logs_pruned} system_logs, ${data.audit_logs_pruned} audit_logs, ${data.trail_archives_pruned} trail_archives`);
+      setTimeout(() => setRetentionSuccess(null), 5000);
+    } catch (e: unknown) {
+      setRetentionError(e instanceof Error ? e.message : 'Cleanup fehlgeschlagen');
+    }
+  };
+
+  const handleFirmwareUrlSave = async () => {
+    setFirmwareUrlSaving(true);
+    setFirmwareUrlError(null);
+    setFirmwareUrlSuccess(null);
+    try {
+      const res = await authFetch(`${API_BASE}/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ firmware_backend_url: firmwareBackendUrl.trim() }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      setFirmwareBackendUrl(data.firmware_backend_url || '');
+      setFirmwareUrlSuccess('Backend-URL gespeichert');
+      setTimeout(() => setFirmwareUrlSuccess(null), 3000);
+    } catch (e: unknown) {
+      setFirmwareUrlError(e instanceof Error ? e.message : 'Speichern fehlgeschlagen');
+    } finally {
+      setFirmwareUrlSaving(false);
+    }
+  };
+
   const loadAuditEnabled = useCallback(async () => {
     try {
       const res = await authFetch(`${API_BASE}/admin/audit/enabled`);
@@ -93,11 +197,59 @@ export default function SettingsTab() {
     finally { setAuditToggling(false); }
   };
 
+  const loadServiceTokens = useCallback(async () => {
+    try {
+      setServiceTokens(await fetchServiceTokens());
+    } catch (e: unknown) {
+      setTokenError(e instanceof Error ? e.message : 'Tokens laden fehlgeschlagen');
+    } finally {
+      setTokensLoading(false);
+    }
+  }, []);
+
+  const handleCreateToken = async () => {
+    if (!newTokenName.trim()) {
+      setTokenError('Name erforderlich');
+      return;
+    }
+    setTokenError(null);
+    try {
+      const created = await createServiceToken(newTokenName.trim());
+      setNewlyCreatedToken(created);
+      setNewTokenName('');
+      await loadServiceTokens();
+    } catch (e: unknown) {
+      setTokenError(e instanceof Error ? e.message : 'Token erstellen fehlgeschlagen');
+    }
+  };
+
+  const handleRevokeToken = async (id: string) => {
+    if (!window.confirm('Token widerrufen? Dieser Vorgang ist nicht umkehrbar — erstelle danach ggf. einen neuen Token für denselben Zweck.')) return;
+    try {
+      await revokeServiceToken(id);
+      await loadServiceTokens();
+    } catch (e: unknown) {
+      setTokenError(e instanceof Error ? e.message : 'Widerruf fehlgeschlagen');
+    }
+  };
+
+  const handleDeleteToken = async (id: string) => {
+    if (!window.confirm('Token hart löschen? Verwende lieber Widerrufen (behält Audit-Spur).')) return;
+    try {
+      await deleteServiceToken(id);
+      await loadServiceTokens();
+    } catch (e: unknown) {
+      setTokenError(e instanceof Error ? e.message : 'Löschen fehlgeschlagen');
+    }
+  };
+
   useEffect(() => {
     loadDefaults();
     loadWifiNetworks();
     loadAuditEnabled();
-  }, [loadDefaults, loadWifiNetworks, loadAuditEnabled]);
+    loadFirmwareBackendUrl();
+    loadServiceTokens();
+  }, [loadDefaults, loadWifiNetworks, loadAuditEnabled, loadFirmwareBackendUrl, loadServiceTokens]);
 
   const handleWifiSave = async () => {
     setWifiSaving(true);
@@ -345,6 +497,240 @@ export default function SettingsTab() {
             Standardwerte
           </button>
         </div>
+      </div>
+
+      {/* Firmware Backend URL — baked into every controller at build time */}
+      <div data-testid="firmware-backend-url-section" style={{
+        background: 'var(--bg-secondary)', border: '1px solid var(--border)',
+        borderRadius: 10, padding: 16, marginBottom: 20,
+      }}>
+        <h3 style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 600 }}>
+          Firmware Backend-URL
+        </h3>
+        <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+          Diese URL wird beim Firmware-Build in jeden Empfänger-Controller eingebrannt. Muss von überall erreichbar sein — keine LAN-IP.
+          Für den LabCore Hub: Live-View-URL (z.&nbsp;B. <code style={{ fontSize: 11 }}>https://hub.dasilvafelix.de/api/live/flight-arc</code>).
+        </p>
+
+        {firmwareUrlError && (
+          <div style={{
+            background: 'rgba(239,68,68,0.15)', border: '1px solid var(--status-error)',
+            borderRadius: 8, padding: '10px 14px', marginBottom: 12,
+            fontSize: 13, color: '#ef4444',
+          }}>{firmwareUrlError}</div>
+        )}
+        {firmwareUrlSuccess && (
+          <div style={{
+            background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.5)',
+            borderRadius: 8, padding: '10px 14px', marginBottom: 12,
+            fontSize: 13, color: '#22c55e',
+          }}>{firmwareUrlSuccess}</div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <input
+            data-testid="firmware-backend-url-input"
+            type="url"
+            value={firmwareBackendUrl}
+            onChange={e => setFirmwareBackendUrl(e.target.value)}
+            placeholder="https://hub.dasilvafelix.de/api/live/flight-arc"
+            style={{
+              flex: '1 1 320px', padding: '8px 12px',
+              background: 'var(--bg-tertiary)', border: '1px solid var(--border)',
+              borderRadius: 6, fontSize: 13, color: 'var(--text-primary)',
+              fontFamily: 'monospace', boxSizing: 'border-box',
+            }}
+          />
+          <button
+            data-testid="firmware-backend-url-save"
+            onClick={handleFirmwareUrlSave}
+            disabled={firmwareUrlSaving}
+            style={{
+              padding: '8px 20px', background: 'var(--accent)', color: '#fff',
+              border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600,
+              cursor: firmwareUrlSaving ? 'not-allowed' : 'pointer',
+              opacity: firmwareUrlSaving ? 0.7 : 1,
+            }}
+          >
+            {firmwareUrlSaving ? 'Speichern…' : 'Speichern'}
+          </button>
+        </div>
+      </div>
+
+      {/* Data Retention — caps on how long log tables are kept */}
+      <div data-testid="retention-section" style={{
+        background: 'var(--bg-secondary)', border: '1px solid var(--border)',
+        borderRadius: 10, padding: 16, marginBottom: 20,
+      }}>
+        <h3 style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 600 }}>
+          Datenaufbewahrung
+        </h3>
+        <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+          Wie lange Log-Tabellen aufbewahrt werden, bevor sie automatisch gelöscht werden (stündlicher Cleanup).
+          Leer lassen = Standardwert verwenden. Der Cleanup schützt vor unkontrolliertem DB-Wachstum —
+          vor Inkrafttreten der Regel werden automatisch Backups gezogen.
+        </p>
+
+        {retentionError && (
+          <div style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid var(--status-error)', borderRadius: 8, padding: '8px 12px', marginBottom: 8, fontSize: 12, color: '#ef4444' }}>{retentionError}</div>
+        )}
+        {retentionSuccess && (
+          <div style={{ background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.5)', borderRadius: 8, padding: '8px 12px', marginBottom: 8, fontSize: 12, color: '#22c55e' }}>{retentionSuccess}</div>
+        )}
+
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+          <div style={{ flex: '1 1 200px' }}>
+            <label style={labelStyle}>System-Logs (Tage, default 14)</label>
+            <input
+              data-testid="retention-system-days"
+              type="number" min={1} max={365}
+              placeholder="14"
+              value={retentionSystemDays}
+              onChange={e => setRetentionSystemDays(e.target.value)}
+              style={inputStyle}
+            />
+          </div>
+          <div style={{ flex: '1 1 200px' }}>
+            <label style={labelStyle}>Audit-Logs (Tage, default 90)</label>
+            <input
+              data-testid="retention-audit-days"
+              type="number" min={1} max={365}
+              placeholder="90"
+              value={retentionAuditDays}
+              onChange={e => setRetentionAuditDays(e.target.value)}
+              style={inputStyle}
+            />
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            data-testid="retention-save"
+            onClick={handleRetentionSave}
+            disabled={retentionSaving}
+            style={{
+              padding: '8px 16px', background: 'var(--accent)', color: '#fff',
+              border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600,
+              cursor: retentionSaving ? 'not-allowed' : 'pointer',
+              opacity: retentionSaving ? 0.7 : 1,
+            }}
+          >{retentionSaving ? 'Speichern…' : 'Speichern'}</button>
+          <button
+            data-testid="retention-cleanup-now"
+            onClick={handleCleanupNow}
+            style={{
+              padding: '8px 16px', background: 'transparent', color: 'var(--text-secondary)',
+              border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, cursor: 'pointer',
+            }}
+          >Jetzt aufräumen</button>
+        </div>
+      </div>
+
+      {/* Service Tokens — API keys for external monitors (health-check agents) */}
+      <div data-testid="service-tokens-section" style={{
+        background: 'var(--bg-secondary)', border: '1px solid var(--border)',
+        borderRadius: 10, padding: 16, marginBottom: 20,
+      }}>
+        <h3 style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 600 }}>
+          Service-Tokens
+        </h3>
+        <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+          API-Tokens für externe Monitore / Scheduled Agents. Jeder Token hat Scope <code>health_read</code> und darf <code>GET /api/receivers/health-summary</code> aufrufen — aber <strong>keine</strong> Daten ändern. Der Token-Wert wird nur beim Erstellen <em>einmalig</em> angezeigt — danach nur noch das Präfix.
+        </p>
+
+        {tokenError && (
+          <div style={{
+            background: 'rgba(239,68,68,0.15)', border: '1px solid var(--status-error)',
+            borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: '#ef4444',
+          }}>{tokenError}</div>
+        )}
+
+        {newlyCreatedToken?.token && (
+          <div data-testid="newly-created-token" style={{
+            background: 'rgba(234,179,8,0.15)', border: '1px solid #eab308',
+            borderRadius: 8, padding: 12, marginBottom: 12,
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#eab308' }}>
+              Neuer Token „{newlyCreatedToken.name}" erstellt — jetzt kopieren, der Wert wird nicht mehr angezeigt!
+            </div>
+            <code style={{
+              display: 'block', fontSize: 11, padding: '6px 8px',
+              background: 'var(--bg-tertiary)', borderRadius: 4,
+              wordBreak: 'break-all', userSelect: 'all',
+            }}>{newlyCreatedToken.token}</code>
+            <button
+              onClick={() => setNewlyCreatedToken(null)}
+              style={{
+                marginTop: 8, padding: '4px 10px', fontSize: 11,
+                background: 'transparent', border: '1px solid var(--border)',
+                borderRadius: 4, cursor: 'pointer', color: 'var(--text-secondary)',
+              }}
+            >Schließen</button>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+          <input
+            data-testid="service-token-name-input"
+            placeholder="Token-Name (z. B. daily-health-check)"
+            value={newTokenName}
+            onChange={e => setNewTokenName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleCreateToken()}
+            style={{
+              flex: '1 1 260px', padding: '8px 12px',
+              background: 'var(--bg-tertiary)', border: '1px solid var(--border)',
+              borderRadius: 6, fontSize: 13, color: 'var(--text-primary)',
+            }}
+          />
+          <button
+            data-testid="service-token-create"
+            onClick={handleCreateToken}
+            style={{
+              padding: '8px 16px', background: 'var(--accent)', color: '#fff',
+              border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            }}
+          >Token erstellen</button>
+        </div>
+
+        {tokensLoading ? (
+          <div style={{ padding: 8, fontSize: 12, color: 'var(--text-muted)' }}>Lade Tokens…</div>
+        ) : serviceTokens.length === 0 ? (
+          <div style={{ padding: 8, fontSize: 12, color: 'var(--text-muted)' }}>Noch keine Tokens.</div>
+        ) : (
+          <div data-testid="service-tokens-list" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {serviceTokens.map(t => {
+              const revoked = !!t.revokedAt;
+              const created = new Date(t.createdAt * 1000).toLocaleString('de-DE');
+              const lastUsed = t.lastUsedAt ? new Date(t.lastUsedAt * 1000).toLocaleString('de-DE') : 'nie';
+              return (
+                <div key={t.id} style={{
+                  padding: '8px 12px', background: 'var(--bg-primary)',
+                  border: `1px solid ${revoked ? 'var(--status-error)' : 'var(--border)'}`,
+                  borderRadius: 6, opacity: revoked ? 0.6 : 1,
+                  display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+                }}>
+                  <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>
+                      {t.name} {revoked && <span style={{ color: '#ef4444', fontWeight: 400 }}>(widerrufen)</span>}
+                    </div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                      Prefix <code>{t.tokenPrefix}…</code> · Scopes <code>{t.scopes.join(', ')}</code> · erstellt {created} · zuletzt verwendet: {lastUsed}
+                    </div>
+                  </div>
+                  {!revoked && (
+                    <button
+                      onClick={() => handleRevokeToken(t.id)}
+                      style={{ padding: '4px 10px', fontSize: 11, background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', color: '#eab308' }}
+                    >Widerrufen</button>
+                  )}
+                  <button
+                    onClick={() => handleDeleteToken(t.id)}
+                    style={{ padding: '4px 10px', fontSize: 11, background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', color: 'var(--status-error)' }}
+                  >Löschen</button>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* WiFi Networks */}
