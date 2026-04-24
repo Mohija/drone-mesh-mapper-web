@@ -800,23 +800,47 @@ export default function ReceiverList() {
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <div style={{ flex: 1, minWidth: 200 }}>
               <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Name</label>
-              <input
-                data-testid="receiver-name-input"
-                value={newName}
-                onChange={e => setNewName(e.target.value)}
-                placeholder="z.B. Empfänger Dach-Nord"
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  background: 'var(--bg-primary)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 6,
-                  color: 'var(--text-primary)',
-                  fontSize: 13,
-                  outline: 'none',
-                  boxSizing: 'border-box',
-                }}
-              />
+              {(() => {
+                const trimmed = newName.trim();
+                const isDuplicate = trimmed.length > 0
+                  && receivers.some(r => r.name.toLowerCase() === trimmed.toLowerCase());
+                const isTooShort = trimmed.length > 0 && trimmed.length < 2;
+                const isValid = trimmed.length >= 2 && !isDuplicate;
+                const hintColor = trimmed.length === 0 ? 'var(--text-muted)'
+                  : isValid ? 'var(--status-active)' : 'var(--status-error)';
+                const borderColor = trimmed.length === 0 ? 'var(--border)'
+                  : isValid ? 'var(--status-active)' : 'var(--status-error)';
+                const hint = trimmed.length === 0 ? 'Mindestens 2 Zeichen'
+                  : isTooShort ? '⚠ Zu kurz (min. 2 Zeichen)'
+                  : isDuplicate ? '⚠ Name bereits vergeben'
+                  : '✓ Name verfügbar';
+                return (
+                  <>
+                    <input
+                      data-testid="receiver-name-input"
+                      value={newName}
+                      onChange={e => setNewName(e.target.value)}
+                      placeholder="z.B. Empfänger Dach-Nord"
+                      maxLength={100}
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        background: 'var(--bg-primary)',
+                        border: `1px solid ${borderColor}`,
+                        borderRadius: 6,
+                        color: 'var(--text-primary)',
+                        fontSize: 13,
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                        transition: 'border-color 0.15s',
+                      }}
+                    />
+                    <div data-testid="receiver-name-hint" style={{ fontSize: 10, color: hintColor, marginTop: 4, minHeight: 14 }}>
+                      {hint}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
             <div style={{ minWidth: 180 }}>
               <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Hardware-Typ</label>
@@ -1067,16 +1091,28 @@ export default function ReceiverList() {
 
       {/* Receiver list */}
       {receivers.length === 0 ? (
-        <div data-testid="receiver-empty" style={{
-          background: 'var(--bg-secondary)',
-          border: '1px solid var(--border)',
-          borderRadius: 10,
-          padding: 32,
-          textAlign: 'center',
-          color: 'var(--text-secondary)',
-          fontSize: 14,
-        }}>
-          Noch keine Empfänger erstellt.
+        <div
+          data-testid="receiver-empty"
+          className="fa-card fa-card--hero"
+          style={{ padding: '40px 24px', textAlign: 'center' }}
+        >
+          <div style={{ fontSize: 44, marginBottom: 12, opacity: 0.85 }}>📡</div>
+          <div className="fa-display" style={{ fontSize: 20, fontWeight: 700, marginBottom: 6, letterSpacing: '-0.01em' }}>
+            Noch keine Empfänger angelegt
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20, maxWidth: 440, margin: '0 auto 20px', lineHeight: 1.5 }}>
+            Ein Empfänger ist ein ESP32 oder ESP8266, der Drohnen-Remote-ID-Signale
+            in deiner Umgebung mithört und an dieses Dashboard sendet. Leg einen
+            ersten Node an — die Firmware bauen wir dir danach automatisch.
+          </div>
+          <button
+            onClick={() => setShowCreate(true)}
+            className="fa-btn-primary"
+            data-testid="receiver-empty-create"
+          >+ Ersten Empfänger erstellen</button>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 16 }}>
+            oder siehe <a href="/help#empfaenger" style={{ color: 'var(--accent)', textDecoration: 'none' }}>Handbuch → Empfänger</a> für eine Hardware-Einkaufsliste.
+          </div>
         </div>
       ) : isMobile ? (
         /* ─── Mobile: Card Layout ─── */
@@ -1820,12 +1856,41 @@ export default function ReceiverList() {
                   </p>
                 </div>
                 {(otaStep === 'config' || otaStep === 'done' || otaStep === 'error') && (
-                  <button onClick={closeOtaModal} style={{
+                  <button onClick={closeOtaModal} aria-label="Schließen" style={{
                     background: 'var(--bg-tertiary)', border: '1px solid var(--border)',
-                    borderRadius: 8, width: 36, height: 36, cursor: 'pointer',
+                    borderRadius: 8, minWidth: 44, minHeight: 44, cursor: 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: 18, color: 'var(--text-muted)',
                   }}>&times;</button>
+                )}
+                {/* Abbrechen during active phases — the flow is idempotent
+                    server-side (firmware gets flagged via /ota-cancel), so a
+                    user who realizes they picked the wrong receiver or WiFi
+                    can back out without F5. */}
+                {(otaStep === 'building' || otaStep === 'triggering' || otaStep === 'waiting') && (
+                  <button
+                    onClick={async () => {
+                      if (!window.confirm('OTA-Update wirklich abbrechen? Ein bereits gestarteter Build läuft im Hintergrund zu Ende, wird aber nicht an den Empfänger ausgeliefert.')) return;
+                      try {
+                        if (otaNode) await cancelOtaUpdate(otaNode.id);
+                      } catch { /* best effort */ }
+                      closeOtaModal();
+                    }}
+                    aria-label="Abbrechen"
+                    data-testid="ota-cancel"
+                    style={{
+                      background: 'rgba(239,68,68,0.10)',
+                      border: '1px solid rgba(239,68,68,0.45)',
+                      borderRadius: 8,
+                      padding: '0 14px',
+                      minHeight: 44,
+                      cursor: 'pointer',
+                      color: '#ef4444',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      letterSpacing: '0.02em',
+                    }}
+                  >Abbrechen</button>
                 )}
               </div>
 
@@ -1840,22 +1905,28 @@ export default function ReceiverList() {
                     otaLog.some(l => l.includes('Build erfolgreich')) ? 'triggering' :
                     otaLog.some(l => l.includes('OTA ausgelöst') || l.includes('OTA-Update wird')) ? 'waiting' : 'building'
                   );
+                  const bg = isPast || (isActive && step === 'done') ? 'var(--status-active)'
+                    : isActive ? 'var(--accent)'
+                    : isError ? 'var(--status-error)'
+                    : 'var(--bg-tertiary)';
                   return (
-                    <div key={step} style={{ flex: 1, textAlign: 'center' }}>
+                    <div key={step} style={{ flex: 1, textAlign: 'center', minWidth: 0 }}>
                       <div style={{
-                        width: 28, height: 28, borderRadius: '50%', margin: '0 auto 4px',
+                        width: 30, height: 30, borderRadius: '50%', margin: '0 auto 6px',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         fontSize: 12, fontWeight: 700,
-                        background: isPast || (isActive && step === 'done') ? '#22c55e'
-                          : isActive ? '#3b82f6'
-                          : isError ? '#ef4444'
-                          : 'var(--bg-tertiary)',
-                        color: isPast || isActive ? '#fff' : 'var(--text-muted)',
-                        border: `2px solid ${isPast || (isActive && step === 'done') ? '#22c55e' : isActive ? '#3b82f6' : isError ? '#ef4444' : 'var(--border)'}`,
+                        background: bg,
+                        color: (isPast || isActive) ? '#0b0d12' : 'var(--text-muted)',
+                        border: `2px solid ${bg}`,
+                        boxShadow: isActive ? `0 0 0 3px ${bg}22, 0 0 10px ${bg}66` : 'none',
+                        transition: 'box-shadow 0.25s ease, background 0.2s ease',
                       }}>
                         {isPast ? '\u2713' : isError ? '!' : icons[i]}
                       </div>
-                      <span style={{ fontSize: 10, color: isActive ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                      <span className="fa-micro" style={{
+                        fontSize: 9, letterSpacing: '0.08em',
+                        color: isActive ? 'var(--text-primary)' : 'var(--text-muted)',
+                      }}>
                         {labels[i]}
                       </span>
                     </div>

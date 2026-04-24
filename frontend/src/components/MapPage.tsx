@@ -384,19 +384,31 @@ export default function MapPage() {
             fontSize: 20, color: 'var(--text-secondary)', flexShrink: 0,
           }}>&#9776;</button>
 
-          {/* Logo + drone count */}
-          <div style={{
-            background: 'var(--bg-secondary)', border: '1px solid var(--border)',
-            borderRadius: 8, padding: '8px 12px', flex: 1, minWidth: 0,
-            display: 'flex', alignItems: 'center', gap: 8,
-          }}>
-            <span style={{ fontWeight: 600, fontSize: 13 }}>FlightArc</span>
-            <span style={{
-              background: 'var(--bg-tertiary)', padding: '2px 8px',
-              borderRadius: 4, fontSize: 12, color: 'var(--text-secondary)',
-            }}>
-              {droneCount} Drohne{droneCount !== 1 ? 'n' : ''}
-            </span>
+          {/* Hero: drone count is THE number on the map — accent-bordered,
+              tabular figure, gets its own visual weight so it reads at a
+              glance even on a narrow screen. */}
+          <div
+            data-testid="map-hero-counter"
+            style={{
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--accent)',
+              borderRadius: 10, padding: '6px 12px',
+              flex: 1, minWidth: 0,
+              display: 'flex', alignItems: 'center', gap: 10,
+              boxShadow: 'var(--shadow-sm), var(--shadow-accent-glow)',
+            }}
+          >
+            <span className="fa-display" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '-0.01em' }}>FlightArc</span>
+            <span style={{ width: 1, height: 20, background: 'var(--border)', flexShrink: 0 }} />
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, minWidth: 0 }}>
+              <span
+                className="fa-display fa-tabular"
+                style={{ fontSize: 20, fontWeight: 700, color: 'var(--accent)', letterSpacing: '-0.02em' }}
+              >{droneCount}</span>
+              <span className="fa-micro" style={{ fontSize: 9 }}>
+                Drohne{droneCount !== 1 ? 'n' : ''}
+              </span>
+            </div>
           </div>
 
           {/* Admin button (separated from logout!) */}
@@ -550,32 +562,48 @@ export default function MapPage() {
         gap: 8,
         flexWrap: 'wrap',
       }}>
-        <div style={{
-          background: 'var(--bg-secondary)',
-          border: '1px solid var(--border)',
-          borderRadius: 8,
-          padding: '8px 16px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          whiteSpace: 'nowrap',
-        }}>
-          <span style={{ fontSize: 18 }}>&#128681;</span>
-          <span style={{ fontWeight: 600, fontSize: 14 }}>FlightArc</span>
-          <span style={{
-            fontSize: 10,
-            color: 'var(--text-muted)',
-            fontWeight: 400,
-          }}>v{__APP_VERSION__}</span>
-          <span style={{
-            background: 'var(--bg-tertiary)',
-            padding: '2px 8px',
-            borderRadius: 4,
-            fontSize: 12,
-            color: 'var(--text-secondary)',
-          }}>
-            {altitudeZone !== 'all' ? `${filteredDrones.length}/` : ''}{droneCount} Drohne{droneCount !== 1 ? 'n' : ''}
-          </span>
+        {/* Hero: drone count is the one number that matters — accent-bordered,
+            tabular figure, micro-label. Everything else in the bar is secondary. */}
+        <div
+          data-testid="map-hero-counter"
+          style={{
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--accent)',
+            borderRadius: 10,
+            padding: '6px 14px 6px 12px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            whiteSpace: 'nowrap',
+            boxShadow: 'var(--shadow-md), var(--shadow-accent-glow)',
+            position: 'relative',
+          }}
+        >
+          <span style={{ fontSize: 18, lineHeight: 1, filter: 'saturate(1.1)' }}>&#128681;</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0, lineHeight: 1 }}>
+            <span className="fa-display" style={{ fontSize: 13, fontWeight: 700, letterSpacing: '-0.01em' }}>
+              FlightArc
+              <span style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 400, letterSpacing: 0, marginLeft: 6 }}>
+                v{__APP_VERSION__}
+              </span>
+            </span>
+            <span className="fa-micro" style={{ fontSize: 9, marginTop: 2 }}>Live Tracking</span>
+          </div>
+          <span style={{ width: 1, height: 28, background: 'var(--border)', margin: '0 2px' }} />
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
+            <span
+              className="fa-display fa-tabular"
+              style={{ fontSize: 22, fontWeight: 700, color: 'var(--accent)', letterSpacing: '-0.02em' }}
+            >
+              {altitudeZone !== 'all' ? filteredDrones.length : droneCount}
+            </span>
+            {altitudeZone !== 'all' && (
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>/ {droneCount}</span>
+            )}
+            <span className="fa-micro" style={{ fontSize: 9 }}>
+              Drohne{droneCount !== 1 ? 'n' : ''}
+            </span>
+          </div>
         </div>
 
         {/* Refresh rate control */}

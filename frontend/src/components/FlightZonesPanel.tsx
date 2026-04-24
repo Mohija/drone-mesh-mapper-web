@@ -528,8 +528,19 @@ export default function FlightZonesPanel({
 
         {/* Zone list */}
         {zones.length === 0 && !drawingMode && (
-          <div data-testid="zones-empty" style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: '12px 0' }}>
-            Keine Zonen definiert
+          <div data-testid="zones-empty" style={{
+            fontSize: 12, color: 'var(--text-secondary)', textAlign: 'center',
+            padding: '20px 12px', lineHeight: 1.5,
+            background: 'rgba(0,212,170,0.04)',
+            border: '1px dashed rgba(0,212,170,0.3)',
+            borderRadius: 8,
+          }}>
+            <div style={{ fontSize: 24, marginBottom: 6, opacity: 0.8 }}>✦</div>
+            <div className="fa-micro" style={{ marginBottom: 4 }}>Noch keine Zonen</div>
+            <div style={{ color: 'var(--text-muted)' }}>
+              Zeichne ein Polygon auf die Karte, um eine Mission-Zone,
+              Verbotszone oder Beobachtungsraum zu definieren.
+            </div>
           </div>
         )}
 

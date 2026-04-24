@@ -366,6 +366,16 @@ button.fa-btn-primary:disabled {
   to { opacity: 1; transform: translate(-50%, -100%); }
 }
 
+/* Collapsible section chevrons (StatusPanel, etc.) — default list marker off,
+   native <details>/<summary> rotate the caret on open. */
+details > summary {
+  list-style: none;
+}
+details > summary::-webkit-details-marker { display: none; }
+details[open] > summary .status-section-caret {
+  transform: rotate(90deg);
+}
+
 /* Help page: collapsible subsections */
 details.help-sub > summary { list-style: none; }
 details.help-sub > summary::-webkit-details-marker { display: none; }

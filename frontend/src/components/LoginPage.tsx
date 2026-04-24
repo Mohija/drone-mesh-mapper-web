@@ -84,7 +84,27 @@ export default function LoginPage() {
         localStorage.setItem('last_tenant_id', selectedTenantId);
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Login fehlgeschlagen');
+      // Make the error message useful. The backend returns generic messages
+      // like "Invalid credentials" to not leak which field is wrong, but we
+      // can still distinguish common client-side cases (missing username,
+      // unknown tenant, network). Anything else gets the verbatim message
+      // plus a hint.
+      const raw = err instanceof Error ? err.message : String(err);
+      let friendly = raw;
+      if (!username.trim()) {
+        friendly = 'Bitte Benutzername eingeben.';
+      } else if (!password) {
+        friendly = 'Bitte Passwort eingeben.';
+      } else if (/fetch|network|failed to fetch/i.test(raw)) {
+        friendly = 'Backend nicht erreichbar. Prüfe Netzwerkverbindung oder VPN.';
+      } else if (/401|unauthor|invalid.*(credential|password)/i.test(raw)) {
+        friendly = 'Benutzername oder Passwort falsch. Tippfehler? Caps Lock?';
+      } else if (/tenant|mandant/i.test(raw)) {
+        friendly = 'Mandant nicht gefunden oder deaktiviert. Prüfe die Auswahl.';
+      } else if (/active|aktiv|disabled|deaktiv/i.test(raw)) {
+        friendly = 'Benutzer oder Mandant deaktiviert. Kontaktiere einen Admin.';
+      }
+      setError(friendly);
     } finally {
       setSubmitting(false);
     }

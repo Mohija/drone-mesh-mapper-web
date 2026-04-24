@@ -81,13 +81,16 @@ export default function NoFlyZonesPanel({
           onClick={() => onToggleAll(!allEnabled)}
           title={allEnabled ? 'Alle deaktivieren' : 'Alle aktivieren'}
           style={{
-            fontSize: 11,
-            padding: '2px 8px',
-            borderRadius: 4,
+            fontSize: 12,
+            padding: '8px 14px',      // 32 px tall content + ~12px vertical padding → 44px HIG
+            minHeight: 40,
+            borderRadius: 6,
             border: '1px solid var(--border)',
             background: allEnabled ? 'var(--accent)' : 'var(--bg-tertiary)',
-            color: allEnabled ? '#fff' : 'var(--text-secondary)',
+            color: allEnabled ? '#0b0d12' : 'var(--text-secondary)',
             cursor: 'pointer',
+            fontWeight: 600,
+            touchAction: 'manipulation',
           }}
         >
           {allEnabled ? 'Alle aus' : noneEnabled ? 'Alle an' : 'Alle an'}
@@ -107,9 +110,12 @@ export default function NoFlyZonesPanel({
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 8,
-                padding: '4px 0',
+                gap: 10,
+                padding: '10px 4px',   // ~44px tap-target on touch devices
                 cursor: 'pointer',
+                minHeight: 44,
+                touchAction: 'manipulation',
+                borderRadius: 6,
               }}
               onClick={() => onToggleCategory(cat.id)}
               data-testid={`nofly-category-${cat.id}`}
@@ -132,23 +138,25 @@ export default function NoFlyZonesPanel({
               </span>
               {/* Category toggle indicator */}
               <div style={{
-                width: 28,
-                height: 16,
-                borderRadius: 8,
+                width: 36,
+                height: 20,
+                borderRadius: 10,
                 background: catFull ? 'var(--accent)' : catPartial ? 'var(--accent)' : 'var(--bg-tertiary)',
                 position: 'relative',
                 opacity: catPartial ? 0.6 : 1,
                 flexShrink: 0,
+                boxShadow: catFull ? 'var(--shadow-sm)' : 'none',
               }}>
                 <div style={{
-                  width: 12,
-                  height: 12,
+                  width: 16,
+                  height: 16,
                   borderRadius: '50%',
                   background: '#fff',
                   position: 'absolute',
                   top: 2,
-                  left: catFull || catPartial ? 14 : 2,
+                  left: catFull || catPartial ? 18 : 2,
                   transition: 'left 0.2s',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
                 }} />
               </div>
             </div>
@@ -163,18 +171,21 @@ export default function NoFlyZonesPanel({
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: 8,
-                      padding: '3px 0',
+                      gap: 10,
+                      padding: '8px 4px',       // 40px tap-target
+                      minHeight: 40,
                       cursor: 'pointer',
+                      borderRadius: 6,
+                      touchAction: 'manipulation',
                     }}
                     onClick={() => onToggleLayer(layer.id)}
                     data-testid={`nofly-layer-${layer.id}`}
                   >
                     <div style={{
-                      width: 14,
-                      height: 14,
-                      borderRadius: 3,
-                      border: `1px solid ${isEnabled ? 'var(--accent)' : 'var(--border)'}`,
+                      width: 18,
+                      height: 18,
+                      borderRadius: 4,
+                      border: `1.5px solid ${isEnabled ? 'var(--accent)' : 'var(--border)'}`,
                       background: isEnabled ? 'var(--accent)' : 'transparent',
                       display: 'flex',
                       alignItems: 'center',
@@ -183,11 +194,11 @@ export default function NoFlyZonesPanel({
                       transition: 'all 0.15s',
                     }}>
                       {isEnabled && (
-                        <span style={{ fontSize: 10, color: '#fff', lineHeight: 1 }}>&#10003;</span>
+                        <span style={{ fontSize: 12, color: '#0b0d12', lineHeight: 1, fontWeight: 700 }}>&#10003;</span>
                       )}
                     </div>
                     <span style={{
-                      fontSize: 12,
+                      fontSize: 13,
                       color: isEnabled ? 'var(--text-primary)' : 'var(--text-muted)',
                     }}>
                       {layer.label}

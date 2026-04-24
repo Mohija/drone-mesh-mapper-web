@@ -6,6 +6,7 @@ import { getElevation, onGridReady, isGridReady } from '../elevationGrid';
 import { DIPUL_WMS_URL, getWmsLayerString, NFZ_LAYERS } from '../config/noFlyZones';
 import { getCachedLookup, setCachedLookup, getCachedNfz, setCachedNfz } from '../lookupCache';
 import type { TrackingState } from '../types/drone';
+import { useIsMobile } from '../useIsMobile';
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   active: { label: 'Aktiv', color: 'var(--status-active)' },
@@ -73,6 +74,11 @@ const SOURCE_COLORS: Record<string, string> = {
 
 export default function StatusPanel({ drone, onClose, enabledNoFlyLayers, trackingState, onTrack, onUntrack, onArchive, bottomOffset = 0 }: Props) {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
+  // On mobile, collapse secondary data (Batterie, Pilot, FAA, OGN, Aircraft,
+  // Route) so the first screen surfaces only Signal + Position + NFZ, which
+  // are what a user checks first. One tap unfolds the rest.
+  const secondaryOpen = !isMobile;
   const statusInfo = STATUS_LABELS[drone.status] || STATUS_LABELS.lost;
   const signal = drone.signal_strength != null ? signalBar(drone.signal_strength) : null;
   const sourceColor = SOURCE_COLORS[drone.source || ''] || '#6b7280';
@@ -357,7 +363,7 @@ export default function StatusPanel({ drone, onClose, enabledNoFlyLayers, tracki
         </Section>
 
         {/* Battery */}
-        <Section title="Batterie">
+        <Section title="Batterie" defaultOpen={secondaryOpen}>
           {drone.battery != null ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{
@@ -416,7 +422,7 @@ export default function StatusPanel({ drone, onClose, enabledNoFlyLayers, tracki
 
         {/* Pilot */}
         {drone.pilot_latitude != null && drone.pilot_longitude != null && (
-          <Section title="Pilot">
+          <Section title="Pilot" defaultOpen={secondaryOpen}>
             <DataRow label="Breitengrad" value={drone.pilot_latitude.toFixed(6)} />
             <DataRow label="Längengrad" value={drone.pilot_longitude.toFixed(6)} />
             <DataRow
@@ -429,7 +435,7 @@ export default function StatusPanel({ drone, onClose, enabledNoFlyLayers, tracki
 
         {/* FAA Data */}
         {drone.faa_data && (
-          <Section title="FAA Registrierung">
+          <Section title="FAA Registrierung" defaultOpen={secondaryOpen}>
             <DataRow label="Name" value={drone.faa_data.registrant_name} />
             <DataRow label="Hersteller" value={drone.faa_data.manufacturer} />
             <DataRow label="Modell" value={drone.faa_data.model} />
@@ -442,7 +448,7 @@ export default function StatusPanel({ drone, onClose, enabledNoFlyLayers, tracki
 
         {/* OGN Aircraft Type (always shown for OGN source if available) */}
         {drone.source === 'ogn' && drone.ogn_aircraft_type_label && !lookupLoading && (
-          <Section title="OGN Typ">
+          <Section title="OGN Typ" defaultOpen={secondaryOpen}>
             <DataRow label="Kategorie" value={drone.ogn_aircraft_type_label} />
             {drone.icao_hex && <DataRow label="ICAO Hex" value={drone.icao_hex} />}
           </Section>
@@ -450,21 +456,21 @@ export default function StatusPanel({ drone, onClose, enabledNoFlyLayers, tracki
 
         {/* Aircraft Lookup (async loaded) */}
         {lookupLoading && (
-          <Section title="Luftfahrzeug-Daten">
+          <Section title="Luftfahrzeug-Daten" defaultOpen={secondaryOpen}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-muted)', fontSize: 12 }}>
               <Spinner size={14} /> Daten werden geladen...
             </div>
           </Section>
         )}
         {lookupError && (
-          <Section title="Luftfahrzeug-Daten">
+          <Section title="Luftfahrzeug-Daten" defaultOpen={secondaryOpen}>
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Lookup fehlgeschlagen</span>
           </Section>
         )}
         {lookup && !lookupLoading && (
           <>
             {lookup.found ? (
-              <Section title="Luftfahrzeug-Daten">
+              <Section title="Luftfahrzeug-Daten" defaultOpen={secondaryOpen}>
                 {lookup.photo_url && (
                   <div style={{ marginBottom: 10, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border)' }}>
                     <img
@@ -495,14 +501,14 @@ export default function StatusPanel({ drone, onClose, enabledNoFlyLayers, tracki
                 )}
               </Section>
             ) : (
-              <Section title="Luftfahrzeug-Daten">
+              <Section title="Luftfahrzeug-Daten" defaultOpen={secondaryOpen}>
                 <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Keine Daten gefunden</span>
               </Section>
             )}
 
             {/* Flight route (from callsign) */}
             {(lookup.origin || lookup.destination) && (
-              <Section title="Flugroute">
+              <Section title="Flugroute" defaultOpen={secondaryOpen}>
                 {lookup.airline && <DataRow label="Airline" value={lookup.airline} />}
                 {lookup.origin && (
                   <DataRow
@@ -663,21 +669,46 @@ export default function StatusPanel({ drone, onClose, enabledNoFlyLayers, tracki
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+/**
+ * Collapsible section. Shows a chevron and wraps the content in a native
+ * <details> so state persists without extra React state — and so the full
+ * content still gets indexed for e.g. Ctrl-F even while collapsed.
+ *
+ * `defaultOpen` controls the initial state; on mobile we pass `false` for
+ * secondary sections so the first screen shows only Signal + Position + NFZ,
+ * the rest one tap away.
+ */
+function Section({
+  title,
+  children,
+  defaultOpen = true,
+}: {
+  title: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}) {
   return (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{
-        fontSize: 11,
-        fontWeight: 600,
-        textTransform: 'uppercase',
-        letterSpacing: '0.05em',
-        color: 'var(--text-muted)',
-        marginBottom: 8,
-      }}>
+    <details open={defaultOpen} style={{ marginBottom: 12 }}>
+      <summary
+        className="fa-micro"
+        style={{
+          fontSize: 11,
+          color: 'var(--text-muted)',
+          marginBottom: 8,
+          cursor: 'pointer',
+          listStyle: 'none',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '2px 0',
+          userSelect: 'none',
+        }}
+      >
+        <span className="status-section-caret" style={{ fontSize: 9, transition: 'transform 0.2s', display: 'inline-block' }}>▸</span>
         {title}
-      </div>
+      </summary>
       {children}
-    </div>
+    </details>
   );
 }
 
