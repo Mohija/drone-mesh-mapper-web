@@ -589,7 +589,10 @@ export default function ReceiverList() {
   return (
     <div data-testid="receiver-list">
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, flex: 1 }}>Empfänger</h1>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'baseline', gap: 16 }}>
+          <h1 className="fa-display" style={{ margin: 0, fontSize: 32, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.05 }}>Empfänger</h1>
+          <span className="fa-micro" style={{ paddingLeft: 12, borderLeft: '2px solid var(--accent)' }}>Remote-ID · Mesh</span>
+        </div>
         <AdminTooltip
           brief="Neuen Hardware-Empfänger registrieren"
           detail={"Erstellt einen neuen Empfänger-Eintrag in der Datenbank. Du wählst einen Namen und den Hardware-Typ (ESP32-S3, ESP32-C3 oder ESP8266).\nNach dem Erstellen kannst du die Firmware bauen und auf den Mikrocontroller flashen.\nEs wird eine Einkaufsliste mit allen benötigten Teilen und Links angezeigt."}

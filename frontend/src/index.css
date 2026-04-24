@@ -1,3 +1,9 @@
+/* ── Fonts (self-hosted via @fontsource, DSGVO-konform) ──────────────── */
+@import "@fontsource/space-grotesk/300.css";
+@import "@fontsource/space-grotesk/400.css";
+@import "@fontsource/space-grotesk/500.css";
+@import "@fontsource/space-grotesk/700.css";
+
 *,
 *::before,
 *::after {
@@ -8,66 +14,190 @@
 
 :root,
 [data-theme="dark"] {
-  --bg-primary: #0f1117;
-  --bg-secondary: #1a1d27;
-  --bg-tertiary: #242836;
-  --text-primary: #e4e6eb;
-  --text-secondary: #9ca3af;
-  --text-muted: #6b7280;
-  --border: #2d3040;
-  --accent: #3b82f6;
+  /* Surfaces */
+  --bg-primary: #0b0d12;           /* near-black, slightly warm */
+  --bg-secondary: #13161e;         /* graphite */
+  --bg-tertiary: #1c2029;          /* elevated graphite */
+  --text-primary: #eef1f6;
+  --text-secondary: #a7b0bf;
+  --text-muted: #6b7481;
+  --border: #242936;
+
+  /* Brand — signal cyan as the one memorable color */
+  --accent: #00d4aa;               /* signal cyan */
+  --accent-dim: #00a887;
+  --accent-hot: #3cf0c5;           /* for highlights + hover */
+  --gradient-accent: linear-gradient(135deg, #00d4aa 0%, #00a887 100%);
+  --gradient-hero: radial-gradient(circle at top left, rgba(0, 212, 170, 0.12) 0%, transparent 55%),
+                   radial-gradient(circle at bottom right, rgba(92, 115, 214, 0.08) 0%, transparent 50%);
+
+  /* Functional status (unchanged semantics, slight warmth) */
   --status-active: #22c55e;
   --status-idle: #eab308;
   --status-error: #ef4444;
-  --status-lost: #6b7280;
-  --user-blue: #3b82f6;
+  --status-lost: #6b7481;
+  --user-blue: #5c73d6;             /* muted periwinkle instead of generic blue */
   --signal-good: #22c55e;
   --signal-mid: #eab308;
   --signal-bad: #ef4444;
-  --popup-bg: rgba(26, 29, 39, 0.95);
-  --popup-border: rgba(239, 68, 68, 0.4);
-  --popup-text: #e4e6eb;
-  --popup-text-secondary: #9ca3af;
-  --popup-text-muted: #6b7280;
-  --popup-divider: rgba(255, 255, 255, 0.1);
-  --attribution-bg: rgba(15, 17, 23, 0.8);
+
+  /* Layered elevation shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.25), 0 2px 4px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 10px 20px rgba(0, 0, 0, 0.3), 0 6px 10px rgba(0, 0, 0, 0.2);
+  --shadow-elevated: 0 24px 48px rgba(0, 0, 0, 0.4), 0 12px 16px rgba(0, 0, 0, 0.25);
+  --shadow-accent-glow: 0 0 16px rgba(0, 212, 170, 0.25);
+
+  --popup-bg: rgba(19, 22, 30, 0.96);
+  --popup-border: rgba(0, 212, 170, 0.35);
+  --popup-text: #eef1f6;
+  --popup-text-secondary: #a7b0bf;
+  --popup-text-muted: #6b7481;
+  --popup-divider: rgba(255, 255, 255, 0.08);
+  --attribution-bg: rgba(11, 13, 18, 0.82);
 }
 
 [data-theme="light"] {
-  --bg-primary: #f3f4f6;
+  --bg-primary: #f5f6f8;
   --bg-secondary: #ffffff;
-  --bg-tertiary: #e5e7eb;
-  --text-primary: #111827;
-  --text-secondary: #4b5563;
-  --text-muted: #9ca3af;
-  --border: #d1d5db;
-  --accent: #2563eb;
+  --bg-tertiary: #eceef2;
+  --text-primary: #0b0d12;
+  --text-secondary: #4a5260;
+  --text-muted: #8a94a3;
+  --border: #d4d8de;
+
+  --accent: #00a887;                /* slightly deeper cyan for WCAG contrast on white */
+  --accent-dim: #00876e;
+  --accent-hot: #00d4aa;
+  --gradient-accent: linear-gradient(135deg, #00a887 0%, #00876e 100%);
+  --gradient-hero: radial-gradient(circle at top left, rgba(0, 168, 135, 0.10) 0%, transparent 55%),
+                   radial-gradient(circle at bottom right, rgba(92, 115, 214, 0.06) 0%, transparent 50%);
+
   --status-active: #16a34a;
   --status-idle: #ca8a04;
   --status-error: #dc2626;
-  --status-lost: #6b7280;
-  --user-blue: #2563eb;
+  --status-lost: #8a94a3;
+  --user-blue: #3b4cb8;
   --signal-good: #16a34a;
   --signal-mid: #ca8a04;
   --signal-bad: #dc2626;
+
+  --shadow-sm: 0 1px 2px rgba(15, 17, 23, 0.06);
+  --shadow-md: 0 4px 6px rgba(15, 17, 23, 0.08), 0 2px 4px rgba(15, 17, 23, 0.04);
+  --shadow-lg: 0 10px 20px rgba(15, 17, 23, 0.10), 0 6px 10px rgba(15, 17, 23, 0.06);
+  --shadow-elevated: 0 24px 48px rgba(15, 17, 23, 0.16), 0 12px 16px rgba(15, 17, 23, 0.08);
+  --shadow-accent-glow: 0 0 12px rgba(0, 168, 135, 0.30);
+
   --popup-bg: rgba(255, 255, 255, 0.97);
-  --popup-border: rgba(220, 38, 38, 0.3);
-  --popup-text: #111827;
-  --popup-text-secondary: #4b5563;
-  --popup-text-muted: #9ca3af;
-  --popup-divider: rgba(0, 0, 0, 0.08);
-  --attribution-bg: rgba(255, 255, 255, 0.85);
+  --popup-border: rgba(0, 168, 135, 0.35);
+  --popup-text: #0b0d12;
+  --popup-text-secondary: #4a5260;
+  --popup-text-muted: #8a94a3;
+  --popup-divider: rgba(0, 0, 0, 0.07);
+  --attribution-bg: rgba(255, 255, 255, 0.88);
 }
 
+/* Typography system — Space Grotesk for display + micro-labels, system sans
+   for body. System-font is fast, familiar, readable at small sizes; the
+   distinctive voice comes from headings, labels, and tracked-uppercase bits. */
 html,
 body,
 #root {
   height: 100%;
   width: 100%;
   overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
   background: var(--bg-primary);
   color: var(--text-primary);
+  /* Subtle atmosphere — keeps the surface from feeling like a flat slab. */
+  background-image: var(--gradient-hero);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "ss01", "ss02";
+}
+
+/* Display headings — Space Grotesk with tighter tracking for that cockpit feel */
+.fa-display,
+h1.fa-display,
+h2.fa-display,
+h3.fa-display {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+/* Micro-labels — small all-caps with wide tracking for instrument panels */
+.fa-micro {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-muted);
+}
+
+/* Tabular figures in numeric displays (RSSI, uptime, counters) */
+.fa-tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Primary button — signal cyan with dark text (instead of white-on-blue Tailwind default).
+   Works on both dark and light themes because the accent value is already
+   contrast-matched per theme. */
+button.fa-btn-primary {
+  background: var(--accent);
+  color: #0b0d12;
+  border: none;
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  padding: 9px 18px;
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm), var(--shadow-accent-glow);
+  transition: transform 0.12s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+button.fa-btn-primary:hover:not(:disabled) {
+  background: var(--accent-hot);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md), var(--shadow-accent-glow);
+}
+button.fa-btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: var(--shadow-sm);
+}
+button.fa-btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Elevated card — replaces the flat "bg-secondary + border" pattern. Adds
+   layered shadow depth + a subtle accent-tinted top highlight so panels don't
+   look like stamped rectangles. */
+.fa-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-md);
+  position: relative;
+}
+.fa-card::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 16px; right: 16px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent-dim), transparent);
+  opacity: 0.35;
+  pointer-events: none;
+}
+.fa-card--hero {
+  background:
+    linear-gradient(180deg, rgba(0, 212, 170, 0.04) 0%, transparent 100%),
+    var(--bg-secondary);
+  box-shadow: var(--shadow-lg);
 }
 
 /* Leaflet dark theme overrides */

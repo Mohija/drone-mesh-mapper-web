@@ -350,7 +350,8 @@ export default function SettingsTab() {
         display: 'flex', alignItems: 'center', gap: 12,
         marginBottom: 20, flexWrap: 'wrap',
       }}>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Einstellungen</h1>
+        <h1 className="fa-display" style={{ margin: 0, fontSize: 32, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.05 }}>Einstellungen</h1>
+        <div className="fa-micro" style={{ marginLeft: 2, paddingLeft: 12, borderLeft: '2px solid var(--accent)' }}>Admin · Mandanten-Config</div>
       </div>
 
       {/* Error */}
@@ -385,7 +386,7 @@ export default function SettingsTab() {
         background: 'var(--bg-secondary)', border: '1px solid var(--border)',
         borderRadius: 10, padding: 16, marginBottom: 20,
       }}>
-        <h3 style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 600 }}>
+        <h3 className="fa-display" style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 700, letterSpacing: '-0.01em' }}>
           Einsatz-Zonen Standardwerte
         </h3>
         <p style={{ margin: '0 0 16px', fontSize: 12, color: 'var(--text-muted)' }}>
@@ -504,7 +505,7 @@ export default function SettingsTab() {
         background: 'var(--bg-secondary)', border: '1px solid var(--border)',
         borderRadius: 10, padding: 16, marginBottom: 20,
       }}>
-        <h3 style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 600 }}>
+        <h3 className="fa-display" style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 700, letterSpacing: '-0.01em' }}>
           Firmware Backend-URL
         </h3>
         <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
@@ -545,12 +546,7 @@ export default function SettingsTab() {
             data-testid="firmware-backend-url-save"
             onClick={handleFirmwareUrlSave}
             disabled={firmwareUrlSaving}
-            style={{
-              padding: '8px 20px', background: 'var(--accent)', color: '#fff',
-              border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600,
-              cursor: firmwareUrlSaving ? 'not-allowed' : 'pointer',
-              opacity: firmwareUrlSaving ? 0.7 : 1,
-            }}
+            className="fa-btn-primary"
           >
             {firmwareUrlSaving ? 'Speichern…' : 'Speichern'}
           </button>
@@ -562,7 +558,7 @@ export default function SettingsTab() {
         background: 'var(--bg-secondary)', border: '1px solid var(--border)',
         borderRadius: 10, padding: 16, marginBottom: 20,
       }}>
-        <h3 style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 600 }}>
+        <h3 className="fa-display" style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 700, letterSpacing: '-0.01em' }}>
           Datenaufbewahrung
         </h3>
         <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
@@ -607,12 +603,7 @@ export default function SettingsTab() {
             data-testid="retention-save"
             onClick={handleRetentionSave}
             disabled={retentionSaving}
-            style={{
-              padding: '8px 16px', background: 'var(--accent)', color: '#fff',
-              border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600,
-              cursor: retentionSaving ? 'not-allowed' : 'pointer',
-              opacity: retentionSaving ? 0.7 : 1,
-            }}
+            className="fa-btn-primary"
           >{retentionSaving ? 'Speichern…' : 'Speichern'}</button>
           <button
             data-testid="retention-cleanup-now"
@@ -630,7 +621,7 @@ export default function SettingsTab() {
         background: 'var(--bg-secondary)', border: '1px solid var(--border)',
         borderRadius: 10, padding: 16, marginBottom: 20,
       }}>
-        <h3 style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 600 }}>
+        <h3 className="fa-display" style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 700, letterSpacing: '-0.01em' }}>
           Service-Tokens
         </h3>
         <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
@@ -684,10 +675,7 @@ export default function SettingsTab() {
           <button
             data-testid="service-token-create"
             onClick={handleCreateToken}
-            style={{
-              padding: '8px 16px', background: 'var(--accent)', color: '#fff',
-              border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-            }}
+            className="fa-btn-primary"
           >Token erstellen</button>
         </div>
 
@@ -738,7 +726,7 @@ export default function SettingsTab() {
         background: 'var(--bg-secondary)', border: '1px solid var(--border)',
         borderRadius: 10, padding: 16, marginBottom: 20,
       }}>
-        <h3 style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 600 }}>
+        <h3 className="fa-display" style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 700, letterSpacing: '-0.01em' }}>
           WiFi-Netzwerke
         </h3>
         <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--text-muted)' }}>
@@ -864,7 +852,7 @@ export default function SettingsTab() {
         background: 'var(--bg-secondary)', border: '1px solid var(--border)',
         borderRadius: 10, padding: 16, marginBottom: 20,
       }}>
-        <h3 style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 600 }}>
+        <h3 className="fa-display" style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 700, letterSpacing: '-0.01em' }}>
           Sicherheits-Audit
         </h3>
         <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-muted)' }}>

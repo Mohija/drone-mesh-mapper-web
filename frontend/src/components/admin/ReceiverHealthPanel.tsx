@@ -140,14 +140,18 @@ const levelIcon: Record<HealthCheck['level'], string> = {
 
 function Pill({ color, label }: { color: string; label: string }) {
   return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 6,
-      padding: '4px 10px', borderRadius: 999,
-      background: `${color}22`, border: `1px solid ${color}`,
-      color, fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
-      letterSpacing: 0.5,
+    <span className="fa-micro" style={{
+      display: 'inline-flex', alignItems: 'center', gap: 8,
+      padding: '5px 12px 5px 10px', borderRadius: 999,
+      background: `${color}1f`,
+      border: `1px solid ${color}66`,
+      color, fontSize: 11, letterSpacing: '0.14em',
+      boxShadow: `0 0 0 1px ${color}10, 0 4px 8px -4px ${color}40`,
     }}>
-      <span style={{ width: 8, height: 8, borderRadius: '50%', background: color }} />
+      <span style={{
+        width: 7, height: 7, borderRadius: '50%', background: color,
+        boxShadow: `0 0 8px ${color}`,
+      }} />
       {label}
     </span>
   );
@@ -214,8 +218,8 @@ export default function ReceiverHealthPanel({ node }: Props) {
       {/* 3-panel grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10 }}>
         {/* Network */}
-        <div style={{ padding: 10, background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 8 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Verbindung</div>
+        <div className="fa-card" style={{ padding: 12 }}>
+          <div className="fa-micro" style={{ marginBottom: 10 }}>Verbindung</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12 }}>
             <div><span style={{ color: 'var(--text-muted)' }}>SSID:</span> {node.wifiSsid || '-'}</div>
             <div><span style={{ color: 'var(--text-muted)' }}>Kanal:</span> {node.wifiChannel ?? '-'}</div>
@@ -227,8 +231,8 @@ export default function ReceiverHealthPanel({ node }: Props) {
         </div>
 
         {/* Runtime */}
-        <div style={{ padding: 10, background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 8 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Laufzeit</div>
+        <div className="fa-card" style={{ padding: 12 }}>
+          <div className="fa-micro" style={{ marginBottom: 10 }}>Laufzeit</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12 }}>
             <div><span style={{ color: 'var(--text-muted)' }}>Firmware:</span> {node.firmwareVersion || '-'}</div>
             <div><span style={{ color: 'var(--text-muted)' }}>Uptime:</span> {formatUptime(node.uptimeSeconds)}</div>
@@ -241,8 +245,8 @@ export default function ReceiverHealthPanel({ node }: Props) {
         </div>
 
         {/* Backend comms */}
-        <div style={{ padding: 10, background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 8 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Backend-Kommunikation</div>
+        <div className="fa-card" style={{ padding: 12 }}>
+          <div className="fa-micro" style={{ marginBottom: 10 }}>Backend-Kommunikation</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12 }}>
             <div>
               <span style={{ color: 'var(--text-muted)' }}>Fehlerzähler:</span>{' '}
@@ -261,7 +265,7 @@ export default function ReceiverHealthPanel({ node }: Props) {
 
       {/* Health check list */}
       <div style={{ padding: 10, background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 8 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Checks</div>
+        <div className="fa-micro" style={{ marginBottom: 10 }}>Checks</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12 }}>
           {checks.map((c, i) => (
             <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>

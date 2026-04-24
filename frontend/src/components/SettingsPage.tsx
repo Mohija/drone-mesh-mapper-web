@@ -122,7 +122,7 @@ export default function SettingsPage() {
         >
           &#8592; Karte
         </button>
-        <div style={{ fontSize: 20, fontWeight: 600 }}>Einstellungen</div>
+        <h1 className="fa-display" style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.05, margin: 0 }}>Einstellungen</h1>
       </div>
 
       {/* Content */}
@@ -385,18 +385,8 @@ export default function SettingsPage() {
             <button
               onClick={handleSave}
               disabled={saving}
-              style={{
-                padding: '10px 24px',
-                background: saved ? 'var(--status-active)' : 'var(--accent)',
-                color: '#fff',
-                border: 'none',
-                borderRadius: 8,
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: saving ? 'not-allowed' : 'pointer',
-                opacity: saving ? 0.7 : 1,
-                transition: 'background 0.2s',
-              }}
+              className="fa-btn-primary"
+              style={saved ? { background: 'var(--status-active)', color: '#0b0d12' } : undefined}
             >
               {saving ? 'Speichern...' : saved ? 'Gespeichert!' : 'Speichern'}
             </button>
