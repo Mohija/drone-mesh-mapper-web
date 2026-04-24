@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../ThemeContext';
 import { useIsMobile } from '../useIsMobile';
 import { useAuth } from '../AuthContext';
@@ -2455,8 +2455,33 @@ function MiniTOC({ subs, activeSubId, onSubClick }: {
 
 // ─── Main Component ──────────────────────────────────────
 
+// Maps a path to a human-readable label for the "zurück zu …" breadcrumb
+// shown when the user arrived here via a HelpLink. Keeping the mapping
+// in the same file so it stays in sync with the routes users can come from.
+function labelForPath(path: string): string {
+  if (path.startsWith('/admin/receivers')) return 'Empfänger';
+  if (path.startsWith('/admin/users')) return 'Benutzer';
+  if (path.startsWith('/admin/tenants')) return 'Mandanten';
+  if (path.startsWith('/admin/settings')) return 'Admin-Einstellungen';
+  if (path.startsWith('/admin/simulation')) return 'Simulation';
+  if (path.startsWith('/admin/logs')) return 'Logs';
+  if (path.startsWith('/admin/audit')) return 'Sicherheit';
+  if (path.startsWith('/admin/planning')) return 'Planung';
+  if (path.startsWith('/admin/addressbook')) return 'Adressbuch';
+  if (path.startsWith('/admin')) return 'Administration';
+  if (path.startsWith('/settings')) return 'Einstellungen';
+  if (path === '/' || path === '') return 'Karte';
+  return 'zurück';
+}
+
 export default function HelpPage() {
   const navigate = useNavigate();
+  const routerLocation = useLocation();
+  // location.state is set by <HelpLink> when the user opened help from a
+  // specific menu/button. Shows a top-left breadcrumb "← Zurück zu Empfänger"
+  // so the user knows a single back-click returns them where they came from.
+  const fromState = routerLocation.state as { fromPath?: string; fromLabel?: string } | null;
+  const fromPath = fromState?.fromPath;
   const { theme } = useTheme();
   const { canManage } = useAuth();
   const isMobile = useIsMobile();
@@ -2712,6 +2737,32 @@ export default function HelpPage() {
             padding: isMobile ? '60px 16px 24px' : '24px 40px',
             maxWidth: 800, lineHeight: 1.7, fontSize: 14,
           }}>
+            {/* Contextual back-link — only rendered when the user got here
+                via a <HelpLink> from somewhere in the app. Browser back
+                still works, this is just a visible hint + one-click exit. */}
+            {fromPath && (
+              <div style={{ marginBottom: 16 }}>
+                <button
+                  onClick={() => {
+                    if (window.history.length > 1) navigate(-1);
+                    else navigate(fromPath);
+                  }}
+                  data-testid="help-back"
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 8,
+                    padding: '8px 14px', minHeight: 40,
+                    background: 'transparent', border: '1px solid var(--accent)',
+                    borderRadius: 8, color: 'var(--accent)',
+                    fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                    fontFamily: "'Space Grotesk', sans-serif",
+                    letterSpacing: '0.02em',
+                    touchAction: 'manipulation',
+                  }}
+                >
+                  ← Zurück zu <strong style={{ marginLeft: 2 }}>{labelForPath(fromPath)}</strong>
+                </button>
+              </div>
+            )}
             {/* Expand all / Collapse all - only for long collapsible sections */}
             {(active === 'hardware' || active === 'receivers' || active === 'ota') && (
               <div style={{ display: 'flex', gap: 8, marginBottom: 8, justifyContent: 'flex-end' }}>

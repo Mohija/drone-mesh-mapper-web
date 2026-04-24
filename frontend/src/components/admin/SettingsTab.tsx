@@ -7,6 +7,21 @@ import {
   type MissionZoneDefaults, type TenantWifiNetwork, type ServiceToken,
 } from '../../api';
 import { useIsMobile } from '../../useIsMobile';
+import HelpLink from '../HelpLink';
+
+// Tiny helper: render a section heading with an inline "?" help anchor.
+// Keeps the pair of elements (h3 + button) inline without forcing every
+// call site to repeat the flex wrapper.
+function SectionTitle({ children, helpSub }: { children: React.ReactNode; helpSub: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+      <h3 className="fa-display" style={{ margin: 0, fontSize: 17, fontWeight: 700, letterSpacing: '-0.01em' }}>
+        {children}
+      </h3>
+      <HelpLink section="admin" sub={helpSub} title={`Hilfe: ${String(children)}`} size={18} />
+    </div>
+  );
+}
 
 const DEFAULT_VALUES: MissionZoneDefaults = {
   radius: 100,
@@ -392,9 +407,7 @@ export default function SettingsTab() {
         background: 'var(--bg-secondary)', border: '1px solid var(--border)',
         borderRadius: 10, padding: 16, marginBottom: 20,
       }}>
-        <h3 className="fa-display" style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 700, letterSpacing: '-0.01em' }}>
-          Einsatz-Zonen Standardwerte
-        </h3>
+        <SectionTitle helpSub="zonen-einstellungen">Einsatz-Zonen Standardwerte</SectionTitle>
         <p style={{ margin: '0 0 16px', fontSize: 12, color: 'var(--text-muted)' }}>
           Diese Werte werden beim Erstellen neuer Einsatz-Zonen als Standard verwendet.
         </p>
@@ -511,9 +524,7 @@ export default function SettingsTab() {
         background: 'var(--bg-secondary)', border: '1px solid var(--border)',
         borderRadius: 10, padding: 16, marginBottom: 20,
       }}>
-        <h3 className="fa-display" style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 700, letterSpacing: '-0.01em' }}>
-          Firmware Backend-URL
-        </h3>
+        <SectionTitle helpSub="firmware-backend-url">Firmware Backend-URL</SectionTitle>
         <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
           Diese URL wird beim Firmware-Build in jeden Empfänger-Controller eingebrannt. Muss von überall erreichbar sein — keine LAN-IP.
           Für den LabCore Hub: Live-View-URL (z.&nbsp;B. <code style={{ fontSize: 11 }}>https://hub.dasilvafelix.de/api/live/flight-arc</code>).
@@ -564,9 +575,7 @@ export default function SettingsTab() {
         background: 'var(--bg-secondary)', border: '1px solid var(--border)',
         borderRadius: 10, padding: 16, marginBottom: 20,
       }}>
-        <h3 className="fa-display" style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 700, letterSpacing: '-0.01em' }}>
-          Datenaufbewahrung
-        </h3>
+        <SectionTitle helpSub="datenaufbewahrung">Datenaufbewahrung</SectionTitle>
         <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
           Wie lange Log-Tabellen aufbewahrt werden, bevor sie automatisch gelöscht werden (stündlicher Cleanup).
           Leer lassen = Standardwert verwenden. Der Cleanup schützt vor unkontrolliertem DB-Wachstum —
@@ -627,9 +636,7 @@ export default function SettingsTab() {
         background: 'var(--bg-secondary)', border: '1px solid var(--border)',
         borderRadius: 10, padding: 16, marginBottom: 20,
       }}>
-        <h3 className="fa-display" style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 700, letterSpacing: '-0.01em' }}>
-          Service-Tokens
-        </h3>
+        <SectionTitle helpSub="service-tokens">Service-Tokens</SectionTitle>
         <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
           API-Tokens für externe Monitore / Scheduled Agents. Jeder Token hat Scope <code>health_read</code> und darf <code>GET /api/receivers/health-summary</code> aufrufen — aber <strong>keine</strong> Daten ändern. Der Token-Wert wird nur beim Erstellen <em>einmalig</em> angezeigt — danach nur noch das Präfix.
         </p>
@@ -732,9 +739,7 @@ export default function SettingsTab() {
         background: 'var(--bg-secondary)', border: '1px solid var(--border)',
         borderRadius: 10, padding: 16, marginBottom: 20,
       }}>
-        <h3 className="fa-display" style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 700, letterSpacing: '-0.01em' }}>
-          WiFi-Netzwerke
-        </h3>
+        <SectionTitle helpSub="wifi-netzwerk-verwaltung">WiFi-Netzwerke</SectionTitle>
         <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--text-muted)' }}>
           Mandanten-WiFi-Netzwerke werden beim Firmware-Build als Standardwerte vorausgefüllt.
           Empfänger verbinden sich automatisch mit dem stärksten verfügbaren Netzwerk.
@@ -858,9 +863,7 @@ export default function SettingsTab() {
         background: 'var(--bg-secondary)', border: '1px solid var(--border)',
         borderRadius: 10, padding: 16, marginBottom: 20,
       }}>
-        <h3 className="fa-display" style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 700, letterSpacing: '-0.01em' }}>
-          Sicherheits-Audit
-        </h3>
+        <SectionTitle helpSub="sicherheits-audit">Sicherheits-Audit</SectionTitle>
         <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-muted)' }}>
           Protokolliert alle Benutzeraktionen (Anmeldungen, Änderungen an Zonen, Empfängern, Benutzern und Einstellungen).
           Einträge werden nach 48 Stunden automatisch gelöscht.

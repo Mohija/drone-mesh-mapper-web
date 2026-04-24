@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import HelpLink from './HelpLink';
 import {
   NFZ_CATEGORIES,
   NFZ_LAYERS,
@@ -77,6 +78,8 @@ export default function NoFlyZonesPanel({
         borderBottom: '1px solid var(--border)',
       }}>
         <span style={{ fontSize: 13, fontWeight: 600 }}>Flugverbotszonen (DIPUL)</span>
+        <HelpLink section="nfz" title="Hilfe: Flugverbotszonen" size={16} />
+        <span style={{ flex: 1 }} />
         <button
           onClick={() => onToggleAll(!allEnabled)}
           title={allEnabled ? 'Alle deaktivieren' : 'Alle aktivieren'}

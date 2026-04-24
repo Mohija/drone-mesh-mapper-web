@@ -25,6 +25,7 @@ import {
 } from '../config/noFlyZones';
 import { getUserItem, setUserItem } from '../userStorage';
 import { useIsMobile } from '../useIsMobile';
+import HelpLink from './HelpLink';
 
 const DEFAULT_RADIUS = 50000; // 50km
 const DEFAULT_CENTER = { lat: 52.0302, lon: 8.5325 }; // Bielefeld
@@ -409,6 +410,7 @@ export default function MapPage() {
                 Drohne{droneCount !== 1 ? 'n' : ''}
               </span>
             </div>
+            <HelpLink section="map" title="Hilfe: Kartenansicht" size={20} />
           </div>
 
           {/* Admin button (separated from logout!) */}
@@ -604,6 +606,7 @@ export default function MapPage() {
               Drohne{droneCount !== 1 ? 'n' : ''}
             </span>
           </div>
+          <HelpLink section="map" title="Hilfe: Kartenansicht" size={18} />
         </div>
 
         {/* Refresh rate control */}

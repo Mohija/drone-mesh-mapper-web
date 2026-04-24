@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import HelpLink from './HelpLink';
 import type { FlightZone } from '../types/drone';
 import { ZONE_COLORS } from '../useFlightZones';
 import { forwardGeocode } from '../api';
@@ -110,6 +111,7 @@ export default function FlightZonesPanel({
         justifyContent: 'space-between',
       }}>
         <span style={{ fontWeight: 600, fontSize: 13 }}>Flugzonen</span>
+        <HelpLink section="flightzones" title="Hilfe: Flugzonen" size={16} />
         <button
           onClick={onClose}
           style={{
