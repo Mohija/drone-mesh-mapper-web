@@ -1,6 +1,17 @@
 {
   "versions": [
     {
+      "version": "1.6.3",
+      "date": "2026-04-24",
+      "hardware": ["esp32-s3", "esp32-c3", "esp32-s3-gps"],
+      "changes": [
+        "OTA-Watchdog von 60s auf 180s erhöht — verhindert Abbrüche bei langsamen HTTPS-Downloads über Cloudflare-Tunnel (ein 1,2-MB-Download brauchte vorher ~90s und traf den Watchdog mitten im Flash-Write)",
+        "OTA-Progress-Callback füttert den Watchdog bei jedem empfangenen Chunk — der 180s-Timer feuert jetzt nur noch wenn der Transfer komplett stehenbleibt, nicht mehr wenn er einfach langsam ist",
+        "OTA-Logging erweitert: Fortschritt alle 10% (mit Heap-Zustand), Download-Start/Ende/Fehler-Events landen im Serial-Log — macht OTA-Probleme nachvollziehbar ohne Packet-Capture",
+        "Setzt httpUpdate.onProgress/onError/onStart/onEnd-Callbacks — frühere Fehlerdiagnose bestand nur aus getLastErrorString() nach Abbruch"
+      ]
+    },
+    {
       "version": "1.6.2",
       "date": "2026-04-24",
       "hardware": ["esp32-s3-gps"],

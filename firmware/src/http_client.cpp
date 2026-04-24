@@ -292,6 +292,7 @@ String FlightArcClient::_httpPostWithResponse(const String& path, const String& 
 }
 
 #include <HTTPUpdate.h>
+#include <esp_task_wdt.h>
 
 bool FlightArcClient::performOtaUpdate(const String& otaUrl) {
     // Construct full URL with API key as query parameter
@@ -309,6 +310,32 @@ bool FlightArcClient::performOtaUpdate(const String& otaUrl) {
     }
 
     httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
+
+    // Progress callback: feed the task watchdog on every chunk + log progress
+    // every ~100 KB so a stalled download surfaces in the serial log before
+    // the 180 s watchdog fires. Static because onProgress takes a
+    // std::function and we want to capture the previous reporting threshold.
+    static int lastLoggedPct = -1;
+    httpUpdate.onProgress([](int cur, int total) {
+        esp_task_wdt_reset();
+        if (total <= 0) return;
+        int pct = (cur * 100) / total;
+        if (pct / 10 != lastLoggedPct / 10) {
+            lastLoggedPct = pct;
+            Serial.printf("[OTA] Downloaded %d%% (%d / %d bytes, heap %d)\n",
+                          pct, cur, total, ESP.getFreeHeap());
+        }
+    });
+    httpUpdate.onError([](int err) {
+        Serial.printf("[OTA] httpUpdate error code %d\n", err);
+    });
+    httpUpdate.onStart([]() {
+        Serial.println("[OTA] Download started");
+    });
+    httpUpdate.onEnd([]() {
+        Serial.println("[OTA] Download complete, verifying + switching partition…");
+    });
+    lastLoggedPct = -1;
 
 #if HAS_TLS
     if (fullUrl.startsWith("https")) {

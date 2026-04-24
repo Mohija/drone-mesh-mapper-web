@@ -282,8 +282,11 @@ void loop() {
 #endif
             led.setState(LED_BOOT);  // Blink during OTA
 
-            // Set a watchdog: if OTA hangs >60s, reboot
-            esp_task_wdt_init(60, true);
+            // OTA stall watchdog — 180s gives enough slack for slow HTTPS
+            // downloads over Cloudflare tunnels. The progress callback in
+            // performOtaUpdate feeds this watchdog on every chunk, so it
+            // only fires if the transfer truly stalls (no bytes for 180s).
+            esp_task_wdt_init(180, true);
             esp_task_wdt_add(NULL);
 
             if (client.performOtaUpdate(ota.url)) {
