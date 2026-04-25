@@ -99,10 +99,10 @@ test.describe('Mobile: Admin Drawer', () => {
       // Click hamburger to open
       await page.locator('button').filter({ hasText: '\u2630' }).click();
     }
-    await expect(page.locator('a:has-text("Benutzer")')).toBeVisible({ timeout: 3000 });
-    await expect(page.locator('a:has-text("Empfänger")')).toBeVisible();
-    await expect(page.locator('a:has-text("Einstellungen")')).toBeVisible();
-    await expect(page.locator('a:has-text("Logs")')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Benutzer', exact: true })).toBeVisible({ timeout: 3000 });
+    await expect(page.getByRole('link', { name: 'Empfänger', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Einstellungen', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Logs', exact: true })).toBeVisible();
   });
 
   test('sidebar drawer navigation works', async ({ page }) => {
