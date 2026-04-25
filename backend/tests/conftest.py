@@ -83,8 +83,13 @@ def setup_test_db():
         )
 
     with flask_app.app_context():
-        from models import FlightZone, TrailArchive as TrailArchiveModel, User, Tenant, TenantSettings, SystemLog
+        from models import (FlightZone, TrailArchive as TrailArchiveModel, User, Tenant, TenantSettings,
+                            SystemLog, AlarmInterface, AlarmRule, AlarmDelivery, ServiceToken)
         # Delete zones, archives, and logs for default tenant
+        AlarmDelivery.query.delete()
+        AlarmRule.query.delete()
+        AlarmInterface.query.delete()
+        ServiceToken.query.delete()
         FlightZone.query.delete()
         TrailArchiveModel.query.delete()
         SystemLog.query.delete()

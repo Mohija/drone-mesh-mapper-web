@@ -449,7 +449,7 @@ class ServiceToken(db.Model):
     """
     __tablename__ = "service_tokens"
 
-    VALID_SCOPES = {"health_read"}
+    VALID_SCOPES = {"health_read", "alarm_pull"}
 
     id = db.Column(db.String(8), primary_key=True, default=_uuid8)
     tenant_id = db.Column(db.String(8), db.ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
@@ -561,6 +561,181 @@ class AuditLog(db.Model):
             "details": self.details,
             "ipAddress": self.ip_address,
         }
+
+
+class AlarmInterface(db.Model):
+    """Outbound integration target: webhook (push), pull-out (FlightArc polls remote),
+    or pull-in (remote polls FlightArc via ServiceToken).
+
+    Auth credentials live in `auth_config` as JSON; secret values are encrypted
+    at rest (see services/alarm_dispatcher._encrypt / _decrypt). API responses
+    mask secrets like the wifi_networks pattern in tenant_settings.
+    """
+    __tablename__ = "alarm_interfaces"
+
+    VALID_TYPES = {"webhook", "pull_out", "pull_in"}
+    VALID_AUTH_TYPES = {"none", "basic", "bearer", "api_key_header", "api_key_query"}
+
+    id = db.Column(db.String(8), primary_key=True, default=_uuid8)
+    tenant_id = db.Column(db.String(8), db.ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    interface_type = db.Column(db.String(20), nullable=False)  # webhook | pull_out | pull_in
+    enabled = db.Column(db.Boolean, default=True, nullable=False)
+
+    # Connection
+    url = db.Column(db.String(500), nullable=True)              # NULL for pull_in
+    http_method = db.Column(db.String(10), default="POST", nullable=False)
+    extra_headers = db.Column(JSON, nullable=True)              # {"X-Custom": "value", ...}
+    timeout_seconds = db.Column(db.Integer, default=10, nullable=False)
+    retry_max = db.Column(db.Integer, default=3, nullable=False)
+    retry_backoff_seconds = db.Column(db.Float, default=2.0, nullable=False)
+
+    # Auth — stored encrypted; never returned in plaintext via API
+    auth_type = db.Column(db.String(20), default="none", nullable=False)
+    auth_config_encrypted = db.Column(db.Text, nullable=True)   # Fernet ciphertext
+
+    # Pull behaviour
+    pull_interval_seconds = db.Column(db.Integer, default=60, nullable=True)  # pull_out only
+    service_token_id = db.Column(db.String(8), db.ForeignKey("service_tokens.id", ondelete="SET NULL"), nullable=True)  # pull_in only
+
+    # Payload template — JSON tree where string leaves can contain {{mustache}} tokens.
+    # Renders against a context dict {drone, zone, violation, tenant, system}.
+    payload_template = db.Column(JSON, nullable=True)
+
+    created_at = db.Column(db.Float, default=_now, nullable=False)
+    updated_at = db.Column(db.Float, default=_now, onupdate=_now, nullable=False)
+    created_by = db.Column(db.String(100), nullable=True)
+
+    rules = db.relationship("AlarmRule", backref="interface", cascade="all, delete-orphan", lazy=True)
+    deliveries = db.relationship("AlarmDelivery", backref="interface", cascade="all, delete-orphan", lazy=True)
+
+    def to_dict(self, *, reveal_secrets: bool = False, raw_pull_token: str | None = None):
+        from services.alarm_dispatcher import decrypt_auth_config
+        auth_config = decrypt_auth_config(self.auth_config_encrypted) if self.auth_config_encrypted else {}
+        if not reveal_secrets:
+            auth_config = _mask_secrets(auth_config)
+        return {
+            "id": self.id,
+            "tenantId": self.tenant_id,
+            "name": self.name,
+            "description": self.description,
+            "interfaceType": self.interface_type,
+            "enabled": self.enabled,
+            "url": self.url,
+            "httpMethod": self.http_method,
+            "extraHeaders": self.extra_headers or {},
+            "timeoutSeconds": self.timeout_seconds,
+            "retryMax": self.retry_max,
+            "retryBackoffSeconds": self.retry_backoff_seconds,
+            "authType": self.auth_type,
+            "authConfig": auth_config,
+            "pullIntervalSeconds": self.pull_interval_seconds,
+            "serviceTokenId": self.service_token_id,
+            "payloadTemplate": self.payload_template,
+            "createdAt": self.created_at,
+            "updatedAt": self.updated_at,
+            "createdBy": self.created_by,
+            **({"pullToken": raw_pull_token} if raw_pull_token else {}),
+        }
+
+
+class AlarmRule(db.Model):
+    """Binds a Zone (or all zones) to an AlarmInterface for a given trigger."""
+    __tablename__ = "alarm_rules"
+
+    VALID_TRIGGERS = {"violation_start", "violation_end", "violation_update"}
+
+    id = db.Column(db.String(8), primary_key=True, default=_uuid8)
+    tenant_id = db.Column(db.String(8), db.ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    interface_id = db.Column(db.String(8), db.ForeignKey("alarm_interfaces.id", ondelete="CASCADE"), nullable=False)
+    zone_id = db.Column(db.String(8), db.ForeignKey("flight_zones.id", ondelete="CASCADE"), nullable=True)  # NULL = alle Zonen
+    name = db.Column(db.String(100), nullable=True)
+    trigger_type = db.Column(db.String(30), nullable=False)
+    filters = db.Column(JSON, nullable=True)                    # {"drone_source": "receiver", ...}
+    enabled = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.Float, default=_now, nullable=False)
+    updated_at = db.Column(db.Float, default=_now, onupdate=_now, nullable=False)
+
+    deliveries = db.relationship("AlarmDelivery", backref="rule", lazy=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "tenantId": self.tenant_id,
+            "interfaceId": self.interface_id,
+            "zoneId": self.zone_id,
+            "name": self.name,
+            "triggerType": self.trigger_type,
+            "filters": self.filters or {},
+            "enabled": self.enabled,
+            "createdAt": self.created_at,
+            "updatedAt": self.updated_at,
+        }
+
+
+class AlarmDelivery(db.Model):
+    """Audit row: every dispatch attempt (success or failure) writes here."""
+    __tablename__ = "alarm_deliveries"
+
+    VALID_STATUS = {"pending", "success", "failed", "retrying"}
+
+    id = db.Column(db.String(8), primary_key=True, default=_uuid8)
+    tenant_id = db.Column(db.String(8), db.ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    rule_id = db.Column(db.String(8), db.ForeignKey("alarm_rules.id", ondelete="SET NULL"), nullable=True)
+    interface_id = db.Column(db.String(8), db.ForeignKey("alarm_interfaces.id", ondelete="CASCADE"), nullable=False)
+    violation_id = db.Column(db.String(8), nullable=True)        # FK target may have been deleted by retention
+    trigger_type = db.Column(db.String(30), nullable=True)       # e.g. violation_start | pull_out_check | manual_test
+    attempt = db.Column(db.Integer, default=1, nullable=False)
+    status = db.Column(db.String(20), default="pending", nullable=False)
+    http_status = db.Column(db.Integer, nullable=True)
+    request_payload = db.Column(JSON, nullable=True)
+    response_status = db.Column(db.Integer, nullable=True)
+    response_body = db.Column(db.Text, nullable=True)            # truncated to 4 KB
+    error = db.Column(db.Text, nullable=True)
+    started_at = db.Column(db.Float, default=_now, nullable=False)
+    completed_at = db.Column(db.Float, nullable=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "tenantId": self.tenant_id,
+            "ruleId": self.rule_id,
+            "interfaceId": self.interface_id,
+            "violationId": self.violation_id,
+            "triggerType": self.trigger_type,
+            "attempt": self.attempt,
+            "status": self.status,
+            "httpStatus": self.http_status,
+            "requestPayload": self.request_payload,
+            "responseStatus": self.response_status,
+            "responseBody": self.response_body,
+            "error": self.error,
+            "startedAt": self.started_at,
+            "completedAt": self.completed_at,
+        }
+
+
+_SECRET_KEYS = {"password", "token", "api_key", "secret", "value"}
+
+
+def _mask_secrets(auth_config: dict) -> dict:
+    """Return a copy of an auth config with sensitive values replaced by '••••••••'.
+
+    Used by AlarmInterface.to_dict to ensure tokens / passwords never leave the
+    server in the clear after the first save. Frontend sends '' (empty string)
+    or no key when the user did not change the field — backend keeps the old
+    encrypted blob in that case.
+    """
+    if not isinstance(auth_config, dict):
+        return {}
+    out = {}
+    for k, v in auth_config.items():
+        if k in _SECRET_KEYS and v:
+            out[k] = "••••••••"
+        else:
+            out[k] = v
+    return out
 
 
 # ─── Cleanup: delete firmware binaries when ReceiverNode is deleted ─────

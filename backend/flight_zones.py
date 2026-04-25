@@ -319,6 +319,10 @@ class FlightZoneManager:
                 }
 
         # 2. Update DB records atomically
+        zones_by_id = {z["id"]: z for z in zones_list}
+        created_events: list[tuple] = []     # (record, drone_dict, zone_dict)
+        ended_events: list[tuple] = []       # (record, drone_snapshot, zone_dict)
+
         with self._ctx():
             active_records = VR.query.filter_by(tenant_id=tid, end_time=None).all()
             existing_keys: dict[tuple[str, str], "VR"] = {}
@@ -331,6 +335,8 @@ class FlightZoneManager:
                 if key not in active_pairs:
                     record.end_time = now
                     changed = True
+                    last_snap = (record.trail_data or [{}])[-1] if record.trail_data else {}
+                    ended_events.append((record, last_snap, zones_by_id.get(record.zone_id, {})))
 
             # Create new violations or append trail snapshots
             for key, details in active_pairs.items():
@@ -350,7 +356,7 @@ class FlightZoneManager:
 
                 if key not in existing_keys:
                     drone_id, zone_id = key
-                    db.session.add(VR(
+                    new_rec = VR(
                         tenant_id=tid,
                         drone_id=drone_id,
                         drone_name=details["drone_name"],
@@ -360,8 +366,11 @@ class FlightZoneManager:
                         zone_polygon=details["zone_polygon"],
                         start_time=now,
                         trail_data=[snapshot],
-                    ))
+                    )
+                    db.session.add(new_rec)
+                    db.session.flush()  # populate id for dispatcher
                     changed = True
+                    created_events.append((new_rec, drone, zones_by_id.get(zone_id, {})))
                 else:
                     # Append trail snapshot to existing active violation
                     record = existing_keys[key]
@@ -373,8 +382,38 @@ class FlightZoneManager:
 
         if changed:
             self._bump_violation_version(tid)
+            self._dispatch_alarm_events(tid, created_events, ended_events)
         logger.debug("update_violations tenant=%s: %d active pairs, %d db records, changed=%s",
                       tid, len(active_pairs), len(existing_keys), changed)
+
+    def _dispatch_alarm_events(self, tid: str, created_events: list[tuple],
+                                ended_events: list[tuple]) -> None:
+        """Fan out violation_start / violation_end events to the alarm dispatcher.
+
+        Failures here must never affect violation tracking — wrap aggressively.
+        """
+        if not created_events and not ended_events:
+            return
+        try:
+            from flask import current_app
+            from services.alarm_dispatcher import dispatch_violation_event
+            app = current_app._get_current_object()
+            for record, drone, zone in created_events:
+                dispatch_violation_event(app, tid, "violation_start", record, drone, zone)
+            for record, drone_snap, zone in ended_events:
+                drone = {
+                    "id": record.drone_id, "name": record.drone_name,
+                    "latitude": drone_snap.get("lat"), "longitude": drone_snap.get("lon"),
+                    "altitude": drone_snap.get("alt"), "speed": drone_snap.get("speed"),
+                    "battery": drone_snap.get("battery"),
+                    "signal_strength": drone_snap.get("signal"),
+                    "bearing": drone_snap.get("heading"),
+                    "pilot_latitude": drone_snap.get("pilot_lat"),
+                    "pilot_longitude": drone_snap.get("pilot_lon"),
+                }
+                dispatch_violation_event(app, tid, "violation_end", record, drone, zone)
+        except Exception as exc:
+            logger.exception("alarm dispatch failed for tenant=%s: %s", tid, exc)
 
     def list_violations(self, tenant_id=None) -> list[dict]:
         """Get all violation records for a tenant (active + ended)."""

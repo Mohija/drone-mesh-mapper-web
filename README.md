@@ -51,6 +51,24 @@ Web-Anwendung für Echtzeit-Visualisierung und Überwachung von Drohnen auf eine
 - **DB-Statistik** (Zeilenzähler je Tabelle, Dateigröße)
 - **Flugberichte** mit HTML/PDF-Export aus archivierten Trails (30 d Aufbewahrung)
 
+### Alarmierung an externe Systeme
+- **Schnittstellen-Editor** im Admin-Bereich (`/admin/interfaces`): pro Mandant beliebige Anzahl
+  Außenkanäle anlegen — **Webhook (Push)**, **Pull-Out** (FlightArc pollt extern), **Pull-In**
+  (Drittsystem holt von FlightArc ab via Service-Token).
+- **Authentifizierung** pro Schnittstelle: Bearer-Token, Basic Auth, API-Key (Header oder
+  Query-Parameter). Geheimnisse werden mit Fernet verschlüsselt und im UI mit `••••••••` maskiert.
+- **JSON-Payload-Builder** mit Variablen-Picker — alle Drohnen-, Zonen-, Verstoß-, Tenant- und
+  System-Felder sind per Click in das Template einsetzbar (`{{drone.id}}`, `{{zone.name}}`,
+  `{{system.now_iso}}`, …). Typisierte Werte (Zahlen / Bools) per `${{path}}`-Präfix.
+- **Templates**: Slack-Webhook, Alamos-FE2-Skelett, generisch — als Vorlagen direkt im Editor.
+  Pro Schnittstelle Export / Import als JSON (ohne Geheimnisse).
+- **Test-Button** sendet sofort gegen einen Beispielkontext oder den letzten echten Verstoß,
+  Response wird angezeigt, jeder Versuch landet im Lieferungs-Log.
+- **Alarmverwaltung** (`/admin/alarms`): Regeln verbinden Zone (oder „alle Zonen") × Schnittstelle ×
+  Trigger (Verstoß-Start / -Ende / -Update). Pro Regel ein-/ausschaltbar + testbar.
+- **Lieferungs-Log** pro Schnittstelle: Status, HTTP-Code, Trigger, Request- und Response-Body
+  jedes Versuchs (3 Wiederholungen mit Backoff bei Fehler). Audit-Trail für jede Konfigurationsänderung.
+
 ### Frontend
 - **Mobile- und Desktop-Layout** mit Drawer-Menü, 44 px Touch-Targets, collapsible Sections, Tablet-Detection
 - **Dark / Light Theme** (localStorage-persistent)

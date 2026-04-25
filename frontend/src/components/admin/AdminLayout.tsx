@@ -14,6 +14,8 @@ const navItems = [
   { to: '/admin/logs', label: 'Logs' },
   { to: '/admin/audit', label: 'Sicherheit' },
   { to: '/admin/planning', label: 'Planung' },
+  { to: '/admin/interfaces', label: 'Schnittstellen' },
+  { to: '/admin/alarms', label: 'Alarmverwaltung' },
 ];
 
 export default function AdminLayout() {

@@ -1392,3 +1392,230 @@ export async function deleteServiceToken(id: string): Promise<void> {
   const res = await authFetch(`${API_BASE}/admin/service-tokens/${id}`, { method: 'DELETE' });
   if (!res.ok) throw new Error(`API error: ${res.status}`);
 }
+
+// ─── Alarm Interfaces & Rules ─────────────────────────────────────────────
+
+export interface AlarmAuthConfig {
+  username?: string;
+  password?: string;
+  token?: string;
+  name?: string;
+  value?: string;
+}
+
+export interface AlarmInterface {
+  id: string;
+  tenantId: string;
+  name: string;
+  description: string | null;
+  interfaceType: 'webhook' | 'pull_out' | 'pull_in';
+  enabled: boolean;
+  url: string | null;
+  httpMethod: string;
+  extraHeaders: Record<string, string>;
+  timeoutSeconds: number;
+  retryMax: number;
+  retryBackoffSeconds: number;
+  authType: 'none' | 'basic' | 'bearer' | 'api_key_header' | 'api_key_query';
+  authConfig: AlarmAuthConfig;
+  pullIntervalSeconds: number | null;
+  serviceTokenId: string | null;
+  payloadTemplate: unknown;
+  createdAt: number;
+  updatedAt: number;
+  createdBy: string | null;
+  pullToken?: string;  // returned only on creation of pull_in interface
+}
+
+export interface AlarmInterfaceListResponse {
+  items: AlarmInterface[];
+  version: number;
+}
+
+export interface AlarmRule {
+  id: string;
+  tenantId: string;
+  interfaceId: string;
+  zoneId: string | null;
+  name: string | null;
+  triggerType: 'violation_start' | 'violation_end' | 'violation_update';
+  filters: Record<string, unknown>;
+  enabled: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface AlarmDelivery {
+  id: string;
+  tenantId: string;
+  ruleId: string | null;
+  interfaceId: string;
+  violationId: string | null;
+  triggerType: string | null;
+  attempt: number;
+  status: 'pending' | 'success' | 'failed' | 'retrying';
+  httpStatus: number | null;
+  requestPayload: unknown;
+  responseStatus: number | null;
+  responseBody: string | null;
+  error: string | null;
+  startedAt: number;
+  completedAt: number | null;
+}
+
+export interface VariablePoolEntry {
+  path: string;
+  type: string;
+  category: 'drone' | 'zone' | 'violation' | 'tenant' | 'system';
+  example: unknown;
+}
+
+export interface VariablePool {
+  variables: VariablePoolEntry[];
+  exampleContext: Record<string, unknown>;
+}
+
+export async function listAlarmInterfaces(): Promise<AlarmInterfaceListResponse> {
+  const res = await authFetch(`${API_BASE}/admin/interfaces`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function getAlarmInterface(id: string): Promise<AlarmInterface> {
+  const res = await authFetch(`${API_BASE}/admin/interfaces/${id}`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function createAlarmInterface(data: Partial<AlarmInterface>): Promise<AlarmInterface> {
+  const res = await authFetch(`${API_BASE}/admin/interfaces`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `API error: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function updateAlarmInterface(id: string, data: Partial<AlarmInterface>): Promise<AlarmInterface> {
+  const res = await authFetch(`${API_BASE}/admin/interfaces/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `API error: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function deleteAlarmInterface(id: string): Promise<void> {
+  const res = await authFetch(`${API_BASE}/admin/interfaces/${id}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+}
+
+export async function duplicateAlarmInterface(id: string): Promise<AlarmInterface> {
+  const res = await authFetch(`${API_BASE}/admin/interfaces/${id}/duplicate`, { method: 'POST' });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function exportAlarmInterface(id: string): Promise<unknown> {
+  const res = await authFetch(`${API_BASE}/admin/interfaces/${id}/export`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function importAlarmInterface(data: unknown): Promise<AlarmInterface> {
+  const res = await authFetch(`${API_BASE}/admin/interfaces/import`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `API error: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function testAlarmInterface(
+  id: string,
+  opts?: { useLatestViolation?: boolean; trigger?: string }
+): Promise<{ ok: boolean; status?: number; body?: string; error?: string }> {
+  const res = await authFetch(`${API_BASE}/admin/interfaces/${id}/test`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(opts || {}),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `API error: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function fetchVariablePool(): Promise<VariablePool> {
+  const res = await authFetch(`${API_BASE}/admin/interfaces/variables`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function listAlarmRules(): Promise<{ items: AlarmRule[]; version: number }> {
+  const res = await authFetch(`${API_BASE}/admin/alarm-rules`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function createAlarmRule(data: Partial<AlarmRule>): Promise<AlarmRule> {
+  const res = await authFetch(`${API_BASE}/admin/alarm-rules`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `API error: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function updateAlarmRule(id: string, data: Partial<AlarmRule>): Promise<AlarmRule> {
+  const res = await authFetch(`${API_BASE}/admin/alarm-rules/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function deleteAlarmRule(id: string): Promise<void> {
+  const res = await authFetch(`${API_BASE}/admin/alarm-rules/${id}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+}
+
+export async function testAlarmRule(id: string): Promise<{ ok: boolean; status?: number; body?: string; error?: string }> {
+  const res = await authFetch(`${API_BASE}/admin/alarm-rules/${id}/test`, { method: 'POST' });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function listAlarmDeliveries(opts?: {
+  limit?: number;
+  interfaceId?: string;
+  status?: string;
+}): Promise<{ items: AlarmDelivery[] }> {
+  const params = new URLSearchParams();
+  if (opts?.limit) params.set('limit', String(opts.limit));
+  if (opts?.interfaceId) params.set('interfaceId', opts.interfaceId);
+  if (opts?.status) params.set('status', opts.status);
+  const url = `${API_BASE}/admin/alarm-deliveries${params.toString() ? `?${params}` : ''}`;
+  const res = await authFetch(url);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}

@@ -164,6 +164,12 @@ with app.app_context():
 # Register blueprints (auth, admin)
 register_blueprints(app)
 
+# Outbound alarm pull-out worker: probes pull_out interfaces every ~30s for
+# liveness. Inbound (push webhook) dispatch is triggered from
+# flight_zones.update_violations directly. See services/alarm_dispatcher.py.
+from services.alarm_dispatcher import start_pull_out_worker
+start_pull_out_worker(app)
+
 # Seed super admin
 seed_super_admin(app)
 

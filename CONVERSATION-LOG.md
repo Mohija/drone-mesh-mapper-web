@@ -2,7 +2,7 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-04-25 (Doku-Sweep: README.md auf aktuellen Funktionsumfang gehoben)
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-04-25 (Alarmierung Phase 1: Schnittstellen-Editor + Alarmverwaltung)
 - **Typ:** Projekt | **Status:** Development
 
 ## Offene Aufgaben
@@ -18,12 +18,42 @@
 - [x] Logging-System: Per-Mandant DB-Logging mit konfigurierbaren Levels. Admin-Tab "Logs" mit Filterung, Suche, Auto-Refresh.
 - [x] E2E-Tests für Mobile-Ansichten: 28 Playwright-Tests mit Mobile-Viewport (375x667) für alle Mobile-Layouts.
 - [x] Benutzerhandbuch: Mobile-Ansichten, Einsatz-Zonen Einstellungen, Adress-Prüfung, Log-Viewer dokumentiert.
+- [x] Alarmierung Phase 1: Schnittstellen-Editor + Alarmverwaltung (Webhook-Push, Pull-Out, Pull-In, Auth-Methoden, JSON-Template-Builder, Lieferungs-Log)
+- [ ] Alarmierung Phase 2: Drag-and-Drop JSON-Builder mit @dnd-kit
+- [ ] Alarmierung Phase 3: System-Templates (Alamos FE2, Slack, Discord) + UI-Polish Import/Export
+- [ ] Alarmierung Phase 4: Pull-Out-Response-Mapper, Statistik-Charts, Mobile-Polishing
 - [ ] WebSocket-Integration für echte Push-Updates statt Polling
 - [ ] ESP 8266 MicroPython-Anpassung
 - [ ] Integration mit echtem drone-mesh-mapper Hardware-Setup
 - [ ] Docker Deployment Package
 
 ## Änderungshistorie
+
+### 2026-04-25 - Alarmierung Phase 1: Schnittstellen-Editor + Alarmverwaltung
+**Anlass:** Bisher gab es keinen Outbound-Kanal — Verstöße wurden nur intern angezeigt und beep-acoustisch signalisiert. Externe Drittsysteme (Alamos FE2, Slack, Teams, eigene Alarmserver) konnten nicht angebunden werden.
+
+**Phase-1-Umfang (umgesetzt, alle Tests grün, live verifiziert gegen httpbin.org):**
+
+- **Backend** — drei neue Modelle (`AlarmInterface`, `AlarmRule`, `AlarmDelivery`), Migration `015_alarm_interfaces` (additiv mit Auto-Backup), neuer Service `services/alarm_dispatcher.py`:
+  - Mustache-Renderer (`chevron`) mit `${{path}}`-Syntax für typisierte Werte
+  - Auth-Anwender für Bearer / Basic / API-Key (Header oder Query) — Geheimnisse mit Fernet aus `JWT_SECRET` verschlüsselt, im Response mit `••••••••` maskiert
+  - Async Dispatch via `ThreadPoolExecutor(4)`, Retry mit Backoff, jede Lieferung in `alarm_deliveries` auditiert
+  - Pull-Out-Worker als Background-Thread (alle 30 s), Pull-In als Service-Token-geschützter Read-Only-Endpoint `/api/integrations/violations` (aktive + 24 h beendete Verstöße)
+  - Hook in `flight_zones.update_violations`: `created_events` / `ended_events` werden gesammelt und nach Commit ans Dispatcher-System übergeben (failures isoliert, Tracking nicht blockiert)
+- **Routes** (`backend/routes/alarm_routes.py`): 17 neue Endpunkte unter `/api/admin/interfaces`, `/api/admin/alarm-rules`, `/api/admin/alarm-deliveries` (alle mit `@role_required("tenant_admin")`) plus `/api/integrations/violations` (Service-Token, neuer Scope `alarm_pull` zu `ServiceToken.VALID_SCOPES`).
+- **Frontend** — fünf neue Komponenten + zwei neue Admin-Tabs:
+  - `InterfacesManager.tsx`: Card-Liste mit Test / Bearbeiten / Duplizieren / Export / Löschen / Lieferungen-Buttons + JSON-Datei-Import + einmalige Pull-In-Token-Anzeige
+  - `InterfaceEditor.tsx`: Modal mit 5 Tabs (Allgemein, Verbindung, Auth, Payload, Vorschau & Senden), Variablen-Picker links zum Click-to-insert, Live-Preview rechts mit Beispielkontext, Sample-Templates (Alamos FE2, Slack, Generic)
+  - `AlarmRulesManager.tsx` + Inline-Editor: Zone × Schnittstelle × Trigger, Aktiv-Toggle, Test-Button
+  - `AlarmDeliveryLog.tsx`: Per-Schnittstelle-Tabelle mit expandierbaren Request/Response
+  - 16 neue API-Funktionen + TypeScript-Interfaces in `api.ts`
+- **Tests**: 35 neue Backend-pytest-Tests (Encryption-Round-Trip, Auth-Anwendung aller 4 Methoden, Mustache-Render mit `${{}}`-Coercion, CRUD inkl. Auth-Maskierung beim Update, Dispatch-Retry mit Mock, Pull-In Auth+Scope) — alle grün. 5 neue Playwright E2E (versionierte Liste, Variable-Pool, CRUD inkl. Auth-Maskierung, Pull-In One-Shot-Token, UI-Render der beiden neuen Tabs) — alle grün. Conftest-Cleanup um neue Tabellen erweitert.
+- **Live-Verifikation**: Webhook gegen httpbin.org/post — Bearer-Header korrekt übergeben, Mustache + `${{}}` lieferten korrekt typisierte Werte (`drone.altitude` als Zahl 120.5), Delivery-Log zeigte `success 200 manual_test`.
+- **Doku**: `README.md` neuer Abschnitt „Alarmierung an externe Systeme", `HelpPage.tsx` zwei neue Sektionen (`interfaces`, `alarms`) mit Beispiel-Payloads (Slack, Alamos FE2). `requirements.txt` ergänzt um `chevron` und `cryptography`. Phase 2-4 als offene Aufgaben markiert.
+
+**Hinweis:** Phase 2 (Drag-and-Drop-Tree-Editor mit @dnd-kit), Phase 3 (System-Templates + Import/Export-Polish) und Phase 4 (Pull-Out-Response-Mapper, Stats, Mobile) folgen iterativ — Phase 1 liefert das vollständige funktionale Fundament.
+
+**Dateien:** `backend/{models.py,migrations.py,flight_zones.py,app.py,requirements.txt,routes/__init__.py,routes/alarm_routes.py,services/alarm_dispatcher.py,tests/conftest.py,tests/test_alarms.py}`, `frontend/src/{api.ts,App.tsx,components/HelpPage.tsx,components/admin/{AdminLayout,InterfacesManager,InterfaceEditor,AlarmRulesManager,AlarmDeliveryLog}.tsx}`, `frontend/e2e/interfaces.spec.ts`, `README.md`, `CONVERSATION-LOG.md`, `manifest.json`.
 
 ### 2026-04-25 - Doku-Sweep: README.md auf aktuellen Funktionsumfang gehoben
 **Anlass:** README.md zeigte nur 4 API-Endpunkte und v1.0.0-Feature-Liste, obwohl manifest.json bei v1.9.0 steht und Backend tatsächlich 80+ Endpunkte hat (Receivers, Zones, Violations, Trails, Admin, Logs, Audit, Service-Tokens, Addressbook).

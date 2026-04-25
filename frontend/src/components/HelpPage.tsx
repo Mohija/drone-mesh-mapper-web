@@ -125,7 +125,8 @@ const SECTION_SUBS: Record<string, SubMeta[]> = {
 type Section =
   | 'overview' | 'login' | 'map' | 'drones' | 'flightzones'
   | 'nfz' | 'violations' | 'reports' | 'settings' | 'admin'
-  | 'receivers' | 'simulation' | 'hardware' | 'ota' | 'installation' | 'tips';
+  | 'receivers' | 'simulation' | 'hardware' | 'ota' | 'installation' | 'tips'
+  | 'interfaces' | 'alarms';
 
 const SECTIONS: { id: Section; title: string; icon: string; adminOnly?: boolean }[] = [
   { id: 'overview', title: 'Übersicht', icon: '📋' },
@@ -140,6 +141,8 @@ const SECTIONS: { id: Section; title: string; icon: string; adminOnly?: boolean 
   { id: 'admin', title: 'Administration', icon: '👤', adminOnly: true },
   { id: 'receivers', title: 'Empfänger-Verwaltung', icon: '📡', adminOnly: true },
   { id: 'simulation', title: 'Simulation', icon: '🧪', adminOnly: true },
+  { id: 'interfaces', title: 'Schnittstellen', icon: '🔌', adminOnly: true },
+  { id: 'alarms', title: 'Alarmverwaltung', icon: '🔔', adminOnly: true },
   { id: 'hardware', title: 'Hardware-Inbetriebnahme', icon: '🔧', adminOnly: true },
   { id: 'ota', title: 'OTA-Updates & Merged Binary', icon: '📲', adminOnly: true },
   { id: 'installation', title: 'Installation & Update', icon: '📦', adminOnly: true },
@@ -1323,6 +1326,118 @@ function SectionReceivers() {
   );
 }
 
+function SectionInterfaces() {
+  return (
+    <div>
+      <h2>Schnittstellen</h2>
+      <p>
+        Im Adminbereich unter <strong>Schnittstellen</strong> definierst du alle Außenkanäle, an die
+        FlightArc Alarme schickt — oder die das Drittsystem von FlightArc abholt. Eine Schnittstelle
+        beschreibt, <em>wohin</em> die Daten gehen und <em>wie sie aufgebaut sind</em>. Welche Zone
+        welche Schnittstelle auslöst, regelt die <strong>Alarmverwaltung</strong>.
+      </p>
+      <h3>Drei Typen</h3>
+      <ul>
+        <li><strong>Webhook (Push)</strong> — FlightArc sendet bei Verstößen einen HTTP-Request mit
+          dem von dir konfigurierten Payload. Klassischer Anwendungsfall: Slack-Webhook,
+          Teams-Webhook, Alarmserver einer Leitstelle.</li>
+        <li><strong>Pull-Out</strong> — FlightArc fragt periodisch eine externe URL ab
+          (Konfigurations-Polling, Liveness-Check). Phase 1 macht nur einen Request alle X Sekunden
+          und protokolliert den Status.</li>
+        <li><strong>Pull-In</strong> — Das Drittsystem holt sich Verstöße bei FlightArc ab. Beim
+          Speichern wird einmalig ein Service-Token angezeigt, den du im Drittsystem als
+          <code>X-Service-Token</code>-Header hinterlegst. Endpoint: <code>/api/integrations/violations</code>.
+          Liefert aktive plus die letzten 24 h beendeten Verstöße.</li>
+      </ul>
+      <h3>Authentifizierung</h3>
+      <p>
+        Pro Schnittstelle wählbar: <strong>Bearer-Token</strong>, <strong>Basic Auth</strong>,
+        <strong>API-Key (Header)</strong> oder <strong>API-Key (Query-Parameter)</strong>.
+        Geheimnisse werden auf dem Server verschlüsselt (Fernet) und nie wieder im Klartext zurückgegeben —
+        beim Bearbeiten zeigen die Felder „••••••••" für Werte, die unverändert bleiben sollen.
+      </p>
+      <h3>Payload-Builder</h3>
+      <p>
+        Der Tab <strong>Payload</strong> bietet einen JSON-Editor mit eingebauter Variablen-Liste.
+        Klicke eine Variable links an, um sie an der Cursor-Position einzufügen. Verfügbare Pfade:
+      </p>
+      <ul>
+        <li><code>{`{{drone.id}}`}</code>, <code>{`{{drone.name}}`}</code>, <code>{`{{drone.latitude}}`}</code>,
+          <code>{`{{drone.longitude}}`}</code>, <code>{`{{drone.altitude}}`}</code>, … (alle
+          Drohnen-Felder)</li>
+        <li><code>{`{{zone.id}}`}</code>, <code>{`{{zone.name}}`}</code>, <code>{`{{zone.color}}`}</code></li>
+        <li><code>{`{{violation.id}}`}</code>, <code>{`{{violation.start_time_iso}}`}</code>,
+          <code>{`{{violation.duration_seconds}}`}</code></li>
+        <li><code>{`{{tenant.display_name}}`}</code></li>
+        <li><code>{`{{system.now_iso}}`}</code>, <code>{`{{trigger}}`}</code></li>
+      </ul>
+      <p>
+        Variablen in normalen Strings werden als Text eingesetzt. Für <strong>typisierte Werte</strong>
+        (z.B. eine Zahl statt String): nutze <code>{`\${{drone.altitude}}`}</code> mit Dollar-Präfix —
+        der Renderer parst das Ergebnis dann als JSON.
+      </p>
+      <h3>Test, Duplizieren, Export, Import</h3>
+      <p>
+        Jede Schnittstelle lässt sich mit dem <strong>Test</strong>-Button gegen einen
+        Beispielkontext senden — die Antwort siehst du sofort, jede Lieferung landet im Log.
+        <strong>Duplizieren</strong> erzeugt eine deaktivierte Kopie mit allen Einstellungen außer
+        dem Pull-In-Token. <strong>Export</strong> liefert eine JSON-Datei <em>ohne Geheimnisse</em>,
+        die per <strong>Import</strong> in einer anderen Mandanten oder Installation
+        wiederverwendet werden kann.
+      </p>
+      <h3>Beispiel: Slack-Webhook</h3>
+      <pre>{`{
+  "text": "🚨 {{drone.name}} hat „{{zone.name}}" verletzt um {{system.now_iso}}"
+}`}</pre>
+      <h3>Beispiel: Alamos FE2</h3>
+      <pre>{`{
+  "keyword": "Drohne in Sperrzone",
+  "units": [{ "address": "{{drone.id}}" }],
+  "note": "{{zone.name}} • {{drone.name}}",
+  "timestamp": "{{system.now_iso}}"
+}`}</pre>
+    </div>
+  );
+}
+
+function SectionAlarms() {
+  return (
+    <div>
+      <h2>Alarmverwaltung</h2>
+      <p>
+        Hier verbindest du Zonen mit Schnittstellen. Eine <strong>Regel</strong> sagt: „bei diesem Trigger
+        in dieser Zone wird diese Schnittstelle ausgelöst". Du kannst beliebig viele Regeln pro Zone
+        und beliebig viele Regeln pro Schnittstelle anlegen.
+      </p>
+      <h3>Felder einer Regel</h3>
+      <ul>
+        <li><strong>Schnittstelle</strong> — eine zuvor angelegte Schnittstelle (Push-Typen, Pull-In ist nicht trigger-fähig).</li>
+        <li><strong>Zone</strong> — eine konkrete Flugzone, oder „alle Zonen" für eine globale Regel.</li>
+        <li><strong>Trigger</strong>:
+          <ul>
+            <li><em>Verstoß-Start</em> — Drohne betritt Zone (oder erscheint zum ersten Mal innerhalb).</li>
+            <li><em>Verstoß-Ende</em> — Drohne verlässt Zone wieder.</li>
+            <li><em>Verstoß-Update</em> — Phase 2 (Trail-Snapshot, noch nicht aktiv).</li>
+          </ul>
+        </li>
+        <li><strong>Aktiviert</strong> — pro Regel an-/abschaltbar ohne sie zu löschen.</li>
+      </ul>
+      <h3>Test-Button</h3>
+      <p>
+        Eine Regel kann <em>jederzeit</em> mit dem aktuellsten verfügbaren Verstoß als Kontext
+        getestet werden. Wenn noch kein Verstoß im System ist, fällt der Test auf den
+        Beispielkontext zurück. Der Lieferversuch landet im Log der zugehörigen Schnittstelle.
+      </p>
+      <h3>Lieferungen einsehen</h3>
+      <p>
+        Im Schnittstellen-Tab gibt es pro Eintrag den Knopf <strong>Lieferungen</strong> — zeigt die
+        letzten Versuche mit Status, HTTP-Code, Trigger, Request-Payload und Response-Body.
+        Bei Fehlern sieht man die Fehlermeldung direkt.
+      </p>
+    </div>
+  );
+}
+
 function SectionSimulation() {
   return (
     <div>
@@ -2300,6 +2415,8 @@ const SECTION_CONTENT: Record<Section, () => JSX.Element> = {
   admin: SectionAdmin,
   receivers: SectionReceivers,
   simulation: SectionSimulation,
+  interfaces: SectionInterfaces,
+  alarms: SectionAlarms,
   hardware: SectionHardware,
   ota: SectionOta,
   installation: SectionInstallation,
