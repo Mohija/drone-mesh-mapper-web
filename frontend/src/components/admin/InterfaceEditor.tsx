@@ -87,6 +87,17 @@ export default function InterfaceEditor({ existing, onClose, onSaved }: Props) {
   const [externalUrl, setExternalUrl] = useState<string>('');
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; status?: number; body?: string; error?: string } | null>(null);
+  // Modal-Size: nutzer-gewählt (max), persistent. Auf Payload-Tab automatisch breiter.
+  const [fullscreen, setFullscreen] = useState<boolean>(() => {
+    try { return localStorage.getItem('flightarc.interface-editor.fullscreen') === '1'; } catch { return false; }
+  });
+  function toggleFullscreen() {
+    setFullscreen(v => {
+      const next = !v;
+      try { localStorage.setItem('flightarc.interface-editor.fullscreen', next ? '1' : '0'); } catch { /* ignore */ }
+      return next;
+    });
+  }
   const payloadRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -206,16 +217,33 @@ export default function InterfaceEditor({ existing, onClose, onSaved }: Props) {
   })();
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 'clamp(8px, 2vw, 24px)', overflow: 'auto' }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: fullscreen ? 0 : 'clamp(8px, 2vw, 24px)', overflow: 'auto' }}>
       <div style={{
-        width: tab === 'payload' ? 'min(1320px, 100%)' : 'min(960px, 100%)',
+        width: fullscreen
+          ? '100vw'
+          : (tab === 'payload' ? 'min(1320px, 100%)' : 'min(960px, 100%)'),
+        height: fullscreen ? '100vh' : undefined,
         background: 'var(--bg-secondary)',
-        borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden',
-        transition: 'width 0.2s ease',
+        borderRadius: fullscreen ? 0 : 12,
+        border: '1px solid var(--border)',
+        overflow: 'hidden',
+        transition: 'width 0.2s ease, height 0.2s ease',
+        display: 'flex', flexDirection: 'column',
       }}>
-        <header style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <header style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexShrink: 0 }}>
           <h2 style={{ margin: 0, fontSize: 16, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{isEdit ? `Schnittstelle: ${existing!.name}` : 'Neue Schnittstelle'}</h2>
-          <button onClick={onClose} style={{ background: 'transparent', border: 0, fontSize: 24, color: 'var(--text-muted)', cursor: 'pointer', padding: '0 4px', flexShrink: 0 }}>×</button>
+          <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+            <button
+              onClick={toggleFullscreen}
+              title={fullscreen ? 'Verkleinern' : 'Vergrößern (Vollbild)'}
+              style={{
+                background: 'transparent', border: '1px solid var(--border)',
+                fontSize: 14, color: 'var(--text-muted)', cursor: 'pointer',
+                padding: '4px 10px', borderRadius: 6, lineHeight: 1,
+              }}
+            >{fullscreen ? '🗗' : '🗖'}</button>
+            <button onClick={onClose} title="Schließen" style={{ background: 'transparent', border: 0, fontSize: 24, color: 'var(--text-muted)', cursor: 'pointer', padding: '0 4px' }}>×</button>
+          </div>
         </header>
 
         <nav style={{ display: 'flex', gap: 4, padding: '10px 12px 0', borderBottom: '1px solid var(--border)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
@@ -239,7 +267,13 @@ export default function InterfaceEditor({ existing, onClose, onSaved }: Props) {
           ))}
         </nav>
 
-        <div style={{ padding: 'clamp(12px, 3vw, 20px)', maxHeight: '70vh', overflow: 'auto' }}>
+        <div style={{
+          padding: 'clamp(12px, 3vw, 20px)',
+          maxHeight: fullscreen ? undefined : '70vh',
+          flex: fullscreen ? 1 : undefined,
+          minHeight: 0,
+          overflow: 'auto',
+        }}>
           {tab === 'general' && (
             <div style={{ display: 'grid', gap: 12 }}>
               <Field label="Name *">
@@ -399,6 +433,7 @@ export default function InterfaceEditor({ existing, onClose, onSaved }: Props) {
                   onChange={(next) => setPayloadJson(JSON.stringify(next, null, 2))}
                   variables={variables}
                   exampleContext={previewCtx}
+                  fullscreen={fullscreen}
                 />
               )}
 

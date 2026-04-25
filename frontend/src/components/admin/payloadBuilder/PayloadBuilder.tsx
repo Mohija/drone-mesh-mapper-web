@@ -27,6 +27,7 @@ interface Props {
   onChange: (next: unknown) => void;               // called with new JSON template
   variables: VariablePoolEntry[];                  // pool from /api/admin/interfaces/variables
   exampleContext: Record<string, unknown> | null;  // for the live preview
+  fullscreen?: boolean;                            // host modal is in fullscreen → grow vertically
 }
 
 interface DragData {
@@ -50,7 +51,7 @@ const CATEGORY_COLOR: Record<VariablePoolEntry['category'], string> = {
   tenant: '#a78bfa', system: '#94a3b8',
 };
 
-export default function PayloadBuilder({ value, onChange, variables, exampleContext }: Props) {
+export default function PayloadBuilder({ value, onChange, variables, exampleContext, fullscreen = false }: Props) {
   const [tree, setTree] = useState<PayloadNode>(() => fromJson(value));
   const [search, setSearch] = useState('');
   const [activeDrag, setActiveDrag] = useState<DragData | null>(null);
@@ -121,8 +122,8 @@ export default function PayloadBuilder({ value, onChange, variables, exampleCont
         display: 'grid', gap: 12,
         gridTemplateColumns: isMobile ? '1fr' : '200px minmax(0, 1.1fr) minmax(360px, 1fr)',
         alignItems: 'stretch',
-        minHeight: 480,
-      }}>
+        minHeight: fullscreen ? 'calc(100vh - 220px)' : 480,
+      }} data-fullscreen={fullscreen ? 'true' : 'false'}>
         {/* Variable palette */}
         <aside style={paletteBox}>
           <input
@@ -450,9 +451,12 @@ function LeafView({ node, onReplace }: { node: PayloadNode; onReplace: (n: Paylo
   return (
     <div ref={setNodeRef} style={{
       display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
-      padding: '2px 4px', borderRadius: 4, minWidth: 0,
-      background: isOver ? 'rgba(0,212,170,0.15)' : 'transparent',
-      border: isOver ? '1px dashed var(--accent)' : '1px dashed transparent',
+      padding: isOver ? '4px 6px' : '2px 4px',
+      borderRadius: 4, minWidth: 0,
+      background: isOver ? 'rgba(0,212,170,0.22)' : 'transparent',
+      border: isOver ? '2px dashed var(--accent)' : '1px dashed transparent',
+      boxShadow: isOver ? '0 0 0 3px rgba(0,212,170,0.18)' : undefined,
+      transition: 'background 0.15s, border-color 0.15s, padding 0.15s, box-shadow 0.15s',
     }}>
       <span style={{ ...kindLabel(color), fontSize: 9 }}>{node.kind}</span>
       {node.kind === 'string' && (
@@ -600,17 +604,19 @@ function lookup(ctx: Record<string, unknown>, path: string): unknown {
 const paletteBox: React.CSSProperties = {
   background: 'var(--bg-primary)', border: '1px solid var(--border)',
   borderRadius: 8, padding: 10, overflow: 'auto',
-  maxHeight: 'min(70vh, 640px)', minWidth: 0,
+  // Container nutzt grid-stretch — wir lassen die Box mit dem Grid wachsen.
+  // Min sorgt dafür, dass auch im non-fullscreen-Modus genug Platz ist.
+  minHeight: 0, maxHeight: '100%', minWidth: 0,
 };
 const treeBox: React.CSSProperties = {
   background: 'var(--bg-primary)', border: '1px solid var(--border)',
   borderRadius: 8, padding: 12, overflow: 'auto',
-  maxHeight: 'min(70vh, 640px)', minWidth: 0,
+  minHeight: 0, maxHeight: '100%', minWidth: 0,
 };
 const previewBox: React.CSSProperties = {
   background: 'var(--bg-primary)', border: '1px solid var(--border)',
   borderRadius: 8, padding: 10, minWidth: 0,
-  maxHeight: 'min(70vh, 640px)', display: 'flex', flexDirection: 'column',
+  minHeight: 0, maxHeight: '100%', display: 'flex', flexDirection: 'column',
 };
 const inp: React.CSSProperties = {
   padding: '6px 8px', borderRadius: 4, border: '1px solid var(--border)',
@@ -622,6 +628,10 @@ const chipStyle: React.CSSProperties = {
   borderRadius: 4, fontSize: 11, fontFamily: 'monospace',
   border: '1px solid', cursor: 'grab', userSelect: 'none',
   width: '100%', textAlign: 'left', boxSizing: 'border-box',
+  // Lange Pfade (z.B. drone.last_known_location.latitude) brechen sauber um
+  // statt den Chip horizontal zu überfüllen.
+  wordBreak: 'break-all', whiteSpace: 'normal', lineHeight: 1.3,
+  minHeight: 26,
 };
 const headerRow: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap', minWidth: 0,
@@ -656,12 +666,17 @@ function kindLabel(color: string): React.CSSProperties {
 function containerStyle(level: number, isOver: boolean, accent: string): React.CSSProperties {
   return {
     padding: 8, marginLeft: 0,
-    border: isOver ? `1px dashed var(--accent)` : `1px solid var(--border)`,
+    // Beim Drag-Over: kräftiger 2px-Akzent-Rahmen + Glow, damit auch bei vielen
+    // Inhalten die aktuelle Drop-Zone klar sichtbar ist.
+    border: isOver ? `2px dashed var(--accent)` : `1px solid var(--border)`,
     borderLeft: `3px solid ${accent}`,
     borderRadius: 4,
     background: isOver
-      ? 'rgba(0,212,170,0.08)'
+      ? 'rgba(0,212,170,0.18)'
       : level === 0 ? 'var(--bg-secondary)' : 'rgba(255,255,255,0.02)',
+    boxShadow: isOver ? '0 0 0 3px rgba(0,212,170,0.18)' : undefined,
     marginBottom: 4, minWidth: 0,
+    minHeight: 36,  // immer als Drop-Ziel klickbar/sichtbar
+    transition: 'background 0.15s, border-color 0.15s, box-shadow 0.15s',
   };
 }
