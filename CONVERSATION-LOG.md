@@ -29,6 +29,57 @@
 
 ## Änderungshistorie
 
+### 2026-04-25 - PayloadBuilder UX Round 2: Tooltips, sicheres Leeren, JSON-Import
+**Anlass:** User-Feedback nach Tests des überarbeiteten Builders:
+1. Tooltips fehlen an den Bedienelementen.
+2. Die obigen „Objekt"/„Array"-Buttons löschten den gesamten Tree, statt etwas hinzuzufügen.
+3. Es soll eine Import-Funktion geben, die ein bestehendes JSON-Template als Bauklotz-Struktur anlegt.
+
+**Fixes (`frontend/src/components/admin/payloadBuilder/PayloadBuilder.tsx`):**
+- Top-Buttons komplett überarbeitet: statt der zwei destruktiven „Objekt"/„Array"-Tasten gibt es jetzt **„📥 JSON importieren"** (öffnet ein Inline-Panel mit Textarea) und **„🗑️ Leeren"** (mit confirm-Dialog wenn der Tree nicht leer ist). Beide Aktionen tooltipped.
+- **JSON-Import-Panel**: Textarea mit Vorbefüllung des aktuellen Trees als Startpunkt. Buttons „Importieren" (parst und ersetzt Tree via `fromJson`), „Aus Zwischenablage einfügen" (`navigator.clipboard.readText`), „Abbrechen". Mustache-Tokens (`{{...}}`, `${{...}}`) werden korrekt als Variablen-Bausteine erkannt — der bestehende `fromJson()`-Parser kennt das Format.
+- Helper `isTreeEmpty(node)` für die Confirm-Logik (object: keine entries · array: keine items · null/leer-string: leer).
+- KIND_BUTTONS-Tupel auf 3-stellig erweitert: `[kind, label, tooltip]`. Beide Render-Stellen (Object-View „+ neuer Eintrag", Array-View „+ neues Element") geben jetzt einen sprechenden `title` an die Buttons weiter.
+- Tooltips an den restlichen Bedienelementen: Variablen-Such-Input, Key-Input von Object-Entries, alle Leaf-Inputs (string/number/boolean/null/variable). Bestehende Tooltips an Sortier-/Lösch-Buttons + KindSwap blieben.
+
+**Build:** `npm run build` ✓ (4.95s), 12/12 Payload-Builder-Unit-Tests grün.
+
+### 2026-04-25 - Vorschau & Senden + breitere Live-View
+**Anlass:** Im InterfaceEditor-Tab „Vorschau & Senden" gab es nur die Vorschau, keine Senden-Option. Außerdem war die Live-Vorschau im Payload-Tab zu schmal für komplexe Payloads.
+
+**Fixes (`frontend/src/components/admin/InterfaceEditor.tsx`):**
+- `submit()` gibt jetzt das gespeicherte Interface zurück (`Promise<AlarmInterface | null>`) und akzeptiert `closeAfter` zum Steuern, ob nach Save geschlossen wird.
+- Neue Funktionen `runTest({ useLatestViolation })` und `saveAndTest()` — letzteres speichert zuerst (nötig für neue, ungespeicherte Schnittstellen).
+- Preview-Tab um Senden-Block erweitert: zwei Buttons („Test mit Beispielkontext" / „Test mit letztem Verstoß"), context-spezifischer Hinweis je Schnittstellen-Typ (Pull-In / Pull-Out / Subscription / Webhook), Hinweis bei neuen Schnittstellen dass zuerst gespeichert wird, Result-Panel mit grün/rot Status, HTTP-Code, Body und Fehlerausgabe.
+
+**Fixes (`frontend/src/components/admin/payloadBuilder/PayloadBuilder.tsx`):**
+- Grid-Spalten von `210px minmax(0, 1fr) 280px` auf `200px minmax(0, 1.1fr) minmax(360px, 1fr)` — Live-Vorschau bekommt jetzt min. 360px und wächst mit dem Tree mit. Auf einem 1320px-Modal: Tree ≈ 553px, Preview ≈ 503px (vorher 280px fix).
+
+**Build:** `npm run build` ✓.
+
+### 2026-04-25 - Postman-Beispiele für Schnittstellen-Beispiele
+**Anlass:** User möchte sehen, wie der Wire-Format-Request aussieht, um ihn z.B. in Postman zu importieren/nachzustellen.
+
+**Fixes (`backend/services/alarm_dispatcher.py`):**
+- Helper `_format_raw_http(method, url, headers, body)` baut einen HTTP/1.1-Wire-Format-Request, der direkt in Postmans „Import → Raw text" passt (ableitet Pfad + Host aus URL, formatiert Header, fügt `Content-Length` bei Body, bewahrt Konventionen).
+- Helper `_postman_collection(name, items)` baut eine Postman Collection v2.1 JSON, importierbar in Postman.
+- Pull-In: zwei neue Beispiele — Raw HTTP-Request + Postman-Collection (1 Request: GET violations).
+- Subscription: zwei neue Beispiele — Raw HTTP für Register-POST + Postman-Collection mit drei Requests (Register / List / Delete).
+- Webhook (& Subscription Empfangsseite): Raw HTTP mit Beispiel-Drohnen-Event-Payload — zeigt was FlightArc sendet (incl. `X-FlightArc-Signature` bei Subscriptions). User kann das in Postman als Mock-Server nutzen, um den eigenen Empfangs-Endpoint zu testen.
+
+**Tests:** 74/74 alarm-Tests grün.
+
+### 2026-04-25 - HelpLink-Symbole bei Schnittstellen + Alarmverwaltung
+**Anlass:** Die kreisförmigen "?"-Hilfe-Symbole, die im Rest der App neben Headlines die passenden Handbuch-Sektion öffnen, fehlten in den Admin-Tabs „Schnittstellen" und „Alarmverwaltung".
+
+**Fixes:**
+- `frontend/src/components/admin/InterfacesManager.tsx`: `<HelpLink section="interfaces" size={20} />` neben dem `<h1>Schnittstellen</h1>`. Subline um „Subscription (Pub/Sub)" ergänzt, war veraltet.
+- `frontend/src/components/admin/AlarmRulesManager.tsx`: `<HelpLink section="alarms" size={20} />` neben dem `<h1>Alarmverwaltung</h1>`.
+
+Beide Symbole nutzen denselben Hash-Routing-Mechanismus wie der Rest der App (`/help#interfaces` bzw. `/help#alarms`), Browser-Back kehrt zurück zur Admin-Seite.
+
+**Build:** `npm run build` ✓ (4.91s).
+
 ### 2026-04-25 - Doku-Audit: Lücken in HelpPage & README geschlossen
 **Anlass:** User wollte sicherstellen, dass alle Features (auch die neuen aus Alarmierung Phase 3-6 und der DB-Lifecycle-Initiative vom 2026-04-24) vollständig dokumentiert sind.
 

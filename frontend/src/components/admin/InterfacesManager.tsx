@@ -12,6 +12,7 @@ import InterfaceEditor from './InterfaceEditor';
 import AlarmDeliveryLog from './AlarmDeliveryLog';
 import TemplatePicker from './TemplatePicker';
 import InterfaceStatsBadge from './InterfaceStatsBadge';
+import HelpLink from '../HelpLink';
 
 const TYPE_LABEL: Record<string, string> = {
   webhook: 'Webhook (Push)',
@@ -134,9 +135,12 @@ export default function InterfacesManager() {
     >
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 24, gap: 12, flexWrap: 'wrap' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 22 }}>Schnittstellen</h1>
+          <h1 style={{ margin: 0, fontSize: 22, display: 'flex', alignItems: 'center', gap: 10 }}>
+            Schnittstellen
+            <HelpLink section="interfaces" title="Hilfe: Schnittstellen" size={20} />
+          </h1>
           <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: 13 }}>
-            Außenkanäle für Alarmierung — Webhook-Push, Pull-Out (FlightArc fragt nach), Pull-In (Drittsystem holt ab).
+            Außenkanäle für Alarmierung — Webhook-Push, Pull-Out (FlightArc fragt nach), Pull-In (Drittsystem holt ab), Subscription (Pub/Sub).
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

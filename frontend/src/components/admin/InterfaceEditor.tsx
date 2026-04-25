@@ -6,6 +6,7 @@ import {
   createAlarmInterface,
   updateAlarmInterface,
   fetchVariablePool,
+  testAlarmInterface,
   VariablePoolEntry,
 } from '../../api';
 import PayloadBuilder from './payloadBuilder/PayloadBuilder';
@@ -82,6 +83,8 @@ export default function InterfaceEditor({ existing, onClose, onSaved }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [variables, setVariables] = useState<VariablePoolEntry[]>([]);
   const [previewCtx, setPreviewCtx] = useState<Record<string, unknown> | null>(null);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; status?: number; body?: string; error?: string } | null>(null);
   const payloadRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -111,18 +114,18 @@ export default function InterfaceEditor({ existing, onClose, onSaved }: Props) {
     setPayloadError(null);
   }
 
-  async function submit() {
+  async function submit(closeAfter = true): Promise<AlarmInterface | null> {
     setSubmitError(null);
     setHeadersError(null);
     setPayloadError(null);
 
     let parsedPayload: unknown;
     try { parsedPayload = JSON.parse(payloadJson); }
-    catch (e) { setPayloadError('Ungültiges JSON: ' + (e as Error).message); setTab('payload'); return; }
+    catch (e) { setPayloadError('Ungültiges JSON: ' + (e as Error).message); setTab('payload'); return null; }
 
     let parsedHeaders: Record<string, string>;
     try { parsedHeaders = JSON.parse(extraHeaders); }
-    catch (e) { setHeadersError('Ungültiges JSON: ' + (e as Error).message); setTab('connection'); return; }
+    catch (e) { setHeadersError('Ungültiges JSON: ' + (e as Error).message); setTab('connection'); return null; }
 
     const payload: Partial<AlarmInterface> = {
       name: name.trim(),
@@ -147,9 +150,30 @@ export default function InterfaceEditor({ existing, onClose, onSaved }: Props) {
       const saved = isEdit
         ? await updateAlarmInterface(existing!.id, payload)
         : await createAlarmInterface(payload);
-      onSaved(saved);
-    } catch (e) { setSubmitError((e as Error).message); }
+      if (closeAfter) onSaved(saved);
+      return saved;
+    } catch (e) { setSubmitError((e as Error).message); return null; }
     finally { setSubmitting(false); }
+  }
+
+  async function runTest(opts?: { useLatestViolation?: boolean }, ifaceId?: string) {
+    setTestResult(null);
+    setTesting(true);
+    try {
+      const id = ifaceId ?? existing?.id;
+      if (!id) throw new Error('Schnittstelle muss erst gespeichert werden.');
+      const res = await testAlarmInterface(id, opts);
+      setTestResult(res);
+    } catch (e) {
+      setTestResult({ ok: false, error: (e as Error).message });
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  async function saveAndTest(opts?: { useLatestViolation?: boolean }) {
+    const saved = await submit(false);
+    if (saved) await runTest(opts, saved.id);
   }
 
   const renderedPreview = (() => {
@@ -382,14 +406,93 @@ export default function InterfaceEditor({ existing, onClose, onSaved }: Props) {
           )}
 
           {tab === 'preview' && (
-            <div>
-              <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--text-muted)' }}>
-                Live-Vorschau, gerendert mit dem Beispiel-Kontext aus dem Backend (echte Drohnen / Zonen werden bei Auslösung eingesetzt).
-              </p>
-              <pre style={{
-                background: 'var(--bg-primary)', padding: 12, borderRadius: 8,
-                border: '1px solid var(--border)', fontSize: 12, overflow: 'auto', maxHeight: 360,
-              }}>{renderedPreview}</pre>
+            <div style={{ display: 'grid', gap: 16 }}>
+              <div>
+                <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--text-muted)' }}>
+                  Live-Vorschau, gerendert mit dem Beispiel-Kontext aus dem Backend (echte Drohnen / Zonen werden bei Auslösung eingesetzt).
+                </p>
+                <pre style={{
+                  background: 'var(--bg-primary)', padding: 12, borderRadius: 8,
+                  border: '1px solid var(--border)', fontSize: 12, overflow: 'auto', maxHeight: 320,
+                }}>{renderedPreview}</pre>
+              </div>
+
+              <div style={{
+                padding: 14, borderRadius: 8, border: '1px solid var(--border)',
+                background: 'var(--bg-primary)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+                  <strong style={{ fontSize: 13 }}>Test-Sendung</strong>
+                  <span style={{ flex: 1 }} />
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    {interfaceType === 'pull_in'
+                      ? 'Pull-In: kein ausgehender Aufruf — der Test stößt nur die interne Pipeline an.'
+                      : interfaceType === 'pull_out'
+                      ? 'Triggert einen Poll auf die konfigurierte URL und wertet die Antwort aus.'
+                      : interfaceType === 'subscription'
+                      ? 'Sendet ein Test-Event an alle aktiven Subscriber dieses Channels.'
+                      : 'Sendet einen Beispiel-Request mit dem konfigurierten Payload an die URL.'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => isEdit ? runTest({ useLatestViolation: false }) : saveAndTest({ useLatestViolation: false })}
+                    disabled={testing || submitting || !name.trim()}
+                    style={{
+                      ...btnPrimary, opacity: testing || submitting || !name.trim() ? 0.5 : 1,
+                    }}
+                  >
+                    {testing ? 'Sendet…' : isEdit ? '▶ Test mit Beispielkontext' : '💾 Speichern & testen (Beispielkontext)'}
+                  </button>
+                  <button
+                    onClick={() => isEdit ? runTest({ useLatestViolation: true }) : saveAndTest({ useLatestViolation: true })}
+                    disabled={testing || submitting || !name.trim()}
+                    style={{
+                      ...btnSecondary, opacity: testing || submitting || !name.trim() ? 0.5 : 1,
+                    }}
+                    title="Verwendet den letzten echten Verstoß als Kontext, falls vorhanden."
+                  >
+                    {isEdit ? '▶ Test mit letztem Verstoß' : '💾 Speichern & testen (letzter Verstoß)'}
+                  </button>
+                </div>
+                {!isEdit && (
+                  <p style={{ margin: '8px 0 0', fontSize: 11, color: 'var(--text-muted)' }}>
+                    Hinweis: für eine neue Schnittstelle wird zuerst gespeichert, dann gesendet.
+                    Bei einer bestehenden bezieht sich der Test auf den <em>gespeicherten</em> Stand —
+                    ungespeicherte Änderungen im Editor sind dabei nicht enthalten. Vorher speichern,
+                    um den aktuellen Stand zu testen.
+                  </p>
+                )}
+
+                {testResult && (
+                  <div style={{
+                    marginTop: 12, padding: 10, borderRadius: 6,
+                    border: `1px solid ${testResult.ok ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)'}`,
+                    background: testResult.ok ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, fontSize: 12 }}>
+                      <strong style={{ color: testResult.ok ? '#22c55e' : '#ef4444' }}>
+                        {testResult.ok ? '✓ Erfolg' : '✗ Fehler'}
+                      </strong>
+                      {typeof testResult.status === 'number' && (
+                        <span style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-muted)' }}>
+                          HTTP {testResult.status}
+                        </span>
+                      )}
+                    </div>
+                    {testResult.error && (
+                      <p style={{ margin: 0, fontSize: 12, color: '#ef4444' }}>{testResult.error}</p>
+                    )}
+                    {testResult.body && (
+                      <pre style={{
+                        margin: 0, fontSize: 11, lineHeight: 1.4, fontFamily: 'monospace',
+                        whiteSpace: 'pre-wrap', wordBreak: 'break-all', maxHeight: 200, overflow: 'auto',
+                        color: 'var(--text-primary)',
+                      }}>{testResult.body}</pre>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -408,7 +511,7 @@ export default function InterfaceEditor({ existing, onClose, onSaved }: Props) {
 
         <footer style={{ padding: 16, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <button onClick={onClose} style={btnSecondary}>Abbrechen</button>
-          <button onClick={submit} disabled={submitting || !name.trim()} style={{
+          <button onClick={() => submit()} disabled={submitting || !name.trim()} style={{
             ...btnPrimary, opacity: submitting || !name.trim() ? 0.5 : 1,
           }}>{submitting ? 'Speichert…' : 'Speichern'}</button>
         </footer>

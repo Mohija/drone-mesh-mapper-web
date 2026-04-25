@@ -771,6 +771,65 @@ def build_interface_stats(interface_id: str, tenant_id: str) -> dict:
 # Usage examples — ready-to-copy snippets shown in the admin UI
 # ---------------------------------------------------------------------------
 
+
+def _format_raw_http(method: str, url: str, headers: dict | None = None,
+                     body: str | None = None) -> str:
+    """Build a raw HTTP/1.1 wire-format request that pastes cleanly into
+    Postman's "Import → Raw text" or any HTTP-aware tool. Path + Host are
+    derived from the URL so the snippet is copy-paste-and-go.
+    """
+    from urllib.parse import urlsplit
+    parts = urlsplit(url)
+    path = parts.path or "/"
+    if parts.query:
+        path += "?" + parts.query
+    lines = [f"{method.upper()} {path} HTTP/1.1", f"Host: {parts.netloc}"]
+    if headers:
+        for k, v in headers.items():
+            lines.append(f"{k}: {v}")
+    if body is not None:
+        lines.append(f"Content-Length: {len(body.encode('utf-8'))}")
+        lines.append("")
+        lines.append(body)
+    else:
+        lines.append("")
+    return "\n".join(lines)
+
+
+def _postman_collection(name: str, items: list[dict]) -> str:
+    """Build a Postman Collection v2.1 JSON, ready for Import-Raw-text.
+
+    `items` is a list of {name, method, url, headers?, body?} dicts. URLs are
+    written as plain strings (Postman accepts both that and the structured
+    form, and the string form is shorter + easier to read in the snippet).
+    """
+    pm_items = []
+    for it in items:
+        req: dict = {
+            "method": it["method"],
+            "header": [
+                {"key": k, "value": v, "type": "text"}
+                for k, v in (it.get("headers") or {}).items()
+            ],
+            "url": it["url"],
+        }
+        if it.get("body") is not None:
+            req["body"] = {
+                "mode": "raw",
+                "raw": it["body"],
+                "options": {"raw": {"language": "json"}},
+            }
+        pm_items.append({"name": it["name"], "request": req})
+    collection = {
+        "info": {
+            "name": name,
+            "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+        },
+        "item": pm_items,
+    }
+    return json.dumps(collection, indent=2, ensure_ascii=False)
+
+
 def build_usage_examples(interface, *, request_origin: str) -> dict:
     """Return curl / python / JS snippets per interface type.
 
@@ -854,6 +913,26 @@ def build_usage_examples(interface, *, request_origin: str) -> dict:
                 "req['X-Service-Token'] = '<DEIN_TOKEN>'\n"
                 "res = Net::HTTP.start(uri.hostname, uri.port, use_ssl: uri.scheme == 'https') { |h| h.request(req) }\n"
                 "JSON.parse(res.body)['active'].each { |v| puts \"#{v['drone_id']} #{v['zone_name']}\" }"
+             )},
+            {"label": "Raw HTTP-Request (für Postman „Import → Raw text“)",
+             "language": "http",
+             "code": _format_raw_http(
+                "GET", url,
+                headers={"X-Service-Token": "<DEIN_TOKEN>", "Accept": "application/json"},
+             )},
+            {"label": "Postman Collection (v2.1 JSON, importierbar)",
+             "language": "json",
+             "code": _postman_collection(
+                f"FlightArc — {interface.name}",
+                [{
+                    "name": "Pull-In: aktive + 24h Verstöße",
+                    "method": "GET",
+                    "url": url,
+                    "headers": {
+                        "X-Service-Token": "<DEIN_TOKEN>",
+                        "Accept": "application/json",
+                    },
+                }],
              )},
         ]
 
@@ -965,6 +1044,52 @@ def build_usage_examples(interface, *, request_origin: str) -> dict:
                 "sub = JSON.parse(res.body)\n"
                 "puts \"id=#{sub['id']} secret=#{sub['secret']}\""
              )},
+            {"label": "Raw HTTP-Request: Registrieren (für Postman „Import → Raw text“)",
+             "language": "http",
+             "code": _format_raw_http(
+                "POST", register_url,
+                headers={
+                    "X-API-Key": "<KANAL_API_KEY>",
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
+                body=json.dumps({
+                    "callback_url": "https://meinservice.example.com/flightarc-events",
+                    "name": "Mein Service",
+                }, indent=2),
+             )},
+            {"label": "Postman Collection (Register + List + Delete, v2.1 JSON)",
+             "language": "json",
+             "code": _postman_collection(
+                f"FlightArc Subscription — {interface.name}",
+                [
+                    {
+                        "name": "1. Subscriber registrieren",
+                        "method": "POST",
+                        "url": register_url,
+                        "headers": {
+                            "X-API-Key": "<KANAL_API_KEY>",
+                            "Content-Type": "application/json",
+                        },
+                        "body": json.dumps({
+                            "callback_url": "https://meinservice.example.com/flightarc-events",
+                            "name": "Mein Service",
+                        }, indent=2),
+                    },
+                    {
+                        "name": "2. Eigene Subscriptions auflisten",
+                        "method": "GET",
+                        "url": list_url,
+                        "headers": {"X-API-Key": "<KANAL_API_KEY>"},
+                    },
+                    {
+                        "name": "3. Subscription abmelden",
+                        "method": "DELETE",
+                        "url": f"{base}/api/integrations/subscriptions/{interface.id}/<SUBSCRIPTION_ID>",
+                        "headers": {"X-API-Key": "<KANAL_API_KEY>"},
+                    },
+                ],
+             )},
         ]
 
     if interface.interface_type in ("webhook", "subscription"):
@@ -1056,6 +1181,28 @@ def build_usage_examples(interface, *, request_origin: str) -> dict:
                 "  # body enthält JSON-Event\n"
                 "  status 204\n"
                 "end"
+             )},
+            {"label": "Beispiel-Push: so sieht der Wire-Format-Request aus, den FlightArc sendet",
+             "language": "http",
+             "code": _format_raw_http(
+                (interface.http_method or "POST"),
+                interface.url or "https://meinservice.example.com/flightarc-events",
+                headers={
+                    "Content-Type": "application/json",
+                    "User-Agent": "FlightArc-AlarmDispatcher/1.0",
+                    **({"X-FlightArc-Signature": "sha256=<HMAC_HEX>"}
+                       if interface.interface_type == "subscription" else {}),
+                },
+                body=json.dumps({
+                    "trigger": "violation_start",
+                    "drone": {"id": "DRO-001", "name": "Beispiel-Drohne",
+                              "latitude": 52.520008, "longitude": 13.404954,
+                              "altitude": 120.0},
+                    "zone": {"id": "Z-1", "name": "Sperrgebiet Nord"},
+                    "violation": {"id": "V-42", "start_time_iso": "2026-04-25T13:24:00Z"},
+                    "tenant": {"display_name": "Demo-Mandant"},
+                    "system": {"now_iso": "2026-04-25T13:24:00Z"},
+                }, indent=2),
              )},
         ]
 

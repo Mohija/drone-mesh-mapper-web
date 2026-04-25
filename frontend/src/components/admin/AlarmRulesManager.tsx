@@ -5,6 +5,7 @@ import {
   deleteAlarmRule, testAlarmRule,
   fetchFlightZones,
 } from '../../api';
+import HelpLink from '../HelpLink';
 
 const TRIGGER_LABEL: Record<string, string> = {
   violation_start: 'Verstoß-Start (Drohne betritt Zone)',
@@ -65,7 +66,10 @@ export default function AlarmRulesManager() {
     <div style={{ maxWidth: 1100 }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 24, gap: 12, flexWrap: 'wrap' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 22 }}>Alarmverwaltung</h1>
+          <h1 style={{ margin: 0, fontSize: 22, display: 'flex', alignItems: 'center', gap: 10 }}>
+            Alarmverwaltung
+            <HelpLink section="alarms" title="Hilfe: Alarmverwaltung" size={20} />
+          </h1>
           <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: 13 }}>
             Verbindet eine Zone (oder alle Zonen) mit einer Schnittstelle für einen bestimmten Trigger.
           </p>

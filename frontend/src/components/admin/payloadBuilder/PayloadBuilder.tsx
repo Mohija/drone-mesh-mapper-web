@@ -54,6 +54,9 @@ export default function PayloadBuilder({ value, onChange, variables, exampleCont
   const [tree, setTree] = useState<PayloadNode>(() => fromJson(value));
   const [search, setSearch] = useState('');
   const [activeDrag, setActiveDrag] = useState<DragData | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [importError, setImportError] = useState<string | null>(null);
   const isMobile = useIsMobile();
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
@@ -116,7 +119,7 @@ export default function PayloadBuilder({ value, onChange, variables, exampleCont
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div style={{
         display: 'grid', gap: 12,
-        gridTemplateColumns: isMobile ? '1fr' : '210px minmax(0, 1fr) 280px',
+        gridTemplateColumns: isMobile ? '1fr' : '200px minmax(0, 1.1fr) minmax(360px, 1fr)',
         alignItems: 'stretch',
         minHeight: 480,
       }}>
@@ -127,6 +130,7 @@ export default function PayloadBuilder({ value, onChange, variables, exampleCont
             onChange={e => setSearch(e.target.value)}
             placeholder="Variablen suchen…"
             style={{ ...inp, marginBottom: 8 }}
+            title='Filtert die Variablen-Liste nach Pfad-Teilstring (z.B. "drone" zeigt nur Drohnen-Felder).'
           />
           {CATEGORIES.map(cat => {
             const items = filteredVars.filter(v => v.category === cat);
@@ -150,12 +154,84 @@ export default function PayloadBuilder({ value, onChange, variables, exampleCont
 
         {/* Tree editor */}
         <div style={treeBox}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
             <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>Payload-Struktur</p>
             <span style={{ flex: 1 }} />
-            <button onClick={() => commit(makeNode('object'))} style={miniBtn}>Objekt</button>
-            <button onClick={() => commit(makeNode('array'))} style={miniBtn}>Array</button>
+            <button
+              onClick={() => { setImportText(JSON.stringify(toJson(tree), null, 2)); setImportError(null); setImportOpen(o => !o); }}
+              style={miniBtn}
+              title="JSON importieren — die Struktur wird übernommen, du musst nur noch die Variablen hineinziehen."
+            >📥 JSON importieren</button>
+            <button
+              onClick={() => {
+                if (!isTreeEmpty(tree) && !confirm('Den gesamten Payload-Tree löschen?')) return;
+                commit(makeNode('object'));
+              }}
+              style={miniBtn}
+              title="Tree komplett leeren (Bestätigung erforderlich, wenn nicht leer)."
+            >🗑️ Leeren</button>
           </div>
+
+          {importOpen && (
+            <div style={{
+              marginBottom: 10, padding: 10, borderRadius: 6,
+              border: '1px solid var(--border)', background: 'var(--bg-secondary)',
+              display: 'grid', gap: 6,
+            }}>
+              <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.45 }}>
+                Füge ein vorhandenes JSON-Template ein. Beim Importieren wird die Struktur (Objekte,
+                Arrays, Strings, Zahlen, Booleans) als Tree-Bausteine angelegt — Variablen-Tokens
+                wie <code>{`\${{drone.id}}`}</code> oder <code>{`{{zone.name}}`}</code> bleiben
+                erhalten. Du musst danach nur noch fehlende Variablen per Drag &amp; Drop in die
+                passenden Slots ziehen.
+              </p>
+              <textarea
+                value={importText}
+                onChange={e => { setImportText(e.target.value); setImportError(null); }}
+                rows={8}
+                style={{
+                  ...inp, fontFamily: 'monospace', fontSize: 12, resize: 'vertical', minHeight: 120,
+                }}
+                placeholder='{ "event": "{{trigger}}", "drone": { "id": "{{drone.id}}" } }'
+                title="Gültiges JSON. Mustache-Tokens werden als Variablen-Bausteine erkannt."
+              />
+              {importError && <small style={{ color: '#ef4444' }}>{importError}</small>}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={() => {
+                    try {
+                      const parsed = JSON.parse(importText);
+                      commit(fromJson(parsed));
+                      setImportOpen(false);
+                      setImportError(null);
+                    } catch (e) {
+                      setImportError('Ungültiges JSON: ' + (e as Error).message);
+                    }
+                  }}
+                  style={miniBtn}
+                  title="JSON parsen und als Tree-Struktur übernehmen."
+                >Importieren</button>
+                <button
+                  onClick={() => { setImportOpen(false); setImportError(null); }}
+                  style={miniBtn}
+                  title="Import-Dialog schließen ohne Änderungen."
+                >Abbrechen</button>
+                <span style={{ flex: 1 }} />
+                <button
+                  onClick={async () => {
+                    try {
+                      const txt = await navigator.clipboard.readText();
+                      setImportText(txt);
+                      setImportError(null);
+                    } catch { setImportError('Zwischenablage konnte nicht gelesen werden.'); }
+                  }}
+                  style={miniBtn}
+                  title="Aktuellen Inhalt der Zwischenablage in das Eingabefeld einfügen."
+                >Aus Zwischenablage einfügen</button>
+              </div>
+            </div>
+          )}
+
           <NodeView
             node={tree}
             onReplace={(n) => commit(replaceNode(tree, tree.id, n))}
@@ -258,6 +334,7 @@ function ObjectView({ node, onReplace, onMutate, level }: { node: ObjectNode; on
                 value={entry.key}
                 onChange={e => onMutate(r => updateObjectEntry(r, entry.id, { key: e.target.value }))}
                 style={{ ...inp, padding: '4px 6px', fontSize: 12, flex: '1 1 120px', minWidth: 80, maxWidth: 200, fontFamily: 'monospace' }}
+                title="JSON-Schlüssel (Property-Name)"
               />
               <span style={{ color: 'var(--text-muted)' }}>:</span>
               {!isContainer && (
@@ -287,9 +364,9 @@ function ObjectView({ node, onReplace, onMutate, level }: { node: ObjectNode; on
       })}
       <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 10, color: 'var(--text-muted)', alignSelf: 'center' }}>+ neuer Eintrag:</span>
-        {KIND_BUTTONS.map(([kind, label]) => (
+        {KIND_BUTTONS.map(([kind, label, tip]) => (
           <button key={kind} onClick={() => onMutate(r => addObjectEntry(r, node.id, 'feld', makeNode(kind)))}
-                  style={miniBtn}>{label}</button>
+                  style={miniBtn} title={tip}>{label}</button>
         ))}
       </div>
     </div>
@@ -348,9 +425,9 @@ function ArrayView({ node, onReplace, onMutate, level }: { node: ArrayNode; onRe
       })}
       <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 10, color: 'var(--text-muted)', alignSelf: 'center' }}>+ neues Element:</span>
-        {KIND_BUTTONS.map(([kind, label]) => (
+        {KIND_BUTTONS.map(([kind, label, tip]) => (
           <button key={kind} onClick={() => onMutate(r => addArrayItem(r, node.id, makeNode(kind)))}
-                  style={miniBtn}>{label}</button>
+                  style={miniBtn} title={tip}>{label}</button>
         ))}
       </div>
     </div>
@@ -381,30 +458,34 @@ function LeafView({ node, onReplace }: { node: PayloadNode; onReplace: (n: Paylo
       {node.kind === 'string' && (
         <input value={node.value}
                onChange={e => onReplace({ ...node, value: e.target.value })}
-               style={{ ...inp, padding: '4px 6px', fontSize: 12, fontFamily: 'monospace', flex: '1 1 140px', minWidth: 0 }} />
+               style={{ ...inp, padding: '4px 6px', fontSize: 12, fontFamily: 'monospace', flex: '1 1 140px', minWidth: 0 }}
+               title="String-Wert. {{path}}-Token werden beim Senden durch Werte ersetzt." />
       )}
       {node.kind === 'number' && (
         <input type="number" value={node.value}
                onChange={e => onReplace({ ...node, value: Number(e.target.value) })}
-               style={{ ...inp, padding: '4px 6px', fontSize: 12, flex: '0 1 120px', minWidth: 60 }} />
+               style={{ ...inp, padding: '4px 6px', fontSize: 12, flex: '0 1 120px', minWidth: 60 }}
+               title="Numerischer Wert (Integer oder Float)." />
       )}
       {node.kind === 'boolean' && (
         <select value={node.value ? 'true' : 'false'}
                 onChange={e => onReplace({ ...node, value: e.target.value === 'true' })}
-                style={{ ...inp, padding: '4px 6px', fontSize: 12, flex: '0 1 100px', minWidth: 70 }}>
+                style={{ ...inp, padding: '4px 6px', fontSize: 12, flex: '0 1 100px', minWidth: 70 }}
+                title="Boolean-Wert (true/false).">
           <option value="true">true</option>
           <option value="false">false</option>
         </select>
       )}
       {node.kind === 'null' && (
-        <span style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>null</span>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }} title="JSON null">null</span>
       )}
       {node.kind === 'variable' && (
         <input value={node.path}
                onChange={e => onReplace({ ...node, path: e.target.value })}
                style={{ ...inp, padding: '4px 6px', fontSize: 12, fontFamily: 'monospace',
                         color: 'var(--accent)', flex: '1 1 140px', minWidth: 0 }}
-               placeholder="drone.id" />
+               placeholder="drone.id"
+               title="Variablen-Pfad (z.B. drone.id, zone.name). Beim Senden mit echtem Wert ersetzt." />
       )}
       <KindSwap node={node} onReplace={onReplace} />
     </div>
@@ -444,13 +525,26 @@ function KindSwap({ node, onReplace }: { node: PayloadNode; onReplace: (n: Paylo
   );
 }
 
-const KIND_BUTTONS: [NodeKind, string][] = [
-  ['object', '{ }'], ['array', '[ ]'], ['string', 'abc'],
-  ['number', '0'], ['boolean', '✓'], ['null', '∅'], ['variable', '{{x}}'],
+const KIND_BUTTONS: [NodeKind, string, string][] = [
+  ['object',   '{ }',    'Objekt — verschachtelte Schlüssel/Werte'],
+  ['array',    '[ ]',    'Array — Liste von Werten'],
+  ['string',   'abc',    'String — Text, kann {{...}}-Tokens enthalten'],
+  ['number',   '0',      'Zahl'],
+  ['boolean',  '✓',      'Boolean — true/false'],
+  ['null',     '∅',      'Null'],
+  ['variable', '{{x}}',  'Variable — typisierter Wert (Drohne, Zone, …)'],
 ];
 
 // ───────────────────────────────────────────────────────────────────────────
 // Helpers
+
+function isTreeEmpty(node: PayloadNode): boolean {
+  if (node.kind === 'object') return node.entries.length === 0;
+  if (node.kind === 'array') return node.items.length === 0;
+  if (node.kind === 'null') return true;
+  if (node.kind === 'string') return node.value === '';
+  return false;
+}
 
 function findNode(root: PayloadNode, id: string): PayloadNode | null {
   if (root.id === id) return root;
