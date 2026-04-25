@@ -417,37 +417,78 @@ def update_mission_zone_defaults():
     return jsonify(settings.get_mission_zone_defaults(tenant_id=tid))
 
 
+def _default_tenant_id() -> str | None:
+    """Return id of the default tenant (where global WiFi networks live)."""
+    from models import Tenant as _Tenant
+    t = _Tenant.query.filter_by(name="default").first()
+    return t.id if t else None
+
+
 @app.route("/api/settings/wifi-networks", methods=["GET"])
 @login_required
 @role_required("tenant_admin")
 def get_wifi_networks():
-    """Get tenant WiFi networks (passwords masked)."""
+    """Get tenant WiFi networks (passwords masked).
+
+    Returns own networks plus inherited globals from the default tenant. Each
+    entry has `is_global` (set by super-admin) and `inherited` (true when it
+    comes from a different tenant — in that case the current admin cannot edit it).
+    """
     tid = g.tenant_id or DEFAULT_TENANT_ID
     ts = TenantSettings.query.filter_by(tenant_id=tid).first()
-    networks = (ts.wifi_networks or []) if ts else []
-    # Mask passwords — never send plaintext to frontend
-    masked = [{"ssid": n.get("ssid", ""), "has_password": bool(n.get("password"))} for n in networks]
-    return jsonify(masked)
+    own = (ts.wifi_networks or []) if ts else []
+    result = [
+        {
+            "ssid": n.get("ssid", ""),
+            "has_password": bool(n.get("password")),
+            "is_global": bool(n.get("is_global", False)),
+            "inherited": False,
+        }
+        for n in own
+    ]
+
+    # Append global networks from the default tenant (if we're not it).
+    default_tid = _default_tenant_id()
+    if default_tid and tid != default_tid:
+        d_ts = TenantSettings.query.filter_by(tenant_id=default_tid).first()
+        for n in (d_ts.wifi_networks or []) if d_ts else []:
+            if n.get("is_global"):
+                result.append({
+                    "ssid": n.get("ssid", ""),
+                    "has_password": bool(n.get("password")),
+                    "is_global": True,
+                    "inherited": True,
+                })
+    return jsonify(result)
 
 
 @app.route("/api/settings/wifi-networks", methods=["POST"])
 @login_required
 @role_required("tenant_admin")
 def update_wifi_networks():
-    """Set tenant WiFi networks. Max 3."""
+    """Set tenant WiFi networks. Max 3 own. Inherited entries are skipped (they
+    live on the default tenant). is_global=true is only honored when saved
+    on the default tenant (otherwise stripped — would have no effect anyway)."""
     data = request.get_json(silent=True) or {}
     networks = data.get("networks", [])
-    if len(networks) > 3:
-        return jsonify({"error": "Maximal 3 WiFi-Netzwerke erlaubt"}), 400
 
     tid = g.tenant_id or DEFAULT_TENANT_ID
+    default_tid = _default_tenant_id()
+    is_default_tenant = (tid == default_tid)
+
+    # Drop inherited entries — they belong to the default tenant.
+    networks = [n for n in networks if not n.get("inherited")]
+
+    if len(networks) > 3:
+        return jsonify({"error": "Maximal 3 eigene WiFi-Netzwerke erlaubt"}), 400
+
     ts = TenantSettings.query.filter_by(tenant_id=tid).first()
     if not ts:
         return jsonify({"error": "Mandant nicht gefunden"}), 404
 
     # Merge: if password is empty/null for an existing SSID, keep the old password
     old_networks = ts.wifi_networks or []
-    old_by_ssid = {n["ssid"]: n.get("password", "") for n in old_networks}
+    old_by_ssid = {n["ssid"]: n for n in old_networks}
 
     resolved = []
     for n in networks:
@@ -456,17 +497,22 @@ def update_wifi_networks():
             continue
         password = n.get("password")
         if not password and ssid in old_by_ssid:
-            password = old_by_ssid[ssid]  # Keep existing password
-        resolved.append({"ssid": ssid, "password": password or ""})
+            password = old_by_ssid[ssid].get("password", "")  # Keep existing password
+        is_global = bool(n.get("is_global", False)) and is_default_tenant
+        resolved.append({"ssid": ssid, "password": password or "", "is_global": is_global})
 
     ts.wifi_networks = resolved
-    # Bump settings version for client sync
+    # Bump settings version for client sync — also for OTHER tenants if globals
+    # changed, since they inherit them.
     settings._bump_version(tid)
+    if is_default_tenant:
+        from models import Tenant as _Tenant
+        for other in _Tenant.query.filter(_Tenant.id != tid).all():
+            settings._bump_version(other.id)
     audit_log("update", "settings", None, "WiFi Networks", {"count": len(resolved)})
     db.session.commit()
 
-    masked = [{"ssid": n["ssid"], "has_password": bool(n["password"])} for n in resolved]
-    return jsonify(masked)
+    return get_wifi_networks()
 
 
 @app.route("/api/status", methods=["GET"])

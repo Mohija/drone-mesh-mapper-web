@@ -7,6 +7,7 @@ import {
   type MissionZoneDefaults, type TenantWifiNetwork, type ServiceToken,
 } from '../../api';
 import { useIsMobile } from '../../useIsMobile';
+import { useAuth } from '../../AuthContext';
 import HelpLink from '../HelpLink';
 
 // Section heading used across the settings page. Kept as a stand-alone
@@ -30,6 +31,10 @@ const DEFAULT_VALUES: MissionZoneDefaults = {
 
 export default function SettingsTab() {
   const isMobile = useIsMobile();
+  const { tenants, currentTenantId, user } = useAuth();
+  const currentTenant = tenants.find(t => t.id === currentTenantId);
+  const isDefaultTenant = currentTenant?.name === 'default';
+  const isSuperAdmin = user?.role === 'super_admin';
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +50,7 @@ export default function SettingsTab() {
   const [auditToggling, setAuditToggling] = useState(false);
 
   // WiFi Networks state
-  const [wifiNetworks, setWifiNetworks] = useState<Array<{ ssid: string; password: string; has_password: boolean }>>([]);
+  const [wifiNetworks, setWifiNetworks] = useState<Array<{ ssid: string; password: string; has_password: boolean; is_global: boolean; inherited: boolean }>>([]);
   const [wifiLoading, setWifiLoading] = useState(true);
   const [wifiSaving, setWifiSaving] = useState(false);
   const [wifiError, setWifiError] = useState<string | null>(null);
@@ -93,6 +98,8 @@ export default function SettingsTab() {
         ssid: n.ssid,
         password: '',
         has_password: !!n.has_password,
+        is_global: !!n.is_global,
+        inherited: !!n.inherited,
       })));
     } catch (e: unknown) {
       setWifiError(e instanceof Error ? e.message : 'WiFi-Netzwerke laden fehlgeschlagen');
@@ -272,19 +279,20 @@ export default function SettingsTab() {
       const payload: TenantWifiNetwork[] = wifiNetworks
         .filter(n => n.ssid.trim())
         .map(n => {
-          if (n.password) {
-            return { ssid: n.ssid, password: n.password };
-          }
-          if (n.has_password) {
-            return { ssid: n.ssid, use_stored: true };
-          }
-          return { ssid: n.ssid };
+          const base: TenantWifiNetwork = { ssid: n.ssid };
+          if (n.password) base.password = n.password;
+          else if (n.has_password) base.use_stored = true;
+          if (n.is_global) base.is_global = true;
+          if (n.inherited) base.inherited = true;
+          return base;
         });
       const result = await updateWifiNetworks(payload);
       setWifiNetworks(result.map(n => ({
         ssid: n.ssid,
         password: '',
         has_password: !!n.has_password,
+        is_global: !!n.is_global,
+        inherited: !!n.inherited,
       })));
       setWifiSuccess('WiFi-Netzwerke gespeichert');
       setTimeout(() => setWifiSuccess(null), 3000);
@@ -295,9 +303,10 @@ export default function SettingsTab() {
     }
   };
 
+  const ownWifiCount = wifiNetworks.filter(n => !n.inherited).length;
   const addWifiNetwork = () => {
-    if (wifiNetworks.length < 3) {
-      setWifiNetworks(prev => [...prev, { ssid: '', password: '', has_password: false }]);
+    if (ownWifiCount < 3) {
+      setWifiNetworks(prev => [...prev, { ssid: '', password: '', has_password: false, is_global: false, inherited: false }]);
     }
   };
 
@@ -307,6 +316,10 @@ export default function SettingsTab() {
 
   const updateWifiNetwork = (index: number, field: 'ssid' | 'password', value: string) => {
     setWifiNetworks(prev => prev.map((n, i) => i === index ? { ...n, [field]: value } : n));
+  };
+
+  const toggleWifiGlobal = (index: number) => {
+    setWifiNetworks(prev => prev.map((n, i) => i === index ? { ...n, is_global: !n.is_global } : n));
   };
 
   const handleSave = async () => {
@@ -783,23 +796,45 @@ export default function SettingsTab() {
           <div style={{ padding: 12, color: 'var(--text-muted)', fontSize: 12 }}>Laden...</div>
         ) : (
           <>
+            <p style={{ margin: '0 0 10px', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              {isDefaultTenant
+                ? <>Aktiviere <strong>„übergreifend"</strong> bei einem Eintrag, damit er für ALLE Mandanten gilt (Firmware-Build und Empfänger-Defaults).</>
+                : <>Eigene Netzwerke gelten nur für diesen Mandanten. <strong>Übergreifende</strong> Netzwerke werden im Standard-Mandanten gepflegt und erscheinen hier read-only.</>}
+            </p>
             {wifiNetworks.map((net, i) => (
               <div key={i} style={{
-                background: 'var(--bg-primary)', border: '1px solid var(--border)',
+                background: net.inherited ? 'var(--bg-tertiary)' : 'var(--bg-primary)',
+                border: net.inherited ? '1px dashed var(--border)' : (net.is_global ? '1px solid #a78bfa' : '1px solid var(--border)'),
                 borderRadius: 8, padding: 10, marginBottom: 8,
+                opacity: net.inherited ? 0.85 : 1,
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>
                     Netzwerk {i + 1}
                   </span>
-                  <button
-                    data-testid={`wifi-remove-${i}`}
-                    onClick={() => removeWifiNetwork(i)}
-                    style={{
-                      background: 'none', border: 'none', color: 'var(--text-muted)',
-                      cursor: 'pointer', fontSize: 14, padding: '0 4px',
-                    }}
-                  >x</button>
+                  {net.inherited && (
+                    <span title="Wird im Standard-Mandanten gepflegt" style={{
+                      fontSize: 10, padding: '2px 8px', borderRadius: 4, fontWeight: 600,
+                      background: 'rgba(167,139,250,0.15)', color: '#a78bfa',
+                    }}>📌 Übergreifend (vererbt)</span>
+                  )}
+                  {!net.inherited && net.is_global && (
+                    <span title="Gilt für ALLE Mandanten" style={{
+                      fontSize: 10, padding: '2px 8px', borderRadius: 4, fontWeight: 600,
+                      background: 'rgba(167,139,250,0.15)', color: '#a78bfa',
+                    }}>📌 Übergreifend</span>
+                  )}
+                  <span style={{ flex: 1 }} />
+                  {!net.inherited && (
+                    <button
+                      data-testid={`wifi-remove-${i}`}
+                      onClick={() => removeWifiNetwork(i)}
+                      style={{
+                        background: 'none', border: 'none', color: 'var(--text-muted)',
+                        cursor: 'pointer', fontSize: 14, padding: '0 4px',
+                      }}
+                    >x</button>
+                  )}
                 </div>
                 <div style={{
                   display: 'flex', gap: 8, flexWrap: 'wrap',
@@ -811,7 +846,8 @@ export default function SettingsTab() {
                       value={net.ssid}
                       onChange={e => updateWifiNetwork(i, 'ssid', e.target.value)}
                       placeholder="Netzwerkname"
-                      style={inputStyle}
+                      disabled={net.inherited}
+                      style={{ ...inputStyle, opacity: net.inherited ? 0.7 : 1 }}
                     />
                   </div>
                   <div style={{ flex: isMobile ? '1 1 100%' : '1 1 180px' }}>
@@ -822,26 +858,40 @@ export default function SettingsTab() {
                       value={net.password}
                       onChange={e => updateWifiNetwork(i, 'password', e.target.value)}
                       placeholder={net.has_password ? 'Gespeichertes Passwort' : 'Passwort'}
-                      style={inputStyle}
+                      disabled={net.inherited}
+                      style={{ ...inputStyle, opacity: net.inherited ? 0.7 : 1 }}
                     />
                   </div>
                 </div>
+                {!net.inherited && isDefaultTenant && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 12, color: 'var(--text-secondary)', cursor: isSuperAdmin ? 'pointer' : 'not-allowed' }}>
+                    <input
+                      type="checkbox"
+                      checked={net.is_global}
+                      onChange={() => toggleWifiGlobal(i)}
+                      disabled={!isSuperAdmin}
+                      data-testid={`wifi-global-${i}`}
+                    />
+                    Übergreifend — gilt für alle Mandanten
+                    {!isSuperAdmin && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>(nur Super-Admin)</span>}
+                  </label>
+                )}
               </div>
             ))}
 
-            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+            <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
               <button
                 data-testid="wifi-add-btn"
                 onClick={addWifiNetwork}
-                disabled={wifiNetworks.length >= 3}
+                disabled={ownWifiCount >= 3}
                 style={{
                   padding: '8px 16px', borderRadius: 8,
                   border: '1px solid var(--border)',
-                  background: wifiNetworks.length >= 3 ? 'var(--bg-tertiary)' : 'var(--bg-tertiary)',
-                  color: wifiNetworks.length >= 3 ? 'var(--text-muted)' : 'var(--text-secondary)',
-                  cursor: wifiNetworks.length >= 3 ? 'not-allowed' : 'pointer',
+                  background: 'var(--bg-tertiary)',
+                  color: ownWifiCount >= 3 ? 'var(--text-muted)' : 'var(--text-secondary)',
+                  cursor: ownWifiCount >= 3 ? 'not-allowed' : 'pointer',
                   fontSize: 13, fontWeight: 600,
-                  opacity: wifiNetworks.length >= 3 ? 0.5 : 1,
+                  opacity: ownWifiCount >= 3 ? 0.5 : 1,
                 }}
               >
                 + Netzwerk hinzufügen

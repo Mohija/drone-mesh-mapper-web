@@ -540,6 +540,10 @@ export interface TenantWifiNetwork {
   password?: string;
   has_password?: boolean;
   use_stored?: boolean;
+  /** Im Default-Tenant gepflegt; wirkt für ALLE Tenants. */
+  is_global?: boolean;
+  /** Read-only: dieser Eintrag stammt aus einem anderen Tenant (nur sichtbar). */
+  inherited?: boolean;
 }
 
 export async function fetchWifiNetworks(): Promise<TenantWifiNetwork[]> {

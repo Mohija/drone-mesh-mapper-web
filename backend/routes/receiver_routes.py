@@ -735,38 +735,66 @@ def _resolve_backend_url(request_url: str, tenant_id: str) -> tuple[str, str | N
 def _resolve_wifi_networks(request_networks, tenant_id):
     """Resolve WiFi networks for firmware build.
 
-    If request has networks, use those (per-receiver override).
-    Fill remaining slots (up to 3) with tenant defaults.
-    If a network has use_stored=true, look up password from tenant settings.
-    """
-    from models import TenantSettings
+    Priority order, deduped by SSID, capped at 3:
+      1. Per-receiver overrides from the request
+      2. Tenant-eigene Netzwerke
+      3. Übergreifende Netzwerke aus dem Standard-Tenant (is_global=true)
 
-    # Get tenant defaults
+    If a request entry has use_stored=true, the password is looked up first in
+    the tenant's networks, then in the global pool.
+    """
+    from models import TenantSettings, Tenant
+
     ts = TenantSettings.query.filter_by(tenant_id=tenant_id).first()
     tenant_nets = (ts.wifi_networks or []) if ts else []
-    tenant_by_ssid = {n["ssid"]: n.get("password", "") for n in tenant_nets}
+
+    # Globals from the default tenant (if we're not it).
+    default = Tenant.query.filter_by(name="default").first()
+    global_nets: list[dict] = []
+    if default and default.id != tenant_id:
+        d_ts = TenantSettings.query.filter_by(tenant_id=default.id).first()
+        if d_ts and d_ts.wifi_networks:
+            global_nets = [n for n in d_ts.wifi_networks if n.get("is_global")]
+
+    # Strip is_global from the firmware-bound dict — controllers don't need it.
+    def clean(n: dict) -> dict:
+        return {"ssid": n["ssid"], "password": n.get("password", "")}
+
+    pwd_by_ssid: dict[str, str] = {}
+    for n in tenant_nets + global_nets:
+        pwd_by_ssid.setdefault(n["ssid"], n.get("password", ""))
 
     if not request_networks:
-        # No per-receiver networks — use tenant defaults
-        return tenant_nets[:3]
+        merged: list[dict] = []
+        seen: set[str] = set()
+        for n in tenant_nets + global_nets:
+            if n["ssid"] not in seen:
+                merged.append(clean(n))
+                seen.add(n["ssid"])
+            if len(merged) >= 3:
+                break
+        return merged
 
-    # Resolve stored passwords
-    resolved = []
+    # Resolve per-receiver entries (with optional use_stored lookup)
+    resolved: list[dict] = []
+    seen: set[str] = set()
     for net in request_networks:
-        ssid = net.get("ssid", "").strip()
-        if not ssid:
+        ssid = (net.get("ssid") or "").strip()
+        if not ssid or ssid in seen:
             continue
-        if net.get("use_stored") and ssid in tenant_by_ssid:
-            resolved.append({"ssid": ssid, "password": tenant_by_ssid[ssid]})
+        if net.get("use_stored") and ssid in pwd_by_ssid:
+            resolved.append({"ssid": ssid, "password": pwd_by_ssid[ssid]})
         else:
             resolved.append({"ssid": ssid, "password": net.get("password", "")})
+        seen.add(ssid)
 
-    # Fill remaining slots with tenant networks not already included
-    if len(resolved) < 3:
-        used_ssids = {n["ssid"] for n in resolved}
-        for tn in tenant_nets:
-            if tn["ssid"] not in used_ssids and len(resolved) < 3:
-                resolved.append(tn)
+    # Fill remaining slots first from tenant own, then from globals
+    for n in tenant_nets + global_nets:
+        if len(resolved) >= 3:
+            break
+        if n["ssid"] not in seen:
+            resolved.append(clean(n))
+            seen.add(n["ssid"])
 
     return resolved[:3]
 
