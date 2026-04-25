@@ -24,7 +24,7 @@ from auth import login_required, role_required, service_token_required
 from database import db
 from models import (
     AlarmInterface, AlarmRule, AlarmDelivery, AlarmSubscription,
-    FlightZone, ServiceToken, Tenant, ViolationRecord,
+    FlightZone, ServiceToken, Tenant, TenantSettings, ViolationRecord,
 )
 from services.alarm_dispatcher import (
     build_variable_pool, build_example_context,
@@ -815,6 +815,18 @@ def get_interface_stats(iid):
     return jsonify(build_interface_stats(iid, tid))
 
 
+def _resolve_external_base_url(tenant_id: str) -> str:
+    """Prefer the tenant's configured external URL ("Externe URL" setting),
+    fall back to the host the request arrived on. Used for all snippets and
+    Copy-Buttons that show third-party-facing endpoints.
+    """
+    settings = TenantSettings.query.filter_by(tenant_id=tenant_id).first()
+    configured = (settings.firmware_backend_url or "").strip() if settings else ""
+    if configured:
+        return configured.rstrip("/")
+    return request.host_url.rstrip("/")
+
+
 @alarm_bp.route("/interfaces/<iid>/usage-examples", methods=["GET"])
 @login_required
 @role_required("tenant_admin")
@@ -823,7 +835,7 @@ def get_interface_usage_examples(iid):
     iface = AlarmInterface.query.filter_by(id=iid, tenant_id=tid).first()
     if not iface:
         return jsonify({"error": "Schnittstelle nicht gefunden"}), 404
-    origin = request.host_url.rstrip("/")
+    origin = _resolve_external_base_url(tid)
     return jsonify(build_usage_examples(iface, request_origin=origin))
 
 

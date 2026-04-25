@@ -29,6 +29,49 @@
 
 ## Änderungshistorie
 
+### 2026-04-25 - Externe URL, Endpoint-Display, Single-HelpLink, Mobile-Portrait, Settings-TOC
+**Anlass:** Mehrteiliges User-Feedback nach dem letzten Commit:
+1. Beim Löschen einer Subscription-Schnittstelle müssen API-Keys mit-gelöscht werden.
+2. Der API-Endpoint muss automatisch + eindeutig je Schnittstelle generiert werden.
+3. „Firmware Backend-URL" → „Externe URL" (genereller Zweck).
+4. Generierter Link in der Schnittstelle anzeigen + per Klick kopieren.
+5. Mobile/Tablet im Hochformat unübersichtlich — fixen.
+6. Einstellungen kategorisieren / Übersicht erhöhen.
+7. (Nachtrag) Pro Seite nur EIN Hilfesymbol.
+
+**Umsetzung (in Reihenfolge):**
+
+**Subscription-Cascade (Audit ergab: bereits korrekt):** `AlarmInterface` hat `cascade="all, delete-orphan"` für `subscriptions`, `deliveries`, `rules`. Beim DELETE `/api/admin/interfaces/<id>` wird zusätzlich der Service-Token explizit gelöscht. Keine Verwaisung. Verifikation per pytest (74/74 ✓).
+
+**„Externe URL"-Rename (Label-only, DB-Spalte bleibt):**
+- `frontend/src/components/admin/SettingsTab.tsx`: `<SectionTitle>Externe URL</SectionTitle>` + erweiterte Beschreibung („Firmware-Build, Pull-In, Subscription, externe Links").
+- `frontend/src/components/HelpPage.tsx`: TOC-Eintrag + `<h3>` + erweiterter Erklärtext.
+- DB-Spalte `firmware_backend_url` bleibt — kein Migration-Risiko.
+
+**Externe URL als Quelle für Beispiel-URLs:**
+- `backend/routes/alarm_routes.py`: neuer Helper `_resolve_external_base_url(tenant_id)` — bevorzugt `TenantSettings.firmware_backend_url`, fallback `request.host_url`. Wird in `get_interface_usage_examples` verwendet, sodass Postman-Snippets, Copy-Buttons und Pull-In/Subscription-URLs alle die konfigurierte externe URL nutzen statt der zufälligen Host-URL des Admin-Zugriffs.
+
+**URL-Display + Copy-Button im InterfaceEditor:**
+- Neue `EndpointUrlBox`-Komponente: zeigt Label, generierte URL, Quellen-Badge („aus Externer URL" / „aus aktuellem Host"), und Eindeutigkeits-Hinweis. Klick auf die URL ODER auf den Kopieren-Button kopiert in die Zwischenablage (Feedback „✓ Kopiert" für 1.5s).
+- Im Connection-Tab eingebunden für Pull-In (`/api/integrations/violations`) und Subscription (`/api/integrations/subscriptions/<id>/register`). Bei neuer, ungespeicherter Subscription: Hinweis dass URL nach erstem Speichern erscheint (Channel-ID = UUID).
+
+**Pro Seite nur ein HelpLink:** HelpFab aus 9 Admin-Pages entfernt (TenantList, UserList, LogViewerTab, AuditLogTab, AdminDashboard, ReceiverList, SimulationTab, PlanningTab, SettingsTab). DroneAddressBook behält HelpFab (kein HelpLink). Inventar: jetzt 1 HelpLink je Page-Headline (size=20), 2× side-panel HelpLink (size=16). Keine doppelten Symbole mehr.
+
+**Mobile-Portrait-Fixes (`InterfaceEditor.tsx`):**
+- Modal-Padding `clamp(8px, 2vw, 24px)` statt fix 24 — auf Phone bleibt mehr Platz für Inhalt.
+- Header kompakter: `padding: 14px 16px` (war 16px 20px), Titel mit `text-overflow: ellipsis` statt Umbruch.
+- Tab-Bar: `overflowX: auto` + `WebkitOverflowScrolling: 'touch'` — Tabs scrollen horizontal statt zu wrappen.
+- `tabBtn`: `whiteSpace: 'nowrap'` + `flexShrink: 0` — bleiben ein-zeilig.
+- Content-Padding ebenfalls clamped.
+
+**Settings-Quick-Nav (Kategorisierung ohne Reorder-Risiko):**
+- Neue `SettingsQuickNav`-Komponente: 3 Kategorien (Allgemein · Infrastruktur · Sicherheit & Integrationen) mit je 2 Buttons.
+- Klick scrollt smooth zur Section, kurzes 2px-Accent-Highlight (1.2s) auf der Ziel-Section.
+- Jede Section hat jetzt eine `id="settings-..."` für Anchor-Navigation.
+- Responsives Grid (`auto-fit, minmax(220px, 1fr)`) — auf Mobile stacken die Kategorien automatisch.
+
+**Build/Tests:** `npm run build` ✓, 74/74 Alarm-Tests grün.
+
 ### 2026-04-25 - HelpLink-Konsistenz: Symbol an JEDER Top-Level-Seite, einheitliche Position
 **Anlass:** User-Audit-Frage „prüfe das die Hilfesymbole bei allen Seiten an der gleichen Position sind". Subagent-Audit ergab: 6 von ~15 Seiten hatten ein HelpLink, der Rest nicht; MapPage Mobile hatte 18px statt 20px.
 

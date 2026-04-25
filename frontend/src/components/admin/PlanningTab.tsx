@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import HelpFab from '../HelpFab';
 import HelpLink from '../HelpLink';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -629,7 +628,6 @@ export default function PlanningTab() {
           )}
         </div>
       </div>
-      <HelpFab section="receivers" sub="empfaenger-planung" title="Hilfe: Empfänger-Planung" />
     </div>
   );
 }

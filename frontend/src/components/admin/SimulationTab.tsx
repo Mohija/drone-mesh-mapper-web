@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import HelpFab from '../HelpFab';
 import HelpLink from '../HelpLink';
 import {
   fetchSimulators, createSimulator, deleteSimulator,
@@ -320,7 +319,6 @@ export default function SimulationTab() {
         Die Drohnen erscheinen auf der Karte wenn die Quelle "Empfänger" in den Einstellungen aktiviert ist.
         Simulatoren sind flüchtig — nach einem Server-Neustart sind sie weg, die erzeugten Empfänger-Einträge ([SIM]) bleiben aber in der Datenbank.
       </div>
-      <HelpFab section="simulation" title="Hilfe: Simulation" />
     </div>
   );
 }

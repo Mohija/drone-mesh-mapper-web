@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import HelpFab from '../HelpFab';
 import HelpLink from '../HelpLink';
 import {
   fetchAuditLogs, fetchAuditActions, fetchAuditResourceTypes,
@@ -512,7 +511,6 @@ export default function AuditLogTab() {
           </div>
         )}
       </div>
-      <HelpFab section="admin" sub="sicherheits-audit" title="Hilfe: Sicherheits-Audit" />
     </div>
   );
 }

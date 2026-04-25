@@ -7,7 +7,6 @@ import {
   type MissionZoneDefaults, type TenantWifiNetwork, type ServiceToken,
 } from '../../api';
 import { useIsMobile } from '../../useIsMobile';
-import HelpFab from '../HelpFab';
 import HelpLink from '../HelpLink';
 
 // Section heading used across the settings page. Kept as a stand-alone
@@ -404,8 +403,11 @@ export default function SettingsTab() {
         </div>
       )}
 
+      {/* Categorized Quick-Nav (Inhaltsverzeichnis) */}
+      <SettingsQuickNav />
+
       {/* Mission Zone Defaults */}
-      <div style={{
+      <div id="settings-mission-zone" style={{
         background: 'var(--bg-secondary)', border: '1px solid var(--border)',
         borderRadius: 10, padding: 16, marginBottom: 20,
       }}>
@@ -522,13 +524,15 @@ export default function SettingsTab() {
       </div>
 
       {/* Firmware Backend URL — baked into every controller at build time */}
-      <div data-testid="firmware-backend-url-section" style={{
+      <div id="settings-external-url" data-testid="firmware-backend-url-section" style={{
         background: 'var(--bg-secondary)', border: '1px solid var(--border)',
         borderRadius: 10, padding: 16, marginBottom: 20,
       }}>
-        <SectionTitle helpSub="firmware-backend-url">Firmware Backend-URL</SectionTitle>
+        <SectionTitle helpSub="firmware-backend-url">Externe URL</SectionTitle>
         <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-          Diese URL wird beim Firmware-Build in jeden Empfänger-Controller eingebrannt. Muss von überall erreichbar sein — keine LAN-IP.
+          Öffentlich erreichbare Basis-URL dieser FlightArc-Instanz. Wird genutzt für: Firmware-Build (in jeden
+          Empfänger-Controller eingebrannt), Pull-In- und Subscription-Endpoints (Beispiel-Code, Copy-Buttons),
+          und alle externen Links. Muss von überall erreichbar sein — keine LAN-IP.
           Für den LabCore Hub: Live-View-URL (z.&nbsp;B. <code style={{ fontSize: 11 }}>https://hub.dasilvafelix.de/api/live/flight-arc</code>).
         </p>
 
@@ -573,7 +577,7 @@ export default function SettingsTab() {
       </div>
 
       {/* Data Retention — caps on how long log tables are kept */}
-      <div data-testid="retention-section" style={{
+      <div id="settings-retention" data-testid="retention-section" style={{
         background: 'var(--bg-secondary)', border: '1px solid var(--border)',
         borderRadius: 10, padding: 16, marginBottom: 20,
       }}>
@@ -634,7 +638,7 @@ export default function SettingsTab() {
       </div>
 
       {/* Service Tokens — API keys for external monitors (health-check agents) */}
-      <div data-testid="service-tokens-section" style={{
+      <div id="settings-service-tokens" data-testid="service-tokens-section" style={{
         background: 'var(--bg-secondary)', border: '1px solid var(--border)',
         borderRadius: 10, padding: 16, marginBottom: 20,
       }}>
@@ -737,7 +741,7 @@ export default function SettingsTab() {
       </div>
 
       {/* WiFi Networks */}
-      <div data-testid="wifi-networks-section" style={{
+      <div id="settings-wifi" data-testid="wifi-networks-section" style={{
         background: 'var(--bg-secondary)', border: '1px solid var(--border)',
         borderRadius: 10, padding: 16, marginBottom: 20,
       }}>
@@ -861,7 +865,7 @@ export default function SettingsTab() {
       </div>
 
       {/* Audit Log Toggle */}
-      <div data-testid="audit-settings-section" style={{
+      <div id="settings-audit" data-testid="audit-settings-section" style={{
         background: 'var(--bg-secondary)', border: '1px solid var(--border)',
         borderRadius: 10, padding: 16, marginBottom: 20,
       }}>
@@ -902,7 +906,6 @@ export default function SettingsTab() {
         Standardwerte für Radius, Farbe und Höhengrenzen verwendet.
         WiFi-Netzwerke werden beim Firmware-Build automatisch als Vorgabe übernommen.
       </div>
-      <HelpFab section="admin" sub="einstellungen" title="Hilfe: Einstellungen" />
     </div>
   );
 }
@@ -922,3 +925,78 @@ const inputStyle: React.CSSProperties = {
   color: 'var(--text-primary)', fontSize: 13, outline: 'none',
   boxSizing: 'border-box',
 };
+
+
+// ─── Quick-Nav (Categorized TOC) ──────────────────────────
+
+const QUICK_NAV_GROUPS: { label: string; color: string; items: { id: string; title: string }[] }[] = [
+  {
+    label: 'Allgemein',
+    color: '#22d3ee',
+    items: [
+      { id: 'settings-mission-zone', title: 'Einsatz-Zonen Standardwerte' },
+      { id: 'settings-retention', title: 'Datenaufbewahrung' },
+    ],
+  },
+  {
+    label: 'Infrastruktur',
+    color: '#a78bfa',
+    items: [
+      { id: 'settings-external-url', title: 'Externe URL' },
+      { id: 'settings-wifi', title: 'WiFi-Netzwerke' },
+    ],
+  },
+  {
+    label: 'Sicherheit & Integrationen',
+    color: '#f59e0b',
+    items: [
+      { id: 'settings-service-tokens', title: 'Service-Tokens' },
+      { id: 'settings-audit', title: 'Sicherheits-Audit' },
+    ],
+  },
+];
+
+function SettingsQuickNav() {
+  function jumpTo(id: string) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    el.style.boxShadow = '0 0 0 2px var(--accent)';
+    setTimeout(() => { el.style.boxShadow = ''; }, 1200);
+  }
+  return (
+    <nav
+      aria-label="Schnellnavigation Einstellungen"
+      style={{
+        background: 'var(--bg-secondary)', border: '1px solid var(--border)',
+        borderRadius: 10, padding: 14, marginBottom: 20,
+        display: 'grid', gap: 12,
+        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+      }}
+    >
+      {QUICK_NAV_GROUPS.map(grp => (
+        <div key={grp.label} style={{ minWidth: 0 }}>
+          <p style={{
+            margin: '0 0 6px', fontSize: 10, fontWeight: 700,
+            color: grp.color, textTransform: 'uppercase', letterSpacing: 0.6,
+          }}>{grp.label}</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {grp.items.map(it => (
+              <button
+                key={it.id}
+                onClick={() => jumpTo(it.id)}
+                style={{
+                  textAlign: 'left', padding: '6px 10px', borderRadius: 6,
+                  background: 'var(--bg-tertiary)', border: '1px solid var(--border)',
+                  color: 'var(--text-primary)', cursor: 'pointer',
+                  fontSize: 12, lineHeight: 1.3,
+                }}
+                title={`Zum Abschnitt „${it.title}" springen`}
+              >{it.title}</button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </nav>
+  );
+}

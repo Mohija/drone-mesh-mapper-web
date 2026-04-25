@@ -6,6 +6,7 @@ import {
   createAlarmInterface,
   updateAlarmInterface,
   fetchVariablePool,
+  fetchSettings,
   testAlarmInterface,
   VariablePoolEntry,
 } from '../../api';
@@ -83,6 +84,7 @@ export default function InterfaceEditor({ existing, onClose, onSaved }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [variables, setVariables] = useState<VariablePoolEntry[]>([]);
   const [previewCtx, setPreviewCtx] = useState<Record<string, unknown> | null>(null);
+  const [externalUrl, setExternalUrl] = useState<string>('');
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; status?: number; body?: string; error?: string } | null>(null);
   const payloadRef = useRef<HTMLTextAreaElement>(null);
@@ -92,7 +94,23 @@ export default function InterfaceEditor({ existing, onClose, onSaved }: Props) {
       setVariables(p.variables);
       setPreviewCtx(p.exampleContext);
     }).catch(() => { /* non-fatal */ });
+    fetchSettings().then(s => {
+      setExternalUrl((s.firmware_backend_url || '').trim());
+    }).catch(() => { /* non-fatal */ });
   }, []);
+
+  function endpointUrl(): string | null {
+    const base = externalUrl || (typeof window !== 'undefined' ? window.location.origin : '');
+    if (!base) return null;
+    const trimmed = base.replace(/\/+$/, '');
+    if (interfaceType === 'pull_in') {
+      return `${trimmed}/api/integrations/violations`;
+    }
+    if (interfaceType === 'subscription' && existing) {
+      return `${trimmed}/api/integrations/subscriptions/${existing.id}/register`;
+    }
+    return null;
+  }
 
   function insertVariable(path: string) {
     const ta = payloadRef.current;
@@ -188,19 +206,19 @@ export default function InterfaceEditor({ existing, onClose, onSaved }: Props) {
   })();
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 24, overflow: 'auto' }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 'clamp(8px, 2vw, 24px)', overflow: 'auto' }}>
       <div style={{
         width: tab === 'payload' ? 'min(1320px, 100%)' : 'min(960px, 100%)',
         background: 'var(--bg-secondary)',
         borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden',
         transition: 'width 0.2s ease',
       }}>
-        <header style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h2 style={{ margin: 0, fontSize: 18 }}>{isEdit ? `Schnittstelle bearbeiten — ${existing!.name}` : 'Neue Schnittstelle'}</h2>
-          <button onClick={onClose} style={{ background: 'transparent', border: 0, fontSize: 20, color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }}>×</button>
+        <header style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <h2 style={{ margin: 0, fontSize: 16, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{isEdit ? `Schnittstelle: ${existing!.name}` : 'Neue Schnittstelle'}</h2>
+          <button onClick={onClose} style={{ background: 'transparent', border: 0, fontSize: 24, color: 'var(--text-muted)', cursor: 'pointer', padding: '0 4px', flexShrink: 0 }}>×</button>
         </header>
 
-        <nav style={{ display: 'flex', gap: 4, padding: '12px 20px 0', borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
+        <nav style={{ display: 'flex', gap: 4, padding: '10px 12px 0', borderBottom: '1px solid var(--border)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
           {(() => {
             const tabs: Tab[] = ['general', 'connection', 'auth', 'payload', 'preview'];
             if (isEdit && interfaceType === 'subscription') tabs.push('subscribers');
@@ -221,7 +239,7 @@ export default function InterfaceEditor({ existing, onClose, onSaved }: Props) {
           ))}
         </nav>
 
-        <div style={{ padding: 20, maxHeight: '60vh', overflow: 'auto' }}>
+        <div style={{ padding: 'clamp(12px, 3vw, 20px)', maxHeight: '70vh', overflow: 'auto' }}>
           {tab === 'general' && (
             <div style={{ display: 'grid', gap: 12 }}>
               <Field label="Name *">
@@ -263,7 +281,23 @@ export default function InterfaceEditor({ existing, onClose, onSaved }: Props) {
               )}
               {interfaceType === 'pull_in' && (
                 <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
-                  Pull-In: das Drittsystem fragt FlightArc ab — keine ausgehende URL. Nach dem Speichern erhältst du einmalig einen Service-Token, den du im Drittsystem als <code>X-Service-Token</code>-Header hinterlegst. Der Endpoint lautet <code>/api/integrations/violations</code>.
+                  Pull-In: das Drittsystem fragt FlightArc ab — keine ausgehende URL. Nach dem Speichern erhältst du einmalig einen Service-Token, den du im Drittsystem als <code>X-Service-Token</code>-Header hinterlegst.
+                </p>
+              )}
+              {(interfaceType === 'pull_in' || (interfaceType === 'subscription' && isEdit)) && (
+                <EndpointUrlBox
+                  label={interfaceType === 'pull_in' ? 'Pull-In-Endpoint' : 'Subscription-Registrierungs-URL'}
+                  url={endpointUrl()}
+                  externalUrlConfigured={Boolean(externalUrl)}
+                  unique={interfaceType === 'subscription'
+                    ? 'Eindeutig pro Schnittstelle (UUID im Pfad).'
+                    : 'Pro Service-Token authentifiziert; alle Pull-In-Schnittstellen teilen denselben Pfad.'}
+                />
+              )}
+              {interfaceType === 'subscription' && !isEdit && (
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>
+                  Die Registrierungs-URL wird nach dem ersten Speichern angezeigt — sie enthält die eindeutige
+                  Channel-ID dieser Schnittstelle.
                 </p>
               )}
               {interfaceType === 'pull_out' && (
@@ -529,6 +563,65 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+function EndpointUrlBox({ label, url, externalUrlConfigured, unique }: {
+  label: string;
+  url: string | null;
+  externalUrlConfigured: boolean;
+  unique: string;
+}) {
+  const [copied, setCopied] = useState(false);
+  if (!url) {
+    return (
+      <div style={{ padding: 10, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', fontSize: 12, color: 'var(--text-muted)' }}>
+        URL kann nicht ermittelt werden — pflege die <strong>Externe URL</strong> unter Administration → Einstellungen.
+      </div>
+    );
+  }
+  return (
+    <div style={{
+      padding: 10, borderRadius: 6, border: '1px solid var(--border)',
+      background: 'var(--bg-primary)', display: 'grid', gap: 6,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <strong style={{ fontSize: 12 }}>{label}</strong>
+        <span style={{
+          fontSize: 9, padding: '1px 6px', borderRadius: 3, letterSpacing: 0.5,
+          background: 'var(--bg-tertiary)', color: 'var(--text-muted)', textTransform: 'uppercase',
+        }}>{externalUrlConfigured ? 'aus Externer URL' : 'aus aktuellem Host'}</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'stretch', gap: 6 }}>
+        <code
+          onClick={async () => {
+            try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* ignore */ }
+          }}
+          title="Klicken zum Kopieren"
+          style={{
+            flex: 1, padding: '8px 10px', borderRadius: 4,
+            background: 'var(--bg-tertiary)', border: '1px solid var(--border)',
+            fontFamily: 'monospace', fontSize: 12, cursor: 'pointer',
+            wordBreak: 'break-all', userSelect: 'all',
+            color: 'var(--text-primary)', minWidth: 0,
+          }}
+        >{url}</code>
+        <button
+          onClick={async () => {
+            try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* ignore */ }
+          }}
+          title="In Zwischenablage kopieren"
+          style={{
+            padding: '0 14px', borderRadius: 4,
+            background: copied ? 'rgba(34,197,94,0.15)' : 'var(--bg-tertiary)',
+            border: `1px solid ${copied ? 'rgba(34,197,94,0.5)' : 'var(--border)'}`,
+            color: copied ? '#22c55e' : 'var(--text-primary)',
+            fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+          }}
+        >{copied ? '✓ Kopiert' : 'Kopieren'}</button>
+      </div>
+      <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.4 }}>{unique}</p>
+    </div>
+  );
+}
+
 const inp: React.CSSProperties = {
   padding: 10, borderRadius: 6, border: '1px solid var(--border)',
   background: 'var(--bg-primary)', color: 'var(--text-primary)',
@@ -541,7 +634,7 @@ function tabBtn(active: boolean): React.CSSProperties {
     border: 0, borderBottom: active ? '2px solid var(--accent)' : '2px solid transparent',
     color: active ? 'var(--text-primary)' : 'var(--text-muted)',
     cursor: 'pointer', fontSize: 13, fontWeight: active ? 600 : 400,
-    marginBottom: -1,
+    marginBottom: -1, whiteSpace: 'nowrap', flexShrink: 0,
   };
 }
 

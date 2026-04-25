@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import HelpFab from '../HelpFab';
 import HelpLink from '../HelpLink';
 import { useAuth } from '../../AuthContext';
 import { fetchTenants, fetchUsers, fetchReceiverStats } from '../../api';
@@ -122,7 +121,6 @@ export default function AdminDashboard() {
           </div>
         </>
       )}
-      <HelpFab section="admin" sub="dashboard" title="Hilfe: Dashboard" />
     </div>
   );
 }

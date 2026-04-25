@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import HelpFab from '../HelpFab';
 import HelpLink from '../HelpLink';
 import {
   fetchLogs, fetchLogLevel, setLogLevel, clearLogs, fetchLogModules,
@@ -387,7 +386,6 @@ export default function LogViewerTab() {
           </div>
         )}
       </div>
-      <HelpFab section="admin" sub="log-viewer" title="Hilfe: System-Logs" />
     </div>
   );
 }

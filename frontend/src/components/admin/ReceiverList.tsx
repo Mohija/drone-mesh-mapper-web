@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import HelpFab from '../HelpFab';
 import HelpLink from '../HelpLink';
 import {
   fetchReceivers,
@@ -2139,7 +2138,6 @@ export default function ReceiverList() {
           </div>
         </>
       )}
-      <HelpFab section="receivers" title="Hilfe: Empfänger" />
     </div>
   );
 }

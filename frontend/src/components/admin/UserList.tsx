@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import HelpFab from '../HelpFab';
 import HelpLink from '../HelpLink';
 import { useAuth } from '../../AuthContext';
 import { fetchUsers, fetchTenants, createUser, deleteUser, resetUserPassword, updateUser } from '../../api';
@@ -472,7 +471,6 @@ export default function UserList() {
           </table>
         </div>
       )}
-      <HelpFab section="admin" sub="benutzer-verwaltung" title="Hilfe: Benutzer" />
     </div>
   );
 }

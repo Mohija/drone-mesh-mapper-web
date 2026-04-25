@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import HelpFab from '../HelpFab';
 import HelpLink from '../HelpLink';
 import { fetchTenants, createTenant, deleteTenant } from '../../api';
 import type { Tenant } from '../../api';
@@ -166,7 +165,6 @@ export default function TenantList() {
           </tbody>
         </table>
       </div>
-      <HelpFab section="admin" sub="mandanten-verwaltung" title="Hilfe: Mandanten" />
     </div>
   );
 }

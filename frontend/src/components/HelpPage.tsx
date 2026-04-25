@@ -64,7 +64,7 @@ const SECTION_SUBS: Record<string, SubMeta[]> = {
     { id: 'log-viewer', title: 'Log-Viewer' },
     { id: 'sicherheits-audit', title: 'Sicherheits-Audit' },
     { id: 'wifi-netzwerk-verwaltung', title: 'WiFi-Netzwerk-Verwaltung' },
-    { id: 'firmware-backend-url', title: 'Firmware Backend-URL' },
+    { id: 'firmware-backend-url', title: 'Externe URL' },
     { id: 'datenaufbewahrung', title: 'Datenaufbewahrung (Retention)' },
     { id: 'service-tokens', title: 'Service-Tokens' },
     { id: 'datenbank-verwaltung', title: 'Datenbank-Verwaltung & Backups' },
@@ -977,18 +977,29 @@ function SectionAdmin() {
       </div>
 
       <div id="firmware-backend-url">
-        <h3>Firmware Backend-URL</h3>
+        <h3>Externe URL</h3>
         <p>
-          Unter <strong>Administration → Einstellungen → Firmware Backend-URL</strong> wird die URL gepflegt,
-          die beim Firmware-Build in jeden Empfänger-Controller <strong>eingebrannt</strong> wird.
-          Diese URL muss von überall erreichbar sein, wo ein Controller stehen könnte — also <strong>niemals eine LAN-IP</strong>
-          (<code>192.168.*</code>, <code>10.*</code>, <code>localhost</code>), sondern eine öffentliche Domain via
-          Cloudflare-Tunnel (z. B. <code>https://hub.dasilvafelix.de/api/live/flight-arc</code>).
-          Der Server weigert sich, einen Build mit einer LAN-IP zu erzeugen.
+          Unter <strong>Administration → Einstellungen → Externe URL</strong> wird die öffentlich
+          erreichbare Basis-URL dieser FlightArc-Instanz gepflegt. Sie wird an mehreren Stellen
+          verwendet:
+        </p>
+        <ul>
+          <li><strong>Firmware-Build:</strong> wird in jeden Empfänger-Controller <strong>eingebrannt</strong>.
+            Der Server weigert sich, einen Build mit einer LAN-IP zu erzeugen.</li>
+          <li><strong>Pull-In-Schnittstellen:</strong> der Endpoint <code>/api/integrations/violations</code>
+            wird in Beispiel-Code, Copy-Buttons und der UI auf Basis dieser URL angezeigt.</li>
+          <li><strong>Subscription-Channels:</strong> die Registrierungs-URL
+            <code>/api/integrations/subscriptions/&lt;id&gt;/register</code> nutzt diese Basis.</li>
+          <li><strong>Service-Tokens / Health-Endpoints:</strong> alle externen Links für Monitor-Agenten.</li>
+        </ul>
+        <p>
+          Die URL muss von überall erreichbar sein — <strong>niemals eine LAN-IP</strong>
+          (<code>192.168.*</code>, <code>10.*</code>, <code>localhost</code>), sondern eine öffentliche Domain
+          via Cloudflare-Tunnel (z. B. <code>https://hub.dasilvafelix.de/api/live/flight-arc</code>).
         </p>
         <p>
           Das Feld im Flash-Wizard ist <strong>read-only</strong> und zeigt die hier gepflegte URL an. Ändert man sie hier,
-          gilt sie für alle folgenden Builds und OTA-Updates.
+          gilt sie für alle folgenden Builds, OTA-Updates und externen Endpoint-Anzeigen.
         </p>
         <InfoBox type="warning">
           <strong>Firmware 1.5.3 Watchdog:</strong> Wenn ein Controller die eingebrannte URL 10 Minuten lang nicht erreicht,
