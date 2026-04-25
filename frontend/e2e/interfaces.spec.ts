@@ -95,12 +95,7 @@ test.describe('Alarm Interfaces — API + UI smoke', () => {
   });
 
   test('UI: admin interfaces and alarms tabs render', async ({ page }) => {
-    await page.goto(`${API}/login`);
-    await page.fill('[data-testid="login-username"]', 'admin');
-    await page.fill('[data-testid="login-password"]', 'admin');
-    await page.click('[data-testid="login-submit"]');
-    await page.waitForFunction(() => !window.location.pathname.includes('/login'), { timeout: 10000 });
-
+    // Auth state is provided by auth.setup.ts via storageState — go straight to admin.
     await page.goto(`${API}/admin/interfaces`);
     await expect(page.locator('h1:has-text("Schnittstellen")')).toBeVisible({ timeout: 10000 });
     await expect(page.getByRole('button', { name: /Neue Schnittstelle/ })).toBeVisible();
@@ -200,12 +195,7 @@ test.describe('Alarm Interfaces — API + UI smoke', () => {
   });
 
   test('UI: payload builder mode toggle renders DnD palette', async ({ page }) => {
-    await page.goto(`${API}/login`);
-    await page.fill('[data-testid="login-username"]', 'admin');
-    await page.fill('[data-testid="login-password"]', 'admin');
-    await page.click('[data-testid="login-submit"]');
-    await page.waitForFunction(() => !window.location.pathname.includes('/login'), { timeout: 10000 });
-
+    // Auth via storageState — straight to admin.
     await page.goto(`${API}/admin/interfaces`);
     await page.getByRole('button', { name: /Neue Schnittstelle/ }).click();
     await page.fill('input[placeholder*="Alarmserver"]', `E2E-Builder-${Date.now().toString(36)}`);

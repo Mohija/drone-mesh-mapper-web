@@ -407,6 +407,154 @@ test.describe('Violation Tenant Isolation (API)', () => {
   });
 });
 
+// ─── Alarm Interface Tenant Isolation (API) ─────────────────────
+
+test.describe('Alarm Interface Tenant Isolation', () => {
+  let headersTAdminA: Record<string, string>;
+  let headersTAdminB: Record<string, string>;
+  let headersA1: Record<string, string>;
+  let headersB1: Record<string, string>;
+  let interfaceAId: string;
+  let interfaceBId: string;
+  let subscriptionAId: string;
+  let subscriptionBId: string;
+
+  test.beforeAll(async ({ request }) => {
+    headersTAdminA = await loginUser(request, TENANT_ADMIN_A);
+    headersTAdminB = await loginUser(request, TENANT_ADMIN_B);
+    headersA1 = await loginUser(request, USER_A1);
+    headersB1 = await loginUser(request, USER_B1);
+  });
+
+  test.afterAll(async ({ request }) => {
+    for (const [iid, headers] of [
+      [interfaceAId, headersTAdminA],
+      [interfaceBId, headersTAdminB],
+      [subscriptionAId, headersTAdminA],
+      [subscriptionBId, headersTAdminB],
+    ] as const) {
+      if (iid && headers) {
+        await request.delete(`/api/admin/interfaces/${iid}`, { headers });
+      }
+    }
+  });
+
+  test('Tenant admin A creates a webhook in Tenant A', async ({ request }) => {
+    const res = await request.post('/api/admin/interfaces', {
+      headers: { ...headersTAdminA, 'Content-Type': 'application/json' },
+      data: {
+        name: `E2E-MT-IfaceA-${uid}`,
+        interfaceType: 'webhook',
+        url: 'https://example.com/hook-a',
+        authType: 'none',
+        payloadTemplate: { event: '{{trigger}}' },
+      },
+    });
+    expect(res.status()).toBe(201);
+    interfaceAId = (await res.json()).id;
+  });
+
+  test('Tenant admin B creates a webhook in Tenant B', async ({ request }) => {
+    const res = await request.post('/api/admin/interfaces', {
+      headers: { ...headersTAdminB, 'Content-Type': 'application/json' },
+      data: {
+        name: `E2E-MT-IfaceB-${uid}`,
+        interfaceType: 'webhook',
+        url: 'https://example.com/hook-b',
+        authType: 'none',
+        payloadTemplate: { event: '{{trigger}}' },
+      },
+    });
+    expect(res.status()).toBe(201);
+    interfaceBId = (await res.json()).id;
+  });
+
+  test('Tenant A admin sees only own interfaces', async ({ request }) => {
+    const res = await request.get('/api/admin/interfaces', { headers: headersTAdminA });
+    expect(res.status()).toBe(200);
+    const body = await res.json();
+    const ids = (body.items || []).map((i: { id: string }) => i.id);
+    expect(ids).toContain(interfaceAId);
+    expect(ids).not.toContain(interfaceBId);
+  });
+
+  test('Tenant B admin sees only own interfaces', async ({ request }) => {
+    const res = await request.get('/api/admin/interfaces', { headers: headersTAdminB });
+    expect(res.status()).toBe(200);
+    const body = await res.json();
+    const ids = (body.items || []).map((i: { id: string }) => i.id);
+    expect(ids).toContain(interfaceBId);
+    expect(ids).not.toContain(interfaceAId);
+  });
+
+  test('Tenant B admin cannot access Tenant A interface by ID', async ({ request }) => {
+    const res = await request.get(`/api/admin/interfaces/${interfaceAId}`, { headers: headersTAdminB });
+    expect(res.status()).toBe(404);
+  });
+
+  test('Tenant B admin cannot delete Tenant A interface', async ({ request }) => {
+    const res = await request.delete(`/api/admin/interfaces/${interfaceAId}`, { headers: headersTAdminB });
+    expect([403, 404]).toContain(res.status());
+    // Verify still exists
+    const check = await request.get(`/api/admin/interfaces/${interfaceAId}`, { headers: headersTAdminA });
+    expect(check.status()).toBe(200);
+  });
+
+  test('Subscription channels in different tenants get unique URLs', async ({ request }) => {
+    const subA = await request.post('/api/admin/interfaces', {
+      headers: { ...headersTAdminA, 'Content-Type': 'application/json' },
+      data: {
+        name: `E2E-MT-SubA-${uid}`,
+        interfaceType: 'subscription',
+        authType: 'none',
+        payloadTemplate: {},
+      },
+    });
+    expect(subA.status()).toBe(201);
+    const subAJson = await subA.json();
+    subscriptionAId = subAJson.id;
+
+    const subB = await request.post('/api/admin/interfaces', {
+      headers: { ...headersTAdminB, 'Content-Type': 'application/json' },
+      data: {
+        name: `E2E-MT-SubB-${uid}`,
+        interfaceType: 'subscription',
+        authType: 'none',
+        payloadTemplate: {},
+      },
+    });
+    expect(subB.status()).toBe(201);
+    const subBJson = await subB.json();
+    subscriptionBId = subBJson.id;
+
+    // Critical: each subscription gets a unique UUID → unique register-URL — no
+    // two channels can ever collide, even with identical names across tenants.
+    expect(subscriptionAId).not.toBe(subscriptionBId);
+    expect(subscriptionAId.length).toBeGreaterThan(0);
+
+    // Each channel exposes its own examples (URLs include the unique id).
+    const exA = await request.get(`/api/admin/interfaces/${subscriptionAId}/usage-examples`, { headers: headersTAdminA });
+    expect(exA.status()).toBe(200);
+    const exABody = await exA.json();
+    const subscribeBlocksA = JSON.stringify(exABody.subscribe || []);
+    expect(subscribeBlocksA).toContain(subscriptionAId);
+    expect(subscribeBlocksA).not.toContain(subscriptionBId);
+  });
+
+  test('Regular user (User A1) cannot create interfaces', async ({ request }) => {
+    const res = await request.post('/api/admin/interfaces', {
+      headers: { ...headersA1, 'Content-Type': 'application/json' },
+      data: { name: `forbidden-${uid}`, interfaceType: 'webhook', url: 'https://example.com', authType: 'none', payloadTemplate: {} },
+    });
+    expect([401, 403]).toContain(res.status());
+  });
+
+  test('Regular user (User B1) cannot list interfaces', async ({ request }) => {
+    const res = await request.get('/api/admin/interfaces', { headers: headersB1 });
+    expect([401, 403]).toContain(res.status());
+  });
+});
+
 // ─── Role-Based Access ────────────────────────────────────────
 
 test.describe('Role-Based Access Control', () => {

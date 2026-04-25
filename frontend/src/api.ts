@@ -627,6 +627,7 @@ export interface Tenant {
 export interface UserAdmin extends User {
   last_login: number | null;
   created_at: string;
+  membership_role?: string;
 }
 
 export async function fetchTenants(): Promise<Tenant[]> {

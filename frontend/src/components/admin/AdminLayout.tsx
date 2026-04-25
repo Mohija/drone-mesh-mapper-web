@@ -3,19 +3,52 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../AuthContext';
 import { useIsMobile } from '../../useIsMobile';
 
-const navItems = [
-  { to: '/admin', label: 'Dashboard', end: true },
-  { to: '/admin/tenants', label: 'Mandanten', superAdminOnly: true },
-  { to: '/admin/users', label: 'Benutzer' },
-  { to: '/admin/receivers', label: 'Empfänger' },
-  { to: '/admin/addressbook', label: 'Adressbuch' },
-  { to: '/admin/settings', label: 'Einstellungen' },
-  { to: '/admin/simulation', label: 'Simulation' },
-  { to: '/admin/logs', label: 'Logs' },
-  { to: '/admin/audit', label: 'Sicherheit' },
-  { to: '/admin/planning', label: 'Planung' },
-  { to: '/admin/interfaces', label: 'Schnittstellen' },
-  { to: '/admin/alarms', label: 'Alarmverwaltung' },
+interface NavItem { to: string; label: string; end?: boolean; superAdminOnly?: boolean; }
+interface NavGroup { label: string; color: string; items: NavItem[]; }
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    label: 'Übersicht',
+    color: '#22d3ee',
+    items: [
+      { to: '/admin', label: 'Dashboard', end: true },
+    ],
+  },
+  {
+    label: 'Mandanten & Benutzer',
+    color: '#a78bfa',
+    items: [
+      { to: '/admin/tenants', label: 'Mandanten', superAdminOnly: true },
+      { to: '/admin/users', label: 'Benutzer' },
+    ],
+  },
+  {
+    label: 'Empfänger & Hardware',
+    color: '#22c55e',
+    items: [
+      { to: '/admin/receivers', label: 'Empfänger' },
+      { to: '/admin/planning', label: 'Empfänger-Planung' },
+      { to: '/admin/simulation', label: 'Simulation' },
+    ],
+  },
+  {
+    label: 'Drohnen & Alarmierung',
+    color: '#f59e0b',
+    items: [
+      { to: '/admin/addressbook', label: 'Adressbuch' },
+      { to: '/admin/interfaces', label: 'Schnittstellen' },
+      { to: '/admin/alarms', label: 'Alarmverwaltung' },
+    ],
+  },
+  {
+    label: 'System & Sicherheit',
+    color: '#ef4444',
+    items: [
+      { to: '/admin/settings', label: 'Einstellungen' },
+      { to: '/admin/logs', label: 'Logs' },
+      { to: '/admin/audit', label: 'Sicherheit' },
+    ],
+  },
 ];
 
 export default function AdminLayout() {
@@ -99,32 +132,42 @@ export default function AdminLayout() {
         </div>
       )}
 
-      {/* Nav items */}
-      {navItems
-        .filter(item => !item.superAdminOnly || isSuperAdmin)
-        .map(item => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.end}
-            onClick={() => isMobile && setSidebarOpen(false)}
-            style={({ isActive }) => ({
-              display: 'flex',
-              alignItems: 'center',
-              padding: isMobile ? '14px 16px' : '10px 16px',
-              minHeight: isMobile ? 48 : undefined,
-              fontSize: isMobile ? 15 : 13,
-              fontWeight: isActive ? 600 : 400,
-              color: isActive ? 'var(--accent)' : 'var(--text-secondary)',
-              background: isActive ? 'rgba(0, 212, 170, 0.1)' : 'transparent',
-              textDecoration: 'none',
-              borderLeft: isActive ? '3px solid var(--accent)' : '3px solid transparent',
-            })}
-          >
-            {item.label}
-          </NavLink>
-        ))
-      }
+      {/* Nav items — grouped by category */}
+      {NAV_GROUPS.map(group => {
+        const visibleItems = group.items.filter(item => !item.superAdminOnly || isSuperAdmin);
+        if (visibleItems.length === 0) return null;
+        return (
+          <div key={group.label} style={{ marginBottom: 4 }}>
+            <p style={{
+              margin: '8px 16px 4px',
+              fontSize: 10, fontWeight: 700, letterSpacing: 0.6,
+              color: group.color, textTransform: 'uppercase',
+            }}>{group.label}</p>
+            {visibleItems.map(item => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.end}
+                onClick={() => isMobile && setSidebarOpen(false)}
+                style={({ isActive }) => ({
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: isMobile ? '12px 16px' : '8px 16px',
+                  minHeight: isMobile ? 44 : undefined,
+                  fontSize: isMobile ? 15 : 13,
+                  fontWeight: isActive ? 600 : 400,
+                  color: isActive ? 'var(--accent)' : 'var(--text-secondary)',
+                  background: isActive ? 'rgba(0, 212, 170, 0.1)' : 'transparent',
+                  textDecoration: 'none',
+                  borderLeft: isActive ? '3px solid var(--accent)' : '3px solid transparent',
+                })}
+              >
+                {item.label}
+              </NavLink>
+            ))}
+          </div>
+        );
+      })}
 
       <div style={{ flex: 1 }} />
 

@@ -2,7 +2,7 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-04-25 (PayloadBuilder UX-Fix: Mittelbereich war zu eng + Überlappungen)
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-04-25 (Mandanten-Trennung Audit, UserList tenant badges, Admin-Sidebar kategorisiert, E2E Tenant-Isolation-Tests)
 - **Typ:** Projekt | **Status:** Development
 
 ## Offene Aufgaben
@@ -28,6 +28,53 @@
 - [ ] Docker Deployment Package
 
 ## Änderungshistorie
+
+### 2026-04-25 - Mandanten-Audit + UserList-Tenant-Badges + Admin-Sidebar-Kategorien + E2E Tenant-Isolation-Tests
+**Anlass:** User-Bericht „Schnittstellen wurden beim Restart gelöscht" + „Benutzer scheinen nicht den richtigen Mandanten zugeordnet" + Wunsch nach Admin-Sidebar-Kategorisierung + voller Test-Lauf (Backend + E2E).
+
+**Datenverlust-Audit (Befund: KEIN Verlust):**
+- DB-Backup-Vergleich über alle 17 Startup-Snapshots heute zeigt: Schnittstellen sind seit 15:57 durchgehend in der DB (User hat sie um 13:13 + 15:31 erstellt — erstes Backup danach um 15:57 war schon mit beiden drin). Ihre IDs und Inhalte sind identisch von 15:57 bis jetzt.
+- Audit-Log: 0 Delete-Aktionen heute. Nur Login + switch_tenant.
+- `conftest.py`: DB-Isolation funktioniert korrekt (DATABASE_URL-Override + Hard-Guard mit `pytest.exit()` falls auf Produktions-DB). Pytest hat nie die Produktions-DB getroffen.
+
+**Mandanten-Trennung-Audit (Befunde):**
+- 3 User: `admin` (super_admin, kein Home), `CV` (super_admin, kein Home), `TG` (user, Home=Standard).
+- Audit-Log: 0 verwaiste Daten — alle Receivers/Zonen/Interfaces/Tokens haben gültige tenant_id.
+- Subscription-URLs: per-interface UUID → eindeutig zwischen Tenants ✓.
+- Pull-In-URLs: statisch `/api/integrations/violations`, durch Service-Token differenziert (per-Interface).
+- Switch-Tenant: super_admin frei; tenant_admin/user nur via Membership ✓.
+
+**Fixes:**
+- `backend/routes/admin_routes.py`: `list_users` gibt jetzt `tenants[]` mit `membership_role` pro Membership zurück (vorher nur primäres `tenant_id`). Frontend kann damit alle Mandanten-Zugehörigkeiten anzeigen.
+- `frontend/src/components/admin/UserList.tsx`: Neue Spalte „Mandanten" + neue `TenantBadges`-Komponente. Super-Admins → Badge „Alle Mandanten" (lila). Reguläre User → Badge je Mandant + Rolle. Keine Memberships → rotes Warning-Badge. Auch im Mobile-Card-Layout.
+- `frontend/src/api.ts`: `UserAdmin` um `membership_role?: string` erweitert.
+- `frontend/src/components/admin/AdminLayout.tsx`: 12 Menüpunkte in 5 Kategorien gruppiert mit farbcodierten Subheaders:
+  - **Übersicht** (cyan) — Dashboard
+  - **Mandanten & Benutzer** (lila) — Mandanten · Benutzer
+  - **Empfänger & Hardware** (grün) — Empfänger · Empfänger-Planung · Simulation
+  - **Drohnen & Alarmierung** (orange) — Adressbuch · Schnittstellen · Alarmverwaltung
+  - **System & Sicherheit** (rot) — Einstellungen · Logs · Sicherheit
+
+**E2E-Tests (Tenant-Isolation, neu in `multi-tenant.spec.ts`):**
+- 9 neue Tests im neuen Block „Alarm Interface Tenant Isolation":
+  - Tenant A erstellt Webhook → Tenant B sieht ihn NICHT
+  - Tenant A vs. Tenant B Listen sind disjunkt
+  - Tenant B kann Tenant A Interface nicht per ID lesen (404)
+  - Tenant B kann Tenant A Interface nicht löschen
+  - Subscription-Channels in verschiedenen Tenants haben unterschiedliche UUIDs (Endpoint-Eindeutigkeit)
+  - Reguläre User können keine Interfaces erstellen/listen
+- `interfaces.spec.ts`: Login-Flow in 2 UI-Tests entfernt (nutzten storageState aus auth.setup.ts → Doppel-Login schlug fehl).
+
+**Pre-existing Test-Fixes:**
+- `noFlyZones.test.ts`: Kategorie-Liste um `waterways` und `residential` erweitert (Daten haben sie, Test war veraltet).
+- `ReceiverHealthPanel.test.tsx`: `expectedFirmware="1.6.3"` als Prop gesetzt (sonst Test ohne Referenz, kein Warn-Trigger).
+
+**Build/Tests:**
+- `npm run build` ✓
+- 387/387 Backend-Tests grün
+- 95/95 Vitest-Unit-Tests grün
+- 57/57 E2E (interfaces + multi-tenant) grün
+- 47/47 E2E (admin + auth + api) grün
 
 ### 2026-04-25 - Externe URL, Endpoint-Display, Single-HelpLink, Mobile-Portrait, Settings-TOC
 **Anlass:** Mehrteiliges User-Feedback nach dem letzten Commit:

@@ -142,39 +142,37 @@ def delete_tenant(tenant_id):
 @login_required
 @role_required("tenant_admin")
 def list_users():
-    """List users. super_admin sees all, tenant_admin sees own tenant only (via memberships)."""
-    from models import User, UserTenantMembership
+    """List users. super_admin sees all, tenant_admin sees own tenant only (via memberships).
+
+    Each user's serialized dict includes a `tenants` array of all their memberships
+    (id, name, display_name, membership_role) so the UI can show which tenants the user
+    belongs to — without an N+1 round-trip per row.
+    """
+    from models import User, UserTenantMembership, Tenant
+
+    def serialize(u: "User", active_tid: str | None) -> dict:
+        d = u.to_dict(include_tenant=True, tenant_id=active_tid)
+        d["membership_role"] = u.get_role_for_tenant(active_tid) if active_tid else u.role
+        # Always include all memberships so UI can render tenant badges
+        d["tenants"] = u.get_tenants()
+        return d
+
     if g.current_user.role == "super_admin":
         tenant_filter = request.args.get("tenant_id")
         if tenant_filter:
-            # Get users who are members of this tenant
             memberships = UserTenantMembership.query.filter_by(tenant_id=tenant_filter).all()
             user_ids = [m.user_id for m in memberships]
             users = User.query.filter(User.id.in_(user_ids)).all() if user_ids else []
-            # Include membership role info
-            membership_roles = {m.user_id: m.role for m in memberships}
-            result = []
-            for u in users:
-                d = u.to_dict(include_tenant=True, tenant_id=tenant_filter)
-                d["membership_role"] = membership_roles.get(u.id, u.role)
-                result.append(d)
-            return jsonify(result)
-        else:
-            users = User.query.all()
-            return jsonify([u.to_dict(include_tenant=True) for u in users])
-    else:
-        # tenant_admin: show users in current tenant via memberships
-        tenant_id = g.tenant_id
-        memberships = UserTenantMembership.query.filter_by(tenant_id=tenant_id).all()
-        user_ids = [m.user_id for m in memberships]
-        users = User.query.filter(User.id.in_(user_ids)).all() if user_ids else []
-        membership_roles = {m.user_id: m.role for m in memberships}
-        result = []
-        for u in users:
-            d = u.to_dict(include_tenant=True, tenant_id=tenant_id)
-            d["membership_role"] = membership_roles.get(u.id, u.role)
-            result.append(d)
-        return jsonify(result)
+            return jsonify([serialize(u, tenant_filter) for u in users])
+        users = User.query.all()
+        return jsonify([serialize(u, None) for u in users])
+
+    # tenant_admin: show users in current tenant via memberships
+    tenant_id = g.tenant_id
+    memberships = UserTenantMembership.query.filter_by(tenant_id=tenant_id).all()
+    user_ids = [m.user_id for m in memberships]
+    users = User.query.filter(User.id.in_(user_ids)).all() if user_ids else []
+    return jsonify([serialize(u, tenant_id) for u in users])
 
 
 @admin_bp.route("/users", methods=["POST"])

@@ -94,7 +94,8 @@ describe('ReceiverHealthPanel', () => {
   });
 
   it('flags outdated firmware as warning', () => {
-    render(<ReceiverHealthPanel node={makeNode({ firmwareVersion: '1.4.0' })} />);
+    // expectedFirmware-prop simuliert die "current" Changelog-Version, gegen die verglichen wird.
+    render(<ReceiverHealthPanel node={makeNode({ firmwareVersion: '1.4.0' })} expectedFirmware="1.6.3" />);
     expect(screen.getAllByText(/1\.4\.0/).length).toBeGreaterThan(0);
     expect(screen.getByText(/Warnungen/i)).toBeInTheDocument();
   });

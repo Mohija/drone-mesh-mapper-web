@@ -42,7 +42,7 @@ describe('noFlyZones config', () => {
       expect(layer.wmsLayer).toMatch(/^dipul:/);
       expect(layer.label).toBeTruthy();
       expect(typeof layer.defaultEnabled).toBe('boolean');
-      expect(['aviation', 'temporary', 'nature', 'infrastructure', 'sensitive']).toContain(layer.category);
+      expect(['aviation', 'temporary', 'nature', 'infrastructure', 'sensitive', 'waterways', 'residential']).toContain(layer.category);
     });
   });
 
@@ -136,7 +136,7 @@ describe('getLayersByCategory', () => {
   });
 
   it('all layers belong to a category', () => {
-    const categories: NoFlyCategory[] = ['aviation', 'temporary', 'nature', 'infrastructure', 'sensitive'];
+    const categories: NoFlyCategory[] = ['aviation', 'temporary', 'nature', 'infrastructure', 'sensitive', 'waterways', 'residential'];
     const allFromCategories = categories.flatMap(c => getLayersByCategory(c));
     expect(allFromCategories.length).toBe(NFZ_LAYERS.length);
   });

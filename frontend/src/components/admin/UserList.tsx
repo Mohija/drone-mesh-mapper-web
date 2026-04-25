@@ -313,15 +313,16 @@ export default function UserList() {
                 </div>
 
                 {/* Details */}
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <div>{u.email}</div>
-                  <div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
                     <span style={{
                       fontSize: 11, padding: '1px 6px', borderRadius: 4,
                       background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
                     }}>
                       {ROLE_LABELS[u.role] ?? u.role}
                     </span>
+                    <TenantBadges user={u} />
                   </div>
                 </div>
 
@@ -375,6 +376,7 @@ export default function UserList() {
                 <th style={{ textAlign: 'left', padding: '10px 16px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)' }}>Benutzer</th>
                 <th style={{ textAlign: 'left', padding: '10px 16px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)' }}>E-Mail</th>
                 <th style={{ textAlign: 'center', padding: '10px 16px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)' }}>Rolle</th>
+                <th style={{ textAlign: 'left', padding: '10px 16px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)' }}>Mandanten</th>
                 <th style={{ textAlign: 'center', padding: '10px 16px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)' }}>Status</th>
                 <th style={{ textAlign: 'right', padding: '10px 16px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)' }}>Aktionen</th>
               </tr>
@@ -383,7 +385,7 @@ export default function UserList() {
               {users.map(u => (
                 editingId === u.id ? (
                   <tr key={u.id} style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-tertiary)' }}>
-                    <td colSpan={5} style={{ padding: '16px' }}>
+                    <td colSpan={6} style={{ padding: '16px' }}>
                       {renderEditForm(u)}
                     </td>
                   </tr>
@@ -401,6 +403,9 @@ export default function UserList() {
                       }}>
                         {ROLE_LABELS[u.role] ?? u.role}
                       </span>
+                    </td>
+                    <td style={{ padding: '10px 16px' }}>
+                      <TenantBadges user={u} />
                     </td>
                     <td style={{ padding: '10px 16px', textAlign: 'center' }}>
                       <span style={{
@@ -462,7 +467,7 @@ export default function UserList() {
               ))}
               {users.length === 0 && (
                 <tr>
-                  <td colSpan={5} style={{ padding: '20px 16px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  <td colSpan={6} style={{ padding: '20px 16px', textAlign: 'center', color: 'var(--text-muted)' }}>
                     Keine Benutzer vorhanden.
                   </td>
                 </tr>
@@ -472,5 +477,48 @@ export default function UserList() {
         </div>
       )}
     </div>
+  );
+}
+
+function TenantBadges({ user }: { user: UserAdmin }) {
+  if (user.role === 'super_admin') {
+    return (
+      <span
+        title="Super-Admin hat Zugriff auf alle Mandanten"
+        style={{
+          fontSize: 10, padding: '2px 8px', borderRadius: 4,
+          background: 'rgba(167,139,250,0.15)', color: '#a78bfa',
+          fontWeight: 600,
+        }}
+      >Alle Mandanten</span>
+    );
+  }
+  const tenants = user.tenants || [];
+  if (tenants.length === 0) {
+    return (
+      <span
+        title="Keine Mandanten-Zuordnung — der Benutzer kann sich nicht einloggen"
+        style={{
+          fontSize: 10, padding: '2px 8px', borderRadius: 4,
+          background: 'rgba(239,68,68,0.15)', color: '#ef4444',
+          fontWeight: 600,
+        }}
+      >⚠ Keine Zuordnung</span>
+    );
+  }
+  return (
+    <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 4 }}>
+      {tenants.map(t => (
+        <span
+          key={t.id}
+          title={`Rolle in „${t.display_name}": ${t.membership_role || 'user'}`}
+          style={{
+            fontSize: 10, padding: '2px 8px', borderRadius: 4,
+            background: 'rgba(34,211,238,0.12)', color: '#22d3ee',
+            fontWeight: 600,
+          }}
+        >{t.display_name}{t.membership_role && t.membership_role !== 'user' ? ` · ${t.membership_role === 'tenant_admin' ? 'Admin' : t.membership_role}` : ''}</span>
+      ))}
+    </span>
   );
 }
