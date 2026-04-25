@@ -87,9 +87,13 @@ export default function InterfaceEditor({ existing, onClose, onSaved }: Props) {
   const [externalUrl, setExternalUrl] = useState<string>('');
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; status?: number; body?: string; error?: string } | null>(null);
-  // Modal-Size: nutzer-gewählt (max), persistent. Auf Payload-Tab automatisch breiter.
+  // Modal-Size: Standard ist Vollbild. Nutzer kann verkleinern via Button —
+  // die Wahl bleibt persistent in localStorage. Erstaufruf (kein Wert gesetzt) → fullscreen.
   const [fullscreen, setFullscreen] = useState<boolean>(() => {
-    try { return localStorage.getItem('flightarc.interface-editor.fullscreen') === '1'; } catch { return false; }
+    try {
+      const v = localStorage.getItem('flightarc.interface-editor.fullscreen');
+      return v === null ? true : v === '1';
+    } catch { return true; }
   });
   function toggleFullscreen() {
     setFullscreen(v => {
