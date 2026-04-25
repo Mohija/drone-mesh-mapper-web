@@ -166,8 +166,10 @@ export default function InterfaceEditor({ existing, onClose, onSaved }: Props) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 24, overflow: 'auto' }}>
       <div style={{
-        width: 'min(900px, 100%)', background: 'var(--bg-secondary)',
+        width: tab === 'payload' ? 'min(1320px, 100%)' : 'min(960px, 100%)',
+        background: 'var(--bg-secondary)',
         borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden',
+        transition: 'width 0.2s ease',
       }}>
         <header style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <h2 style={{ margin: 0, fontSize: 18 }}>{isEdit ? `Schnittstelle bearbeiten — ${existing!.name}` : 'Neue Schnittstelle'}</h2>

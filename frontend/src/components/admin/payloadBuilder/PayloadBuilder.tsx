@@ -116,8 +116,9 @@ export default function PayloadBuilder({ value, onChange, variables, exampleCont
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div style={{
         display: 'grid', gap: 12,
-        gridTemplateColumns: isMobile ? '1fr' : '220px 1fr 280px',
-        minHeight: 360,
+        gridTemplateColumns: isMobile ? '1fr' : '210px minmax(0, 1fr) 280px',
+        alignItems: 'stretch',
+        minHeight: 480,
       }}>
         {/* Variable palette */}
         <aside style={paletteBox}>
@@ -171,7 +172,7 @@ export default function PayloadBuilder({ value, onChange, variables, exampleCont
           <pre style={{
             margin: 0, fontSize: 11, lineHeight: 1.4,
             color: 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-all',
-            maxHeight: 360, overflow: 'auto',
+            flex: 1, overflow: 'auto',
           }}>{renderedPreview}</pre>
         </aside>
       </div>
@@ -244,29 +245,46 @@ function ObjectView({ node, onReplace, onMutate, level }: { node: ObjectNode; on
           (leer — Variable hier ablegen oder „+" klicken)
         </p>
       )}
-      {node.entries.map((entry, idx) => (
-        <div key={entry.id} style={entryRow}>
-          <button onClick={() => idx > 0 && onMutate(r => reorderObjectEntries(r, node.id, idx, idx - 1))}
-                  style={smallIcon} disabled={idx === 0} title="Nach oben">↑</button>
-          <button onClick={() => idx < node.entries.length - 1 && onMutate(r => reorderObjectEntries(r, node.id, idx, idx + 1))}
-                  style={smallIcon} disabled={idx === node.entries.length - 1} title="Nach unten">↓</button>
-          <input
-            value={entry.key}
-            onChange={e => onMutate(r => updateObjectEntry(r, entry.id, { key: e.target.value }))}
-            style={{ ...inp, padding: '4px 6px', fontSize: 12, width: 140, fontFamily: 'monospace' }}
-          />
-          <span style={{ color: 'var(--text-muted)' }}>:</span>
-          <div style={{ flex: 1 }}>
-            <NodeView
-              node={entry.value}
-              onReplace={(n) => onMutate(r => updateObjectEntry(r, entry.id, { value: n }))}
-              onMutate={onMutate}
-              level={level + 1}
-            />
+      {node.entries.map((entry, idx) => {
+        const isContainer = entry.value.kind === 'object' || entry.value.kind === 'array';
+        return (
+          <div key={entry.id} style={entryRow}>
+            <div style={entryHeader}>
+              <button onClick={() => idx > 0 && onMutate(r => reorderObjectEntries(r, node.id, idx, idx - 1))}
+                      style={smallIcon} disabled={idx === 0} title="Nach oben">↑</button>
+              <button onClick={() => idx < node.entries.length - 1 && onMutate(r => reorderObjectEntries(r, node.id, idx, idx + 1))}
+                      style={smallIcon} disabled={idx === node.entries.length - 1} title="Nach unten">↓</button>
+              <input
+                value={entry.key}
+                onChange={e => onMutate(r => updateObjectEntry(r, entry.id, { key: e.target.value }))}
+                style={{ ...inp, padding: '4px 6px', fontSize: 12, flex: '1 1 120px', minWidth: 80, maxWidth: 200, fontFamily: 'monospace' }}
+              />
+              <span style={{ color: 'var(--text-muted)' }}>:</span>
+              {!isContainer && (
+                <div style={{ flex: '1 1 200px', minWidth: 0 }}>
+                  <NodeView
+                    node={entry.value}
+                    onReplace={(n) => onMutate(r => updateObjectEntry(r, entry.id, { value: n }))}
+                    onMutate={onMutate}
+                    level={level + 1}
+                  />
+                </div>
+              )}
+              <button onClick={() => onMutate(r => removeObjectEntry(r, entry.id))} style={smallIconDanger} title="Eintrag entfernen">✕</button>
+            </div>
+            {isContainer && (
+              <div style={{ marginLeft: 4, minWidth: 0 }}>
+                <NodeView
+                  node={entry.value}
+                  onReplace={(n) => onMutate(r => updateObjectEntry(r, entry.id, { value: n }))}
+                  onMutate={onMutate}
+                  level={level + 1}
+                />
+              </div>
+            )}
           </div>
-          <button onClick={() => onMutate(r => removeObjectEntry(r, entry.id))} style={smallIconDanger} title="Eintrag entfernen">✕</button>
-        </div>
-      ))}
+        );
+      })}
       <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 10, color: 'var(--text-muted)', alignSelf: 'center' }}>+ neuer Eintrag:</span>
         {KIND_BUTTONS.map(([kind, label]) => (
@@ -293,24 +311,41 @@ function ArrayView({ node, onReplace, onMutate, level }: { node: ArrayNode; onRe
           (leer — Variable hier ablegen oder „+" klicken)
         </p>
       )}
-      {node.items.map((item, idx) => (
-        <div key={item.id} style={entryRow}>
-          <button onClick={() => idx > 0 && onMutate(r => reorderArrayItems(r, node.id, idx, idx - 1))}
-                  style={smallIcon} disabled={idx === 0} title="Nach oben">↑</button>
-          <button onClick={() => idx < node.items.length - 1 && onMutate(r => reorderArrayItems(r, node.id, idx, idx + 1))}
-                  style={smallIcon} disabled={idx === node.items.length - 1} title="Nach unten">↓</button>
-          <span style={{ color: 'var(--text-muted)', fontFamily: 'monospace', fontSize: 11, minWidth: 24 }}>[{idx}]</span>
-          <div style={{ flex: 1 }}>
-            <NodeView
-              node={item.value}
-              onReplace={(n) => onMutate(r => replaceNode(r, item.value.id, n))}
-              onMutate={onMutate}
-              level={level + 1}
-            />
+      {node.items.map((item, idx) => {
+        const isContainer = item.value.kind === 'object' || item.value.kind === 'array';
+        return (
+          <div key={item.id} style={entryRow}>
+            <div style={entryHeader}>
+              <button onClick={() => idx > 0 && onMutate(r => reorderArrayItems(r, node.id, idx, idx - 1))}
+                      style={smallIcon} disabled={idx === 0} title="Nach oben">↑</button>
+              <button onClick={() => idx < node.items.length - 1 && onMutate(r => reorderArrayItems(r, node.id, idx, idx + 1))}
+                      style={smallIcon} disabled={idx === node.items.length - 1} title="Nach unten">↓</button>
+              <span style={{ color: 'var(--text-muted)', fontFamily: 'monospace', fontSize: 11, minWidth: 24 }}>[{idx}]</span>
+              {!isContainer && (
+                <div style={{ flex: '1 1 200px', minWidth: 0 }}>
+                  <NodeView
+                    node={item.value}
+                    onReplace={(n) => onMutate(r => replaceNode(r, item.value.id, n))}
+                    onMutate={onMutate}
+                    level={level + 1}
+                  />
+                </div>
+              )}
+              <button onClick={() => onMutate(r => removeArrayItem(r, item.id))} style={smallIconDanger} title="Element entfernen">✕</button>
+            </div>
+            {isContainer && (
+              <div style={{ marginLeft: 4, minWidth: 0 }}>
+                <NodeView
+                  node={item.value}
+                  onReplace={(n) => onMutate(r => replaceNode(r, item.value.id, n))}
+                  onMutate={onMutate}
+                  level={level + 1}
+                />
+              </div>
+            )}
           </div>
-          <button onClick={() => onMutate(r => removeArrayItem(r, item.id))} style={smallIconDanger} title="Element entfernen">✕</button>
-        </div>
-      ))}
+        );
+      })}
       <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 10, color: 'var(--text-muted)', alignSelf: 'center' }}>+ neues Element:</span>
         {KIND_BUTTONS.map(([kind, label]) => (
@@ -337,8 +372,8 @@ function LeafView({ node, onReplace }: { node: PayloadNode; onReplace: (n: Paylo
 
   return (
     <div ref={setNodeRef} style={{
-      display: 'flex', alignItems: 'center', gap: 6,
-      padding: '2px 4px', borderRadius: 4,
+      display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
+      padding: '2px 4px', borderRadius: 4, minWidth: 0,
       background: isOver ? 'rgba(0,212,170,0.15)' : 'transparent',
       border: isOver ? '1px dashed var(--accent)' : '1px dashed transparent',
     }}>
@@ -346,17 +381,17 @@ function LeafView({ node, onReplace }: { node: PayloadNode; onReplace: (n: Paylo
       {node.kind === 'string' && (
         <input value={node.value}
                onChange={e => onReplace({ ...node, value: e.target.value })}
-               style={{ ...inp, padding: '4px 6px', fontSize: 12, fontFamily: 'monospace' }} />
+               style={{ ...inp, padding: '4px 6px', fontSize: 12, fontFamily: 'monospace', flex: '1 1 140px', minWidth: 0 }} />
       )}
       {node.kind === 'number' && (
         <input type="number" value={node.value}
                onChange={e => onReplace({ ...node, value: Number(e.target.value) })}
-               style={{ ...inp, padding: '4px 6px', fontSize: 12, width: 120 }} />
+               style={{ ...inp, padding: '4px 6px', fontSize: 12, flex: '0 1 120px', minWidth: 60 }} />
       )}
       {node.kind === 'boolean' && (
         <select value={node.value ? 'true' : 'false'}
                 onChange={e => onReplace({ ...node, value: e.target.value === 'true' })}
-                style={{ ...inp, padding: '4px 6px', fontSize: 12, width: 100 }}>
+                style={{ ...inp, padding: '4px 6px', fontSize: 12, flex: '0 1 100px', minWidth: 70 }}>
           <option value="true">true</option>
           <option value="false">false</option>
         </select>
@@ -368,7 +403,7 @@ function LeafView({ node, onReplace }: { node: PayloadNode; onReplace: (n: Paylo
         <input value={node.path}
                onChange={e => onReplace({ ...node, path: e.target.value })}
                style={{ ...inp, padding: '4px 6px', fontSize: 12, fontFamily: 'monospace',
-                        color: 'var(--accent)' }}
+                        color: 'var(--accent)', flex: '1 1 140px', minWidth: 0 }}
                placeholder="drone.id" />
       )}
       <KindSwap node={node} onReplace={onReplace} />
@@ -470,15 +505,18 @@ function lookup(ctx: Record<string, unknown>, path: string): unknown {
 
 const paletteBox: React.CSSProperties = {
   background: 'var(--bg-primary)', border: '1px solid var(--border)',
-  borderRadius: 8, padding: 10, overflow: 'auto', maxHeight: 480,
+  borderRadius: 8, padding: 10, overflow: 'auto',
+  maxHeight: 'min(70vh, 640px)', minWidth: 0,
 };
 const treeBox: React.CSSProperties = {
   background: 'var(--bg-primary)', border: '1px solid var(--border)',
-  borderRadius: 8, padding: 10, overflow: 'auto', maxHeight: 480,
+  borderRadius: 8, padding: 12, overflow: 'auto',
+  maxHeight: 'min(70vh, 640px)', minWidth: 0,
 };
 const previewBox: React.CSSProperties = {
   background: 'var(--bg-primary)', border: '1px solid var(--border)',
-  borderRadius: 8, padding: 10,
+  borderRadius: 8, padding: 10, minWidth: 0,
+  maxHeight: 'min(70vh, 640px)', display: 'flex', flexDirection: 'column',
 };
 const inp: React.CSSProperties = {
   padding: '6px 8px', borderRadius: 4, border: '1px solid var(--border)',
@@ -492,10 +530,13 @@ const chipStyle: React.CSSProperties = {
   width: '100%', textAlign: 'left', boxSizing: 'border-box',
 };
 const headerRow: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4,
+  display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap', minWidth: 0,
 };
 const entryRow: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0',
+  display: 'flex', flexDirection: 'column', gap: 4, padding: '2px 0', minWidth: 0,
+};
+const entryHeader: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', minWidth: 0,
 };
 const miniBtn: React.CSSProperties = {
   padding: '4px 8px', fontSize: 11, background: 'var(--bg-tertiary)',
@@ -520,11 +561,13 @@ function kindLabel(color: string): React.CSSProperties {
 
 function containerStyle(level: number, isOver: boolean, accent: string): React.CSSProperties {
   return {
-    padding: 8, marginLeft: level === 0 ? 0 : 6,
+    padding: 8, marginLeft: 0,
     border: isOver ? `1px dashed var(--accent)` : `1px solid var(--border)`,
     borderLeft: `3px solid ${accent}`,
     borderRadius: 4,
-    background: isOver ? 'rgba(0,212,170,0.08)' : 'var(--bg-secondary)',
-    marginBottom: 4,
+    background: isOver
+      ? 'rgba(0,212,170,0.08)'
+      : level === 0 ? 'var(--bg-secondary)' : 'rgba(255,255,255,0.02)',
+    marginBottom: 4, minWidth: 0,
   };
 }

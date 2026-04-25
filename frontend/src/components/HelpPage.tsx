@@ -67,6 +67,7 @@ const SECTION_SUBS: Record<string, SubMeta[]> = {
     { id: 'firmware-backend-url', title: 'Firmware Backend-URL' },
     { id: 'datenaufbewahrung', title: 'Datenaufbewahrung (Retention)' },
     { id: 'service-tokens', title: 'Service-Tokens' },
+    { id: 'datenbank-verwaltung', title: 'Datenbank-Verwaltung & Backups' },
   ],
   receivers: [
     { id: 'statistik-leiste', title: 'Statistik-Leiste' },
@@ -1048,6 +1049,65 @@ function SectionAdmin() {
           „Löschen" entfernt den Token hart — nutze lieber Widerrufen.
         </p>
       </div>
+      <div id="datenbank-verwaltung">
+        <h3>Datenbank-Verwaltung &amp; Backups</h3>
+        <p>
+          FlightArc nutzt eine SQLite-Datenbank (<code>backend/data/flightarc.db</code>) und
+          bringt eine vollständige Lebenszyklus-Verwaltung mit. Die ausführliche Anleitung steht
+          in <code>DATABASE_LIFECYCLE.md</code> im Projekt-Root — die wichtigsten Punkte:
+        </p>
+        <h4>Auto-Backup</h4>
+        <ul>
+          <li>Beim <strong>Backend-Start</strong> wird automatisch ein Snapshot in
+            <code>backend/data/backups/</code> abgelegt (inkl. WAL- und SHM-Dateien für
+            konsistente Wiederherstellung).</li>
+          <li>Vor jeder Migration läuft ein zusätzliches Pre-Migration-Backup.</li>
+          <li>Rotation: die letzten <strong>30</strong> Snapshots bleiben erhalten, ältere
+            werden automatisch entfernt.</li>
+        </ul>
+        <h4>Versionierte Migrationen</h4>
+        <p>
+          Alle Schema-Änderungen liegen als nummerierte Einträge in
+          <code>backend/migrations.py</code>. Jede Migration ist <strong>additiv</strong> — es
+          gibt keine destruktiven <code>DROP</code>/<code>DELETE</code>-Schritte in der
+          Pipeline. Beim Start prüft das Backend gegen die <code>schema_migrations</code>-Tabelle
+          und führt nur ausstehende Migrationen aus.
+        </p>
+        <h4>Management-CLI: <code>backend/manage.py</code></h4>
+        <p>
+          Aufruf <code>python backend/manage.py &lt;befehl&gt;</code> direkt auf dem Server:
+        </p>
+        <table style={tableStyle}>
+          <thead>
+            <tr><th style={thStyle}>Befehl</th><th style={thStyle}>Beschreibung</th></tr>
+          </thead>
+          <tbody>
+            <tr><td style={tdStyle}><code>backup [--reason TEXT]</code></td><td style={tdStyle}>Manuellen Snapshot erstellen (vor riskanten Operationen).</td></tr>
+            <tr><td style={tdStyle}><code>list-backups</code></td><td style={tdStyle}>Alle vorhandenen Snapshots mit Zeitstempel und Grund anzeigen.</td></tr>
+            <tr><td style={tdStyle}><code>restore &lt;name&gt; --confirm</code></td><td style={tdStyle}>Aus Snapshot wiederherstellen. Legt davor automatisch einen Pre-Restore-Snapshot an.</td></tr>
+            <tr><td style={tdStyle}><code>migrate status</code></td><td style={tdStyle}>Übersicht: angewandte Migrationen vs. ausstehende.</td></tr>
+            <tr><td style={tdStyle}><code>migrate run</code></td><td style={tdStyle}>Ausstehende Migrationen anwenden (mit Auto-Backup davor).</td></tr>
+            <tr><td style={tdStyle}><code>verify-data</code></td><td style={tdStyle}>Konsistenz-Check: Anzahl pro Tabelle, FK-Integrität, fehlerhafte Referenzen.</td></tr>
+          </tbody>
+        </table>
+        <h4>Test-Isolation</h4>
+        <p>
+          <strong>Wichtig für Entwickler:</strong> <code>backend/tests/conftest.py</code>
+          überschreibt die <code>DATABASE_URL</code> auf eine temporäre <code>/tmp</code>-Datei
+          <em>bevor</em> die App importiert wird, plus Hard-Guard mit <code>pytest.exit()</code>.
+          Damit kann <code>pytest</code> niemals destruktiv gegen die Produktions-DB laufen.
+          Hintergrund: am 24.04.2026 hat ein destruktiver Pytest-Fixture die Live-DB
+          getroffen — die hier beschriebenen Schutzmechanismen sind seither verbindlich.
+        </p>
+        <h4>Notfall: Datenverlust</h4>
+        <ol>
+          <li>Backend sofort stoppen.</li>
+          <li>Audit-Log prüfen (wer/wann hat was gelöscht).</li>
+          <li><code>python backend/manage.py list-backups</code> — neuesten Snapshot vor dem Vorfall wählen.</li>
+          <li><code>python backend/manage.py restore &lt;file&gt; --confirm</code>.</li>
+          <li>Ursache fixen <em>bevor</em> wieder gestartet wird, sonst wiederholt sich der Vorfall.</li>
+        </ol>
+      </div>
     </div>
   );
 }
@@ -1425,6 +1485,43 @@ function SectionInterfaces() {
         <strong>API-Key (Header)</strong> oder <strong>API-Key (Query-Parameter)</strong>.
         Geheimnisse werden auf dem Server verschlüsselt (Fernet) und nie wieder im Klartext zurückgegeben —
         beim Bearbeiten zeigen die Felder „••••••••" für Werte, die unverändert bleiben sollen.
+      </p>
+      <h3>Sicherheits-Härtung (Subscription &amp; Webhook)</h3>
+      <p>
+        Subscription-Channels und Webhooks sind einer von Drittsystemen aktiv genutzten
+        Angriffs-Oberfläche ausgesetzt — entsprechend hat FlightArc mehrere Schutzschichten:
+      </p>
+      <ul>
+        <li><strong>SSRF-Schutz auf Callback-URLs.</strong> Beim Registrieren eines Subscribers
+          (POST <code>/register</code>) löst FlightArc den Hostnamen via DNS auf und prüft jede
+          Adresse gegen eine Blacklist (Loopback <code>127.0.0.0/8</code>, private RFC1918-Ranges
+          <code>10.0.0.0/8</code> · <code>172.16.0.0/12</code> · <code>192.168.0.0/16</code>,
+          Link-Local <code>169.254.0.0/16</code>, Multicast/Reserved/Unspecified). Dadurch kann
+          ein kompromittierter API-Key keinen Push auf interne Services (Redis, Cloud-Metadata,
+          LAN-Hosts) auslösen.</li>
+        <li><strong>Rate-Limit auf Registrierung.</strong> Pro Channel maximal
+          <strong>20 Registrierungen pro Minute</strong> (Sliding-Window in-memory). Verhindert,
+          dass ein geleaketer API-Key in Sekunden den Subscriber-Cap füllt — über dem Limit
+          antwortet der Endpoint mit HTTP 429.</li>
+        <li><strong>Subscriber-Cap pro Channel.</strong> Hard cap von <strong>50 aktiven
+          Subscribern</strong>; jenseits davon antwortet der Register-Endpoint mit HTTP 409.
+          Schützt vor DB- und Push-DoS bei kompromittiertem API-Key.</li>
+        <li><strong>Timing-safe HMAC-Verifikation</strong> in den generierten Code-Snippets.
+          Die Beispiele für Empfangshandler nutzen <code>crypto.timingSafeEqual</code> (JS),
+          <code>hmac.compare_digest</code> (Python), <code>hmac.Equal</code> (Go),
+          <code>secure_compare</code> (Ruby) — ein 1:1-Übernahme-tauglicher Code, der nicht
+          durch Timing-Vergleich der Signatur leakt.</li>
+        <li><strong>API-Key-Vergleich</strong> auf der Empfängerseite (FlightArc selbst) erfolgt
+          ebenfalls mit <code>hmac.compare_digest</code> gegen den SHA-256-Hash des Keys —
+          der Klartext liegt nirgends in der DB.</li>
+        <li><strong>Audit-Trail</strong> für jede Konfigurationsänderung an Schnittstellen,
+          Subscribern und Service-Tokens (siehe <em>Sicherheits-Audit</em>).</li>
+      </ul>
+      <p>
+        Hintergrund: Diese Maßnahmen sind das Ergebnis eines internen Pentests des
+        Subscription-Modells (Phase 6 der Alarmierung). Wer eine eigene FlightArc-Instanz
+        extern betreibt, sollte zusätzlich die Cloudflare-/nginx-Edge-Hardening-Header
+        aktivieren — die Maßnahmen hier wirken im Backend, ersetzen aber keinen TLS-Edge.
       </p>
       <h3>Payload-Builder (Drag &amp; Drop)</h3>
       <p>

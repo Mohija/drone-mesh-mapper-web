@@ -54,20 +54,49 @@ Web-Anwendung für Echtzeit-Visualisierung und Überwachung von Drohnen auf eine
 ### Alarmierung an externe Systeme
 - **Schnittstellen-Editor** im Admin-Bereich (`/admin/interfaces`): pro Mandant beliebige Anzahl
   Außenkanäle anlegen — **Webhook (Push)**, **Pull-Out** (FlightArc pollt extern), **Pull-In**
-  (Drittsystem holt von FlightArc ab via Service-Token).
+  (Drittsystem holt von FlightArc ab via Service-Token), **Subscription (Pub/Sub)**
+  mit API-Key + HMAC-SHA256 — beliebig viele Drittsysteme können sich pro Channel registrieren.
 - **Authentifizierung** pro Schnittstelle: Bearer-Token, Basic Auth, API-Key (Header oder
   Query-Parameter). Geheimnisse werden mit Fernet verschlüsselt und im UI mit `••••••••` maskiert.
-- **JSON-Payload-Builder** mit Variablen-Picker — alle Drohnen-, Zonen-, Verstoß-, Tenant- und
-  System-Felder sind per Click in das Template einsetzbar (`{{drone.id}}`, `{{zone.name}}`,
-  `{{system.now_iso}}`, …). Typisierte Werte (Zahlen / Bools) per `${{path}}`-Präfix.
-- **Templates**: Slack-Webhook, Alamos-FE2-Skelett, generisch — als Vorlagen direkt im Editor.
-  Pro Schnittstelle Export / Import als JSON (ohne Geheimnisse).
+- **Drag-and-Drop-Payload-Builder** (`@dnd-kit`) mit dreispaltiger Oberfläche: Variablen-Palette
+  (kategorie-farbcodiert) · Tree-Editor (verschachtelte Objekte/Arrays mit ↑/↓-Sortierung) ·
+  Live-Vorschau. Variablen per Drag auf Knoten ablegen erzeugt typisierte
+  `${{path}}`-Tokens; Drop auf String-Felder hängt Mustache-Tokens an. Toggle zu Raw-JSON jederzeit möglich.
+- **Templates**: Alamos FE2, Slack-Webhook, Discord, MS Teams Adaptive Card, Generic-JSON,
+  Subscription-Starter — als Ein-Klick-Vorlage anwendbar.
+- **Beispiel-Code-Generator** in **sechs Sprachen** (curl/bash, Python, JavaScript, Go, Rust,
+  Ruby) — fertige Snippets für oneShot-Aufruf, Subscriber-Registrierung und Empfangshandler
+  mit timing-konstanter HMAC-Verifikation (`crypto.timingSafeEqual` / `hmac.compare_digest` /
+  `hmac.Equal` / `secure_compare`).
+- **Pull-Out Response-Mapping**: Status-Code-Allowlist + JSON-Path-Auswertung (Punkt-Notation
+  inkl. Array-Index) gegen erwarteten Wert + dedizierter Fehler-Pfad — eine 200-Antwort kann
+  trotzdem als Fehler markiert werden.
+- **Per-Subscriber-Lieferungs-Log**: jeder Subscriber separat aufklappbar, letzte 30
+  Push-Versuche mit HTTP-Code, Trigger, Response-Body und Latenz.
+- **Health-Monitoring**: 24h-Erfolgsrate als Bruch („47/50"), 7-Tage-Sparkline, letzte
+  Lieferung mit Zeit-Differenz, Subscriber-Count bei Channels — direkt auf jeder Karte.
+- **Sicherheits-Härtung** (Phase 6 Pentest): SSRF-Schutz (Callback-URLs werden via DNS aufgelöst
+  und gegen Loopback/Private/Link-Local geprüft), Subscriber-Cap 50/Channel mit HTTP 409,
+  Rate-Limit 20 Registrierungen/Min/Channel mit HTTP 429, API-Key-Vergleich via
+  `hmac.compare_digest` gegen SHA-256-Hash.
 - **Test-Button** sendet sofort gegen einen Beispielkontext oder den letzten echten Verstoß,
   Response wird angezeigt, jeder Versuch landet im Lieferungs-Log.
 - **Alarmverwaltung** (`/admin/alarms`): Regeln verbinden Zone (oder „alle Zonen") × Schnittstelle ×
   Trigger (Verstoß-Start / -Ende / -Update). Pro Regel ein-/ausschaltbar + testbar.
 - **Lieferungs-Log** pro Schnittstelle: Status, HTTP-Code, Trigger, Request- und Response-Body
   jedes Versuchs (3 Wiederholungen mit Backoff bei Fehler). Audit-Trail für jede Konfigurationsänderung.
+
+### Datenbank & Lifecycle
+- **Auto-Backup** beim Backend-Start und vor jeder Migration in `backend/data/backups/`
+  (inkl. WAL/SHM), Rotation auf die letzten 30 Snapshots.
+- **Versionierte Migrationen** in `backend/migrations.py` — additive Pipeline ohne destruktive
+  `DROP`/`DELETE`, Tracking via `schema_migrations`-Tabelle, Pre-Migration-Backup automatisch.
+- **Management-CLI** (`python backend/manage.py`): `backup`, `list-backups`, `restore`,
+  `migrate status`, `migrate run`, `verify-data`.
+- **Test-Isolation**: `backend/tests/conftest.py` zwingt jede Pytest-Session auf eine isolierte
+  `/tmp`-DB (via `DATABASE_URL`-Override + Hard-Guard mit `pytest.exit()`) — destruktive Tests
+  können niemals die Produktions-DB treffen.
+- Vollständige Anleitung & Notfall-Checkliste: siehe [`DATABASE_LIFECYCLE.md`](DATABASE_LIFECYCLE.md).
 
 ### Frontend
 - **Mobile- und Desktop-Layout** mit Drawer-Menü, 44 px Touch-Targets, collapsible Sections, Tablet-Detection

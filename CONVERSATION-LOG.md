@@ -2,7 +2,7 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-04-25 (Alarmierung Phase 6: Multi-Sprachen, Per-Sub-Log, Pull-Out-Mapping, Pentest-Hardening)
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-04-25 (PayloadBuilder UX-Fix: Mittelbereich war zu eng + Überlappungen)
 - **Typ:** Projekt | **Status:** Development
 
 ## Offene Aufgaben
@@ -29,7 +29,37 @@
 
 ## Änderungshistorie
 
-### 2026-04-25 - Alarmierung Phase 6: Multi-Sprachen, Per-Sub-Log, Pull-Out-Mapping, Pentest-Hardening
+### 2026-04-25 - Doku-Audit: Lücken in HelpPage & README geschlossen
+**Anlass:** User wollte sicherstellen, dass alle Features (auch die neuen aus Alarmierung Phase 3-6 und der DB-Lifecycle-Initiative vom 2026-04-24) vollständig dokumentiert sind.
+
+**Audit-Ergebnis (Subagent-Analyse):** 4 echte Lücken — Sicherheits-Härtung der Subscription-Channels (SSRF, Rate-Limit, Subscriber-Cap), Datenbank-Lifecycle / `manage.py` CLI, fehlender Subscription-Typ in der README-Alarmierung-Sektion, fehlende Multi-Sprachen-/Per-Sub-Log-/Pull-Out-Mapping-Hinweise im README.
+
+**Ergänzungen:**
+- `frontend/src/components/HelpPage.tsx` SectionInterfaces: neue Subsection „Sicherheits-Härtung (Subscription & Webhook)" mit SSRF-Schutz (DNS-Resolve + Blacklist Loopback/RFC1918/Link-Local/Multicast), Rate-Limit (20 Reg/Min/Channel, HTTP 429), Subscriber-Cap (50/Channel, HTTP 409), Timing-safe HMAC-Verifikation in 4 Sprachen, hmac.compare_digest auf API-Key-Hash. Audit-Trail-Verweis.
+- `frontend/src/components/HelpPage.tsx` SectionAdmin: neue Subsection „Datenbank-Verwaltung & Backups" mit Auto-Backup (Start + Pre-Migration, Rotation 30), additiven Migrationen + `schema_migrations`-Tracking, `manage.py`-CLI-Tabelle (backup/list-backups/restore/migrate status/migrate run/verify-data), Test-Isolation-Hinweis (DATABASE_URL-Override + Hard-Guard, Bezug auf 2026-04-24-Incident), Notfall-Checkliste bei Datenverlust.
+- HelpPage TOC erweitert um `datenbank-verwaltung` unter `admin`.
+- `README.md` Alarmierung-Sektion: Subscription-Typ ergänzt, Drag-and-Drop-Builder beschrieben, sechs-Sprachen-Snippet-Generator, Pull-Out Response-Mapping (Status-Allowlist + JSON-Path + Fehler-Pfad), Per-Subscriber-Lieferungs-Log, Health-Monitoring, Sicherheits-Härtung (Phase 6 Pentest).
+- `README.md` neue Sektion „Datenbank & Lifecycle" mit Auto-Backup, Migrationen, Management-CLI, Test-Isolation, Verweis auf `DATABASE_LIFECYCLE.md`.
+
+**Build/Verify:** `npm run build` ✓ (4.52s).
+
+### 2026-04-25 - PayloadBuilder UX-Überarbeitung (Mittelbereich + Überlappungen)
+**Anlass:** User-Feedback — die Tree-Spalte (Mittelbereich des Schnittstellen-Builders) war zu schmal, Inhalte überlagerten sich bei verschachtelten Objekten/Arrays.
+
+**Ursachen:** Modal `min(900px, 100%)` + Grid `220px 1fr 280px` ließ ~340px für die Tree-Spalte. Innerhalb dieser engen Spalte zwangen feste Inputs (`width: 140` Key-Input, `width: 120/100` Number/Boolean) plus Sortier-/Lösch-Buttons + KindSwap eine horizontale Überlappung; Container-Indent (`marginLeft: 6` pro Level) verschärfte das bei Tiefe.
+
+**Fixes:**
+- `frontend/src/components/admin/InterfaceEditor.tsx`: Modal-Breite konditional auf `min(1320px, 100%)` für Payload-Tab, sonst `min(960px, 100%)`.
+- `frontend/src/components/admin/payloadBuilder/PayloadBuilder.tsx`: Grid auf `210px minmax(0,1fr) 280px` (`minmax(0, …)` verhindert das Sprengen der Spalte durch lange Inhalte). Höhen auf `min(70vh, 640px)`. `minWidth: 0` an allen drei Boxen.
+- ObjectView/ArrayView: Wenn ein Eintrag selbst Container (Objekt/Array) ist, rückt das Kind in eine **eigene Zeile unter** den Header — vorher nebeneinander, was den Großteil der Überlappung verursachte. `entryRow` ist jetzt `flexDirection: column`, neuer `entryHeader` mit `flexWrap: wrap`.
+- Key-Input flexibel: `flex: '1 1 120px', minWidth: 80, maxWidth: 200` statt fix 140.
+- LeafView: `flexWrap: wrap` + alle Inputs mit `flex: 1 1 …px` + `minWidth: 0` — schrumpfen sauber, brechen um statt zu überlappen.
+- `containerStyle`: `marginLeft` über alle Level auf 0, stattdessen Hintergrund leicht abgehoben (`rgba(255,255,255,0.02)`) für Tiefen-Differenzierung ohne Platzverlust.
+- Live-Preview-Pre nutzt `flex: 1` im Container statt eigener `maxHeight: 360`.
+
+**Build/Tests:** `npm run build` ✓ (4.97s), 12/12 PayloadBuilder-Unit-Tests grün.
+
+
 **Anlass:** User wollte nach Phase 5 alle vier offenen Punkte zusammen umgesetzt haben — mehr Sprachen, granulare Subscriber-Logs, intelligente Pull-Out-Antwort-Auswertung, plus expliziten Pentest-Pass auf das Subscription-Modell.
 
 **Multi-Sprachen-Snippets** (Punkt 1):
