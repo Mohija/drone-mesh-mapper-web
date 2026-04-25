@@ -2,7 +2,7 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-04-25 (Alarmierung Phase 1: Schnittstellen-Editor + Alarmverwaltung)
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-04-25 (Alarmierung Phase 2: Drag-and-Drop JSON-Builder)
 - **Typ:** Projekt | **Status:** Development
 
 ## Offene Aufgaben
@@ -19,7 +19,7 @@
 - [x] E2E-Tests für Mobile-Ansichten: 28 Playwright-Tests mit Mobile-Viewport (375x667) für alle Mobile-Layouts.
 - [x] Benutzerhandbuch: Mobile-Ansichten, Einsatz-Zonen Einstellungen, Adress-Prüfung, Log-Viewer dokumentiert.
 - [x] Alarmierung Phase 1: Schnittstellen-Editor + Alarmverwaltung (Webhook-Push, Pull-Out, Pull-In, Auth-Methoden, JSON-Template-Builder, Lieferungs-Log)
-- [ ] Alarmierung Phase 2: Drag-and-Drop JSON-Builder mit @dnd-kit
+- [x] Alarmierung Phase 2: Drag-and-Drop JSON-Builder mit @dnd-kit (Tree-Editor, Variable-Palette, Live-Preview, Toggle Builder/Raw)
 - [ ] Alarmierung Phase 3: System-Templates (Alamos FE2, Slack, Discord) + UI-Polish Import/Export
 - [ ] Alarmierung Phase 4: Pull-Out-Response-Mapper, Statistik-Charts, Mobile-Polishing
 - [ ] WebSocket-Integration für echte Push-Updates statt Polling
@@ -28,6 +28,25 @@
 - [ ] Docker Deployment Package
 
 ## Änderungshistorie
+
+### 2026-04-25 - Alarmierung Phase 2: Drag-and-Drop JSON-Builder
+**Anlass:** Phase 1 lieferte einen funktionierenden JSON-Texteditor mit Variablen-Picker. Der User wollte explizit „mit drag and drop machen können" — Phase 2 setzt das mit `@dnd-kit/core` um.
+
+**Umfang:**
+- **`@dnd-kit/core` + `@dnd-kit/sortable`** als neue npm-Dependencies (≈14 KB gzipped, accessible, framework-agnostic).
+- **`payloadBuilder/types.ts`** — interne Tree-Repräsentation als diskriminierte Union (`object | array | string | number | boolean | null | variable`), `fromJson`/`toJson`-Round-Trip, immutable Mutationen (`addObjectEntry`, `addArrayItem`, `removeObjectEntry`, `removeArrayItem`, `reorderObjectEntries`, `reorderArrayItems`, `replaceNode`, `updateObjectEntry`). Stable IDs pro Node für React-Keys und @dnd-kit/sortable.
+- **`payloadBuilder/PayloadBuilder.tsx`** — dreispaltige Oberfläche:
+  - **Links**: Variable-Palette mit Suche + Kategorie-Farbcodierung (drone/zone/violation/tenant/system in 5 distinkten Akzentfarben). Jeder Chip ist `useDraggable`.
+  - **Mitte**: Rekursiver Tree-Editor mit Knoten-spezifischen Drop-Zonen (Object → neue Property; Array → neues Item; String → Token-Append; primitive → typisierte Variable als Replacement). Pro Knoten ein Kind-Wechsel-Dropdown (string ↔ variable behält Inhalt). ↑/↓-Sortierpfeile ohne DnD (einfache UX-Wahl).
+  - **Rechts**: Live-Vorschau, gerendert clientseitig gegen den Beispielkontext aus `/api/admin/interfaces/variables`.
+  - DragOverlay zeigt das gegrabbte Variable-Chip in Akzentfarbe.
+- **InterfaceEditor**: Toggle „Builder ↔ Raw JSON" über dem Payload-Tab. Beide Modi teilen sich `payloadJson`-State, sind verlustfrei umschaltbar.
+- **Tests**: 12 neue Vitest-Unit-Tests (Round-Trip Primitives + typed-variable + mixed Mustache + realistisches Alamos-Payload, alle Tree-Mutationen, eindeutige-Key-Logik, Reorder). Alle grün. Eine zusätzliche Playwright-E2E-Spec, die das Toggle live verifiziert (6/6 grün).
+- **HelpPage**: Abschnitt „Payload-Builder" um Drag-and-Drop-Verhalten erweitert (Drop auf Objekt/Array/String/Primitive).
+
+**Hinweis Phase 3:** System-Templates (Alamos FE2 vollständig, Slack, Discord, MS Teams) als Marketplace-ähnliche Bibliothek + per-Tenant „Als Template speichern". Phase 4: Pull-Out-Response-Mapping, Stats, Mobile-Polishing.
+
+**Dateien:** `frontend/src/components/admin/payloadBuilder/{types,types.test,PayloadBuilder}.{ts,tsx}`, `frontend/src/components/admin/InterfaceEditor.tsx`, `frontend/e2e/interfaces.spec.ts`, `frontend/src/components/HelpPage.tsx`, `frontend/package.json`, `CONVERSATION-LOG.md`.
 
 ### 2026-04-25 - Alarmierung Phase 1: Schnittstellen-Editor + Alarmverwaltung
 **Anlass:** Bisher gab es keinen Outbound-Kanal — Verstöße wurden nur intern angezeigt und beep-acoustisch signalisiert. Externe Drittsysteme (Alamos FE2, Slack, Teams, eigene Alarmserver) konnten nicht angebunden werden.

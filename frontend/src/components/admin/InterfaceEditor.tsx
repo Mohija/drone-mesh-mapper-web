@@ -7,6 +7,7 @@ import {
   fetchVariablePool,
   VariablePoolEntry,
 } from '../../api';
+import PayloadBuilder from './payloadBuilder/PayloadBuilder';
 
 interface Props {
   existing?: AlarmInterface;
@@ -69,6 +70,7 @@ export default function InterfaceEditor({ existing, onClose, onSaved }: Props) {
   const [payloadJson, setPayloadJson] = useState<string>(
     JSON.stringify(existing?.payloadTemplate ?? SAMPLE_TEMPLATES.generic, null, 2)
   );
+  const [builderMode, setBuilderMode] = useState<'builder' | 'raw'>('builder');
   const [payloadError, setPayloadError] = useState<string | null>(null);
   const [headersError, setHeadersError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -297,47 +299,66 @@ export default function InterfaceEditor({ existing, onClose, onSaved }: Props) {
           )}
 
           {tab === 'payload' && (
-            <div style={{ display: 'grid', gap: 12, gridTemplateColumns: '220px 1fr' }}>
-              <aside style={{
-                background: 'var(--bg-primary)', border: '1px solid var(--border)',
-                borderRadius: 8, padding: 12, overflow: 'auto', maxHeight: 360,
-              }}>
-                <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Variablen einfügen</p>
-                {(['drone', 'zone', 'violation', 'tenant', 'system'] as const).map(cat => (
-                  <div key={cat} style={{ marginBottom: 10 }}>
-                    <p style={{ margin: '0 0 4px', fontSize: 10, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: 0.5 }}>{cat}</p>
-                    {variables.filter(v => v.category === cat).map(v => (
-                      <button key={v.path} onClick={() => insertVariable(v.path)} style={{
-                        display: 'block', width: '100%', textAlign: 'left',
-                        padding: '4px 6px', marginBottom: 2, fontSize: 11, fontFamily: 'monospace',
-                        background: 'var(--bg-tertiary)', border: '1px solid var(--border)',
-                        borderRadius: 4, color: 'var(--text-primary)', cursor: 'pointer',
-                      }} title={`Beispiel: ${JSON.stringify(v.example)}`}>{v.path}</button>
-                    ))}
-                  </div>
-                ))}
-                <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
-                  <p style={{ margin: '0 0 6px', fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Vorlagen laden</p>
-                  {Object.keys(SAMPLE_TEMPLATES).map(k => (
-                    <button key={k} onClick={() => applySampleTemplate(k as keyof typeof SAMPLE_TEMPLATES)} style={{
-                      display: 'block', width: '100%', textAlign: 'left', padding: '4px 6px',
-                      marginBottom: 2, fontSize: 11, background: 'transparent', border: 0,
-                      color: 'var(--text-secondary)', cursor: 'pointer',
-                    }}>{k}</button>
-                  ))}
+            <div style={{ display: 'grid', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 6, padding: 2 }}>
+                  <button onClick={() => setBuilderMode('builder')} style={modeBtn(builderMode === 'builder')}>Builder</button>
+                  <button onClick={() => setBuilderMode('raw')} style={modeBtn(builderMode === 'raw')}>Raw JSON</button>
                 </div>
-              </aside>
-              <div style={{ display: 'grid', gap: 6 }}>
-                <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>
-                  JSON-Template. Variablen als <code>{`{{drone.id}}`}</code> einsetzen, oder <code>{`\${{drone.altitude}}`}</code> für typisierte Werte.
-                </p>
-                <textarea ref={payloadRef} value={payloadJson} onChange={e => setPayloadJson(e.target.value)}
-                          rows={14} style={{
-                            ...inp, fontFamily: 'monospace', fontSize: 12,
-                            resize: 'vertical', minHeight: 240,
-                          }} />
-                {payloadError && <small style={{ color: '#ef4444' }}>{payloadError}</small>}
+                <span style={{ flex: 1 }} />
+                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Vorlage:</span>
+                {Object.keys(SAMPLE_TEMPLATES).map(k => (
+                  <button key={k} onClick={() => applySampleTemplate(k as keyof typeof SAMPLE_TEMPLATES)} style={{
+                    padding: '4px 10px', fontSize: 11, background: 'transparent',
+                    border: '1px solid var(--border)', borderRadius: 4,
+                    color: 'var(--text-secondary)', cursor: 'pointer',
+                  }}>{k}</button>
+                ))}
               </div>
+
+              {builderMode === 'builder' && (
+                <PayloadBuilder
+                  value={parsedPayload(payloadJson)}
+                  onChange={(next) => setPayloadJson(JSON.stringify(next, null, 2))}
+                  variables={variables}
+                  exampleContext={previewCtx}
+                />
+              )}
+
+              {builderMode === 'raw' && (
+                <div style={{ display: 'grid', gap: 12, gridTemplateColumns: '220px 1fr' }}>
+                  <aside style={{
+                    background: 'var(--bg-primary)', border: '1px solid var(--border)',
+                    borderRadius: 8, padding: 12, overflow: 'auto', maxHeight: 360,
+                  }}>
+                    <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Variablen einfügen</p>
+                    {(['drone', 'zone', 'violation', 'tenant', 'system'] as const).map(cat => (
+                      <div key={cat} style={{ marginBottom: 10 }}>
+                        <p style={{ margin: '0 0 4px', fontSize: 10, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: 0.5 }}>{cat}</p>
+                        {variables.filter(v => v.category === cat).map(v => (
+                          <button key={v.path} onClick={() => insertVariable(v.path)} style={{
+                            display: 'block', width: '100%', textAlign: 'left',
+                            padding: '4px 6px', marginBottom: 2, fontSize: 11, fontFamily: 'monospace',
+                            background: 'var(--bg-tertiary)', border: '1px solid var(--border)',
+                            borderRadius: 4, color: 'var(--text-primary)', cursor: 'pointer',
+                          }} title={`Beispiel: ${JSON.stringify(v.example)}`}>{v.path}</button>
+                        ))}
+                      </div>
+                    ))}
+                  </aside>
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>
+                      JSON-Template. Variablen als <code>{`{{drone.id}}`}</code> einsetzen, oder <code>{`\${{drone.altitude}}`}</code> für typisierte Werte.
+                    </p>
+                    <textarea ref={payloadRef} value={payloadJson} onChange={e => setPayloadJson(e.target.value)}
+                              rows={14} style={{
+                                ...inp, fontFamily: 'monospace', fontSize: 12,
+                                resize: 'vertical', minHeight: 240,
+                              }} />
+                    {payloadError && <small style={{ color: '#ef4444' }}>{payloadError}</small>}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -434,4 +455,20 @@ function lookup(ctx: Record<string, unknown>, path: string): unknown {
     if (acc && typeof acc === 'object') return (acc as Record<string, unknown>)[key];
     return undefined;
   }, ctx);
+}
+
+// Best-effort: parse the textarea contents back to a JSON value for the
+// builder. If the raw text is broken (user mid-edit), fall back to {} so
+// the builder always has a tree to work with.
+function parsedPayload(json: string): unknown {
+  try { return JSON.parse(json); } catch { return {}; }
+}
+
+function modeBtn(active: boolean): React.CSSProperties {
+  return {
+    padding: '4px 10px', fontSize: 11, fontWeight: 600,
+    background: active ? 'var(--accent)' : 'transparent',
+    color: active ? 'var(--bg-primary)' : 'var(--text-muted)',
+    border: 0, borderRadius: 4, cursor: 'pointer',
+  };
 }

@@ -108,4 +108,27 @@ test.describe('Alarm Interfaces — API + UI smoke', () => {
     await page.goto(`${API}/admin/alarms`);
     await expect(page.locator('h1:has-text("Alarmverwaltung")')).toBeVisible({ timeout: 10000 });
   });
+
+  test('UI: payload builder mode toggle renders DnD palette', async ({ page }) => {
+    await page.goto(`${API}/login`);
+    await page.fill('[data-testid="login-username"]', 'admin');
+    await page.fill('[data-testid="login-password"]', 'admin');
+    await page.click('[data-testid="login-submit"]');
+    await page.waitForFunction(() => !window.location.pathname.includes('/login'), { timeout: 10000 });
+
+    await page.goto(`${API}/admin/interfaces`);
+    await page.getByRole('button', { name: /Neue Schnittstelle/ }).click();
+    await page.fill('input[placeholder*="Alarmserver"]', `E2E-Builder-${Date.now().toString(36)}`);
+
+    await page.getByRole('button', { name: /^Payload$/ }).click();
+    // Builder is the default mode — palette + tree must be present
+    await expect(page.getByPlaceholder(/Variablen suchen/)).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('text=Live-Vorschau')).toBeVisible();
+    // Switch to Raw — textarea visible
+    await page.getByRole('button', { name: /^Raw JSON$/ }).click();
+    await expect(page.locator('textarea')).toBeVisible();
+    // Switch back
+    await page.getByRole('button', { name: /^Builder$/ }).click();
+    await expect(page.getByPlaceholder(/Variablen suchen/)).toBeVisible();
+  });
 });

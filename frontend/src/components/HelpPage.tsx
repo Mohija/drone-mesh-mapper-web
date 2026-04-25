@@ -1356,11 +1356,37 @@ function SectionInterfaces() {
         Geheimnisse werden auf dem Server verschlüsselt (Fernet) und nie wieder im Klartext zurückgegeben —
         beim Bearbeiten zeigen die Felder „••••••••" für Werte, die unverändert bleiben sollen.
       </p>
-      <h3>Payload-Builder</h3>
+      <h3>Payload-Builder (Drag &amp; Drop)</h3>
       <p>
-        Der Tab <strong>Payload</strong> bietet einen JSON-Editor mit eingebauter Variablen-Liste.
-        Klicke eine Variable links an, um sie an der Cursor-Position einzufügen. Verfügbare Pfade:
+        Der Tab <strong>Payload</strong> hat zwei Modi, die über den Toggle oben links umschaltbar sind:
       </p>
+      <ul>
+        <li><strong>Builder</strong> (Standard) — dreispaltige Oberfläche: links die Variablen-Palette
+          mit Suche und Kategorie-Farbcodierung, mitte ein hierarchischer Tree-Editor mit
+          „+&nbsp;Eintrag"-Buttons und ↑/↓-Sortierpfeilen, rechts eine Live-Vorschau des
+          gerenderten JSON. Variablen lässt du per <strong>Drag &amp; Drop</strong> auf einen
+          Knoten fallen:
+          <ul>
+            <li>Drop auf <em>Objekt</em> → fügt eine neue Property hinzu (Key = letzte
+              Variable-Komponente, Value = typisierte Variable)</li>
+            <li>Drop auf <em>Array</em> → hängt ein Element mit der Variablen an</li>
+            <li>Drop auf <em>String-Wert</em> → hängt das Mustache-Token <code>{`{{path}}`}</code>
+              an den vorhandenen Text an</li>
+            <li>Drop auf einen primitiven Wert (number, boolean, null) → ersetzt ihn durch eine
+              typisierte Variable</li>
+          </ul>
+        </li>
+        <li><strong>Raw JSON</strong> — klassischer Texteditor mit Variablen-Picker als Click-to-insert.
+          Nützlich, wenn du eine externe Vorlage exakt kopieren oder typografische Feinheiten
+          handschriftlich setzen willst.</li>
+      </ul>
+      <p>
+        Beide Modi teilen sich denselben Inhalt — du kannst jederzeit zwischen ihnen wechseln,
+        ohne die Konfiguration zu verlieren. Wechselbar pro Knoten ist außerdem der Knotentyp
+        (über das kleine Dropdown rechts in jeder Zeile): String ↔ Variable behält den Pfad-Inhalt
+        beim Umschalten.
+      </p>
+      <p>Verfügbare Pfade:</p>
       <ul>
         <li><code>{`{{drone.id}}`}</code>, <code>{`{{drone.name}}`}</code>, <code>{`{{drone.latitude}}`}</code>,
           <code>{`{{drone.longitude}}`}</code>, <code>{`{{drone.altitude}}`}</code>, … (alle
