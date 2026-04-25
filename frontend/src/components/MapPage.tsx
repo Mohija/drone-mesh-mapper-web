@@ -656,7 +656,7 @@ export default function MapPage() {
               Drohne{droneCount !== 1 ? 'n' : ''}
             </span>
           </div>
-          <HelpLink section="map" title="Hilfe: Kartenansicht" size={18} />
+          <HelpLink section="map" title="Hilfe: Kartenansicht" size={20} />
         </div>
 
         {/* Refresh rate control */}

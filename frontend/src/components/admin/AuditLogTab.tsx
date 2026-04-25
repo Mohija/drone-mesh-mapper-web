@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import HelpFab from '../HelpFab';
+import HelpLink from '../HelpLink';
 import {
   fetchAuditLogs, fetchAuditActions, fetchAuditResourceTypes,
   type AuditLogEntry, authFetch, API_BASE,
@@ -198,9 +199,10 @@ export default function AuditLogTab() {
         display: 'flex', alignItems: 'center', gap: 12,
         marginBottom: 16, flexWrap: 'wrap',
       }}>
-        <h1 style={{ margin: 0, fontSize: isMobile ? 18 : 20, fontWeight: 700 }}>
-          <span style={{ marginRight: 8, fontSize: isMobile ? 18 : 20 }}>&#x1f6e1;</span>
+        <h1 style={{ margin: 0, fontSize: isMobile ? 18 : 20, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: isMobile ? 18 : 20 }}>&#x1f6e1;</span>
           Sicherheits-Audit
+          <HelpLink section="admin" sub="sicherheits-audit" title="Hilfe: Sicherheits-Audit" size={20} />
         </h1>
         <AdminTooltip
           brief="Audit-Log"

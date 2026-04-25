@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import HelpFab from '../HelpFab';
+import HelpLink from '../HelpLink';
 import {
   fetchSimulators, createSimulator, deleteSimulator,
   startSimulator, stopSimulator, stopAllSimulators,
@@ -128,7 +129,10 @@ export default function SimulationTab() {
         display: 'flex', alignItems: 'center', gap: 12,
         marginBottom: 20, flexWrap: 'wrap',
       }}>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Simulation</h1>
+        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10 }}>
+          Simulation
+          <HelpLink section="simulation" title="Hilfe: Simulation" size={20} />
+        </h1>
         <div style={{ flex: 1 }} />
         {runningCount > 0 && (
           <AdminTooltip

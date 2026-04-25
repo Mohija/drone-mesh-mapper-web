@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { DataSourceSettings } from '../types/drone';
 import { fetchSettings, updateSettings, restartSimulation } from '../api';
+import HelpLink from './HelpLink';
 import { useTheme } from '../ThemeContext';
 import { useAuth } from '../AuthContext';
 import { getUserItem, setUserItem } from '../userStorage';
@@ -122,7 +123,10 @@ export default function SettingsPage() {
         >
           &#8592; Karte
         </button>
-        <h1 className="fa-display" style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.05, margin: 0 }}>Einstellungen</h1>
+        <h1 className="fa-display" style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.05, margin: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+          Einstellungen
+          <HelpLink section="settings" title="Hilfe: Einstellungen" size={20} />
+        </h1>
       </div>
 
       {/* Content */}

@@ -6,6 +6,7 @@ import { getElevation, onGridReady } from '../elevationGrid';
 import { DIPUL_WMS_URL, getWmsLayerString, NFZ_LAYERS } from '../config/noFlyZones';
 import { getCachedLookup, setCachedLookup, getCachedNfz, setCachedNfz } from '../lookupCache';
 import StatusHistory from './StatusHistory';
+import HelpLink from './HelpLink';
 
 const STATUS_COLORS: Record<string, string> = {
   active: 'var(--status-active)',
@@ -333,6 +334,7 @@ export default function DroneDetailPage() {
                 {drone.source_label}
               </span>
             )}
+            <HelpLink section="drones" title="Hilfe: Drohnen-Detailseite" size={20} />
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
             {drone.basic_id}{drone.mac ? ` \u00b7 ${drone.mac}` : ''}

@@ -8,6 +8,7 @@ import {
 } from '../../api';
 import { useIsMobile } from '../../useIsMobile';
 import HelpFab from '../HelpFab';
+import HelpLink from '../HelpLink';
 
 // Section heading used across the settings page. Kept as a stand-alone
 // helper so per-section styling stays consistent even though the inline
@@ -363,7 +364,10 @@ export default function SettingsTab() {
         display: 'flex', alignItems: 'center', gap: 12,
         marginBottom: 20, flexWrap: 'wrap',
       }}>
-        <h1 className="fa-display" style={{ margin: 0, fontSize: isMobile ? 24 : 32, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.05 }}>Einstellungen</h1>
+        <h1 className="fa-display" style={{ margin: 0, fontSize: isMobile ? 24 : 32, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.05, display: 'flex', alignItems: 'center', gap: 10 }}>
+          Einstellungen
+          <HelpLink section="settings" title="Hilfe: Einstellungen" size={20} />
+        </h1>
         <div
           className="fa-micro"
           style={isMobile

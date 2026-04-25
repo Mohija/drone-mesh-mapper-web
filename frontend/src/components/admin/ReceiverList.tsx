@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import HelpFab from '../HelpFab';
+import HelpLink from '../HelpLink';
 import {
   fetchReceivers,
   createReceiver,
@@ -637,7 +638,10 @@ export default function ReceiverList() {
           gap: isMobile ? 6 : 16,
           minWidth: 0,
         }}>
-          <h1 className="fa-display" style={{ margin: 0, fontSize: isMobile ? 24 : 32, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.05 }}>Empfänger</h1>
+          <h1 className="fa-display" style={{ margin: 0, fontSize: isMobile ? 24 : 32, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.05, display: 'flex', alignItems: 'center', gap: 10 }}>
+            Empfänger
+            <HelpLink section="receivers" title="Hilfe: Empfänger-Verwaltung" size={20} />
+          </h1>
           <span
             className="fa-micro"
             style={isMobile

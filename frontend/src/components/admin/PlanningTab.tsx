@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import HelpFab from '../HelpFab';
+import HelpLink from '../HelpLink';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
@@ -287,7 +288,10 @@ export default function PlanningTab() {
         display: 'flex', alignItems: 'center', gap: 12,
         marginBottom: 16, flexWrap: 'wrap',
       }}>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Empfänger-Platzierung</h1>
+        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10 }}>
+          Empfänger-Platzierung
+          <HelpLink section="receivers" sub="empfaenger-planung" title="Hilfe: Empfänger-Platzierung" size={20} />
+        </h1>
         <span style={{
           fontSize: 11, fontWeight: 600, padding: '3px 8px',
           borderRadius: 4, background: 'rgba(59,130,246,0.15)',

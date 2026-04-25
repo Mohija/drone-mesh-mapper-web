@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import HelpFab from '../HelpFab';
+import HelpLink from '../HelpLink';
 import { fetchTenants, createTenant, deleteTenant } from '../../api';
 import type { Tenant } from '../../api';
 import { useAuth } from '../../AuthContext';
@@ -47,7 +48,10 @@ export default function TenantList() {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, flex: 1 }}>Mandanten</h1>
+        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, flex: 1, display: 'flex', alignItems: 'center', gap: 10 }}>
+          Mandanten
+          <HelpLink section="admin" sub="mandanten-verwaltung" title="Hilfe: Mandanten-Verwaltung" size={20} />
+        </h1>
         <AdminTooltip
           brief="Neuen Mandanten erstellen"
           detail={"Erstellt einen neuen Mandanten (Tenant) im System.\nJeder Mandant hat eigene Benutzer, Empfänger, Zonen und Einstellungen — komplett getrennt voneinander.\n\nFelder:\n- Technischer Name: Kleinbuchstaben, Bindestriche erlaubt (z.B. \"firma-gmbh\")\n- Anzeigename: Frei wählbar (z.B. \"Firma GmbH\")\n\nNach dem Erstellen kannst du Benutzer dem Mandanten zuweisen."}

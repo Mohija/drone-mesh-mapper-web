@@ -29,6 +29,32 @@
 
 ## Änderungshistorie
 
+### 2026-04-25 - HelpLink-Konsistenz: Symbol an JEDER Top-Level-Seite, einheitliche Position
+**Anlass:** User-Audit-Frage „prüfe das die Hilfesymbole bei allen Seiten an der gleichen Position sind". Subagent-Audit ergab: 6 von ~15 Seiten hatten ein HelpLink, der Rest nicht; MapPage Mobile hatte 18px statt 20px.
+
+**Etablierte Konsistenzregel (jetzt überall angewandt):**
+- Top-Level-Page-Headline (`<h1>`): `<HelpLink size={20} />` als letztes Kind im h1, h1-Style um `display:flex, alignItems:center, gap:10` ergänzt.
+- Side-Panel-Header (z.B. FlightZonesPanel, NoFlyZonesPanel): `size={16}` — anderer visueller Kontext, bleibt.
+- Section-/Sub-Mapping in HelpPage: top-level Pages haben eigene Sektion (`map`, `receivers`, `simulation`, `interfaces`, `alarms`, `settings`, `drones`); Admin-Subtabs nutzen `section="admin"` + `sub="<id>"` (z.B. `dashboard`, `mandanten-verwaltung`, `benutzer-verwaltung`, `log-viewer`, `sicherheits-audit`).
+
+**Geänderte Dateien (Import + h1-Style + HelpLink hinzugefügt):**
+- `admin/AdminDashboard.tsx` → `admin/dashboard`
+- `admin/TenantList.tsx` → `admin/mandanten-verwaltung`
+- `admin/UserList.tsx` → `admin/benutzer-verwaltung`
+- `admin/LogViewerTab.tsx` → `admin/log-viewer`
+- `admin/AuditLogTab.tsx` → `admin/sicherheits-audit`
+- `admin/SettingsTab.tsx` → `settings`
+- `admin/ReceiverList.tsx` → `receivers`
+- `admin/SimulationTab.tsx` → `simulation`
+- `admin/PlanningTab.tsx` → `receivers/empfaenger-planung`
+- `DroneDetailPage.tsx` → `drones`
+- `SettingsPage.tsx` → `settings`
+- `MapPage.tsx`: Mobile-HelpLink von size=18 auf size=20 angeglichen.
+
+**Ergebnis:** 17 HelpLinks an konsistenten Positionen — 15× size=20 an Page-Headlines, 2× size=16 an Side-Panel-Headern.
+
+**Build:** `npm run build` ✓ (4.78s).
+
 ### 2026-04-25 - PayloadBuilder UX Round 2: Tooltips, sicheres Leeren, JSON-Import
 **Anlass:** User-Feedback nach Tests des überarbeiteten Builders:
 1. Tooltips fehlen an den Bedienelementen.
