@@ -18,14 +18,16 @@ from flask import Blueprint, g, jsonify, request, current_app
 from auth import login_required, role_required, service_token_required
 from database import db
 from models import (
-    AlarmInterface, AlarmRule, AlarmDelivery,
+    AlarmInterface, AlarmRule, AlarmDelivery, AlarmSubscription,
     FlightZone, ServiceToken, Tenant, ViolationRecord,
 )
 from services.alarm_dispatcher import (
     build_variable_pool, build_example_context,
     encrypt_auth_config, merge_auth_for_update,
     render_payload, send_request,
+    push_subscription_test, build_interface_stats, build_usage_examples,
 )
+from services.alarm_templates import list_templates, get_template
 from services.audit import audit_log
 
 logger = logging.getLogger("alarm_routes")
@@ -148,16 +150,46 @@ def create_interface():
         return jsonify({"error": str(e)}), 400
 
     raw_pull_token = None
+    raw_api_key = None
     if iface.interface_type == "pull_in":
         raw_pull_token, st = _create_pull_token(tid, name)
         iface.service_token_id = st.id
+    elif iface.interface_type == "subscription":
+        raw_api_key = _generate_api_key(iface)
 
     db.session.add(iface)
     db.session.commit()
     _bump_iface(tid)
     audit_log("create", "alarm_interface", iface.id, name)
     logger.info("interface created: %s (%s)", iface.id, iface.name)
-    return jsonify(iface.to_dict(raw_pull_token=raw_pull_token)), 201
+    out = iface.to_dict(raw_pull_token=raw_pull_token)
+    if raw_api_key:
+        out["apiKey"] = raw_api_key
+    return jsonify(out), 201
+
+
+def _generate_api_key(iface: AlarmInterface) -> str:
+    """Generate, hash and persist a subscription channel API key. Returns the
+    raw key (returned ONCE in the API response — never readable again)."""
+    raw = "flightarc_chan_" + secrets.token_hex(16)
+    iface.api_key_hash = hashlib.sha256(raw.encode()).hexdigest()
+    iface.api_key_prefix = raw[:12]   # column is VARCHAR(12) — keep consistent
+    return raw
+
+
+def _interface_for_api_key(channel_id: str, raw_key: str) -> AlarmInterface | None:
+    """Look up + scope-check a channel by raw API key. Returns the interface
+    if the key matches and the channel is a subscription type, else None."""
+    if not raw_key:
+        return None
+    iface = AlarmInterface.query.filter_by(id=channel_id).first()
+    if not iface or iface.interface_type != "subscription":
+        return None
+    if not iface.api_key_hash:
+        return None
+    if hashlib.sha256(raw_key.encode()).hexdigest() != iface.api_key_hash:
+        return None
+    return iface
 
 
 def _create_pull_token(tid: str, label: str) -> tuple[str, ServiceToken]:
@@ -189,10 +221,54 @@ def list_variables():
 @alarm_bp.route("/interfaces/templates", methods=["GET"])
 @login_required
 @role_required("tenant_admin")
-def list_templates():
-    """Phase 3 fills this with curated templates (Alamos FE2, Slack, …).
-    Phase 1 returns an empty list so the frontend's UI doesn't break."""
-    return jsonify({"items": []})
+def get_interface_templates():
+    """Curated payload-template library — Alamos FE2, Slack, Discord, Teams,
+    Generic, Subscription. See services/alarm_templates.py."""
+    return jsonify({"items": list_templates()})
+
+
+@alarm_bp.route("/interfaces/from-template", methods=["POST"])
+@login_required
+@role_required("tenant_admin")
+def create_interface_from_template():
+    """Instantiate a new interface from a server-side template, optionally
+    overriding the name. The user can edit everything afterwards — the
+    template only seeds the JSON template, type, headers, http method."""
+    tid = g.tenant_id
+    data = request.get_json(silent=True) or {}
+    tpl_id = data.get("templateId")
+    tpl = get_template(tpl_id) if tpl_id else None
+    if not tpl:
+        return jsonify({"error": "Unbekannte templateId"}), 400
+
+    iface = AlarmInterface(
+        tenant_id=tid,
+        name=(data.get("name") or tpl["label"])[:100],
+        description=tpl.get("description"),
+        interface_type=tpl["interfaceType"],
+        http_method=tpl.get("httpMethod", "POST"),
+        extra_headers=tpl.get("extraHeaders") or {},
+        auth_type=tpl.get("authType", "none"),
+        payload_template=tpl.get("payloadTemplate"),
+        enabled=False,                  # admin must wire URL + auth before enabling
+        created_by=g.current_user.username if hasattr(g, "current_user") else None,
+    )
+
+    raw_pull_token = None
+    raw_api_key = None
+    if iface.interface_type == "pull_in":
+        raw_pull_token, st = _create_pull_token(tid, iface.name)
+        iface.service_token_id = st.id
+    elif iface.interface_type == "subscription":
+        raw_api_key = _generate_api_key(iface)
+
+    db.session.add(iface)
+    db.session.commit()
+    _bump_iface(tid)
+    audit_log("create_from_template", "alarm_interface", iface.id, iface.name, {"templateId": tpl_id})
+    return jsonify(iface.to_dict(raw_pull_token=raw_pull_token,
+                                  reveal_secrets=False)
+                   | ({"apiKey": raw_api_key} if raw_api_key else {})), 201
 
 
 @alarm_bp.route("/interfaces/import", methods=["POST"])
@@ -543,3 +619,168 @@ def integrations_violations():
         "recentEnded": [v.to_dict(include_trail=False) for v in recent_ended],
         "fetchedAt": time.time(),
     })
+
+
+# ---------------------------------------------------------------------------
+# Subscription API-Key admin (rotate / clear)
+# ---------------------------------------------------------------------------
+
+@alarm_bp.route("/interfaces/<iid>/api-key/rotate", methods=["POST"])
+@login_required
+@role_required("tenant_admin")
+def rotate_api_key(iid):
+    tid = g.tenant_id
+    iface = AlarmInterface.query.filter_by(id=iid, tenant_id=tid).first()
+    if not iface:
+        return jsonify({"error": "Schnittstelle nicht gefunden"}), 404
+    if iface.interface_type != "subscription":
+        return jsonify({"error": "API-Key nur für Subscription-Schnittstellen"}), 400
+    raw = _generate_api_key(iface)
+    db.session.commit()
+    _bump_iface(tid)
+    audit_log("rotate_api_key", "alarm_interface", iface.id, iface.name)
+    return jsonify({"apiKey": raw, "apiKeyPrefix": iface.api_key_prefix})
+
+
+# ---------------------------------------------------------------------------
+# Admin views of subscriptions / stats / examples / templates
+# ---------------------------------------------------------------------------
+
+@alarm_bp.route("/interfaces/<iid>/subscriptions", methods=["GET"])
+@login_required
+@role_required("tenant_admin")
+def admin_list_subscriptions(iid):
+    tid = g.tenant_id
+    iface = AlarmInterface.query.filter_by(id=iid, tenant_id=tid).first()
+    if not iface:
+        return jsonify({"error": "Schnittstelle nicht gefunden"}), 404
+    subs = AlarmSubscription.query.filter_by(interface_id=iid).order_by(AlarmSubscription.created_at.desc()).all()
+    return jsonify({"items": [s.to_dict() for s in subs]})
+
+
+@alarm_bp.route("/interfaces/<iid>/subscriptions/<sid>", methods=["DELETE"])
+@login_required
+@role_required("tenant_admin")
+def admin_revoke_subscription(iid, sid):
+    """Admin override: revoke a subscriber even if the third party didn't
+    unregister itself (e.g. callback URL is dead, security incident)."""
+    tid = g.tenant_id
+    iface = AlarmInterface.query.filter_by(id=iid, tenant_id=tid).first()
+    if not iface:
+        return jsonify({"error": "Schnittstelle nicht gefunden"}), 404
+    sub = AlarmSubscription.query.filter_by(id=sid, interface_id=iid).first()
+    if not sub:
+        return jsonify({"error": "Abonnement nicht gefunden"}), 404
+    db.session.delete(sub)
+    db.session.commit()
+    audit_log("delete", "alarm_subscription", sid, sub.name or sub.callback_url)
+    return jsonify({"ok": True})
+
+
+@alarm_bp.route("/interfaces/<iid>/subscriptions/<sid>/test", methods=["POST"])
+@login_required
+@role_required("tenant_admin")
+def admin_test_subscription(iid, sid):
+    """Admin „Test-Push" to one specific subscriber (useful for diagnosing
+    a single dead callback URL without spamming the rest of the channel)."""
+    tid = g.tenant_id
+    iface = AlarmInterface.query.filter_by(id=iid, tenant_id=tid).first()
+    if not iface or iface.interface_type != "subscription":
+        return jsonify({"error": "Schnittstelle nicht gefunden"}), 404
+    sub = AlarmSubscription.query.filter_by(id=sid, interface_id=iid).first()
+    if not sub:
+        return jsonify({"error": "Abonnement nicht gefunden"}), 404
+    from services.alarm_dispatcher import _push_to_subscriber, build_example_context, render_payload  # type: ignore
+    ctx = build_example_context(); ctx["trigger"] = "manual_test"
+    payload = render_payload(iface.payload_template or {}, ctx)
+    return jsonify(_push_to_subscriber(iface, sub, payload,
+                                       trigger_type="manual_test",
+                                       rule_id=None, violation_id=None))
+
+
+@alarm_bp.route("/interfaces/<iid>/stats", methods=["GET"])
+@login_required
+@role_required("tenant_admin")
+def get_interface_stats(iid):
+    tid = g.tenant_id
+    return jsonify(build_interface_stats(iid, tid))
+
+
+@alarm_bp.route("/interfaces/<iid>/usage-examples", methods=["GET"])
+@login_required
+@role_required("tenant_admin")
+def get_interface_usage_examples(iid):
+    tid = g.tenant_id
+    iface = AlarmInterface.query.filter_by(id=iid, tenant_id=tid).first()
+    if not iface:
+        return jsonify({"error": "Schnittstelle nicht gefunden"}), 404
+    origin = request.host_url.rstrip("/")
+    return jsonify(build_usage_examples(iface, request_origin=origin))
+
+
+# ---------------------------------------------------------------------------
+# Subscription registration (third-party-facing, api-key-secured)
+# ---------------------------------------------------------------------------
+
+def _resolve_channel_from_request(channel_id: str) -> AlarmInterface | None:
+    """Look up the channel from header X-API-Key (preferred) or
+    Authorization: Bearer. The api_key authenticates the caller as someone
+    who knows the channel's shared secret — effectively the operator that
+    holds the key. We don't bind it to a specific tenant identity beyond
+    the channel ownership.
+    """
+    raw = request.headers.get("X-API-Key", "").strip()
+    if not raw:
+        auth = request.headers.get("Authorization", "")
+        if auth.lower().startswith("bearer "):
+            raw = auth[7:].strip()
+    return _interface_for_api_key(channel_id, raw)
+
+
+@integrations_bp.route("/subscriptions/<channel_id>/register", methods=["POST"])
+def integrations_subscribe(channel_id):
+    iface = _resolve_channel_from_request(channel_id)
+    if not iface:
+        return jsonify({"error": "Ungültiger API-Key oder Kanal"}), 401
+    if not iface.enabled:
+        return jsonify({"error": "Kanal ist deaktiviert"}), 403
+    data = request.get_json(silent=True) or {}
+    callback_url = (data.get("callback_url") or "").strip()
+    if not callback_url or not (callback_url.startswith("http://") or callback_url.startswith("https://")):
+        return jsonify({"error": "callback_url muss eine http(s)-URL sein"}), 400
+
+    name = (data.get("name") or "")[:100] or None
+    secret = secrets.token_hex(24)         # raw — returned ONCE
+    sub = AlarmSubscription(
+        interface_id=iface.id, name=name,
+        callback_url=callback_url, secret=secret,
+    )
+    db.session.add(sub)
+    db.session.commit()
+    return jsonify(sub.to_dict(include_secret=True)), 201
+
+
+@integrations_bp.route("/subscriptions/<channel_id>", methods=["GET"])
+def integrations_list_subs(channel_id):
+    """List my own subscriptions on this channel — useful for a third-party
+    operator to audit which callbacks they previously registered."""
+    iface = _resolve_channel_from_request(channel_id)
+    if not iface:
+        return jsonify({"error": "Ungültiger API-Key oder Kanal"}), 401
+    subs = AlarmSubscription.query.filter_by(interface_id=iface.id).all()
+    # secret intentionally NOT included — the third party already has it from
+    # the register response
+    return jsonify({"items": [s.to_dict() for s in subs]})
+
+
+@integrations_bp.route("/subscriptions/<channel_id>/<sub_id>", methods=["DELETE"])
+def integrations_unsubscribe(channel_id, sub_id):
+    iface = _resolve_channel_from_request(channel_id)
+    if not iface:
+        return jsonify({"error": "Ungültiger API-Key oder Kanal"}), 401
+    sub = AlarmSubscription.query.filter_by(id=sub_id, interface_id=iface.id).first()
+    if not sub:
+        return jsonify({"error": "Abonnement nicht gefunden"}), 404
+    db.session.delete(sub)
+    db.session.commit()
+    return jsonify({"ok": True})

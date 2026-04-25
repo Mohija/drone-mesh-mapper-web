@@ -8,6 +8,8 @@ import {
   VariablePoolEntry,
 } from '../../api';
 import PayloadBuilder from './payloadBuilder/PayloadBuilder';
+import InterfaceSubscribersTab from './InterfaceSubscribersTab';
+import InterfaceExamplesTab from './InterfaceExamplesTab';
 
 interface Props {
   existing?: AlarmInterface;
@@ -15,7 +17,7 @@ interface Props {
   onSaved: (saved: AlarmInterface) => void;
 }
 
-type Tab = 'general' | 'connection' | 'auth' | 'payload' | 'preview';
+type Tab = 'general' | 'connection' | 'auth' | 'payload' | 'preview' | 'subscribers' | 'examples';
 
 const AUTH_OPTIONS: { value: AlarmInterface['authType']; label: string }[] = [
   { value: 'none', label: 'Keine Authentifizierung' },
@@ -27,8 +29,9 @@ const AUTH_OPTIONS: { value: AlarmInterface['authType']; label: string }[] = [
 
 const TYPE_OPTIONS: { value: AlarmInterface['interfaceType']; label: string; hint: string }[] = [
   { value: 'webhook', label: 'Webhook (Push)', hint: 'FlightArc sendet HTTP-Request bei Verstoß.' },
-  { value: 'pull_out', label: 'Pull-Out (FlightArc pollt extern)', hint: 'FlightArc ruft die URL periodisch ab (Liveness-Check, Phase 1).' },
+  { value: 'pull_out', label: 'Pull-Out (FlightArc pollt extern)', hint: 'FlightArc ruft die URL periodisch ab (Liveness-Check).' },
   { value: 'pull_in', label: 'Pull-In (Drittsystem holt ab)', hint: 'Beim Speichern wird ein Service-Token erzeugt — das Drittsystem fragt /api/integrations/violations ab.' },
+  { value: 'subscription', label: 'Subscription (Pub/Sub)', hint: 'Beim Speichern wird ein API-Key erzeugt. Beliebig viele Drittsysteme können sich am Channel registrieren und bekommen jedes Event automatisch gepusht.' },
 ];
 
 const SAMPLE_TEMPLATES: Record<string, unknown> = {
@@ -169,7 +172,12 @@ export default function InterfaceEditor({ existing, onClose, onSaved }: Props) {
         </header>
 
         <nav style={{ display: 'flex', gap: 4, padding: '12px 20px 0', borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
-          {(['general', 'connection', 'auth', 'payload', 'preview'] as Tab[]).map(t => (
+          {(() => {
+            const tabs: Tab[] = ['general', 'connection', 'auth', 'payload', 'preview'];
+            if (isEdit && interfaceType === 'subscription') tabs.push('subscribers');
+            if (isEdit) tabs.push('examples');
+            return tabs;
+          })().map(t => (
             <button key={t} onClick={() => setTab(t)} style={tabBtn(tab === t)}>
               {{
                 general: 'Allgemein',
@@ -177,6 +185,8 @@ export default function InterfaceEditor({ existing, onClose, onSaved }: Props) {
                 auth: 'Authentifizierung',
                 payload: 'Payload',
                 preview: 'Vorschau & Senden',
+                subscribers: 'Abonnenten',
+                examples: 'Beispiele',
               }[t]}
             </button>
           ))}
@@ -372,6 +382,14 @@ export default function InterfaceEditor({ existing, onClose, onSaved }: Props) {
                 border: '1px solid var(--border)', fontSize: 12, overflow: 'auto', maxHeight: 360,
               }}>{renderedPreview}</pre>
             </div>
+          )}
+
+          {tab === 'subscribers' && existing && (
+            <InterfaceSubscribersTab iface={existing} />
+          )}
+
+          {tab === 'examples' && existing && (
+            <InterfaceExamplesTab interfaceId={existing.id} />
           )}
         </div>
 

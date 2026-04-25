@@ -2,7 +2,7 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-04-25 (Alarmierung Phase 2: Drag-and-Drop JSON-Builder)
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-04-25 (Alarmierung Phase 3+4+5: Templates, Subscription-Pub/Sub, Beispiel-Code, Health-Stats)
 - **Typ:** Projekt | **Status:** Development
 
 ## Offene Aufgaben
@@ -20,14 +20,51 @@
 - [x] Benutzerhandbuch: Mobile-Ansichten, Einsatz-Zonen Einstellungen, Adress-Prüfung, Log-Viewer dokumentiert.
 - [x] Alarmierung Phase 1: Schnittstellen-Editor + Alarmverwaltung (Webhook-Push, Pull-Out, Pull-In, Auth-Methoden, JSON-Template-Builder, Lieferungs-Log)
 - [x] Alarmierung Phase 2: Drag-and-Drop JSON-Builder mit @dnd-kit (Tree-Editor, Variable-Palette, Live-Preview, Toggle Builder/Raw)
-- [ ] Alarmierung Phase 3: System-Templates (Alamos FE2, Slack, Discord) + UI-Polish Import/Export
-- [ ] Alarmierung Phase 4: Pull-Out-Response-Mapper, Statistik-Charts, Mobile-Polishing
+- [x] Alarmierung Phase 3+4+5: Templates (6), Subscription-Channel (Pub/Sub mit API-Key + HMAC), Beispiel-Code (curl/Python/JS), Stats + 7d-Sparkline, bidirektionales Monitoring, Mobile-Layout, Drag-Drop-Import
 - [ ] WebSocket-Integration für echte Push-Updates statt Polling
 - [ ] ESP 8266 MicroPython-Anpassung
 - [ ] Integration mit echtem drone-mesh-mapper Hardware-Setup
 - [ ] Docker Deployment Package
 
 ## Änderungshistorie
+
+### 2026-04-25 - Alarmierung Phase 3+4+5: Templates, Subscription, Beispiel-Code, Health-Stats
+**Anlass:** User wollte Phase 3 (Templates) und Phase 4 (Stats + Mobile) zusammen, plus eine **neue Anforderung**: Drittsysteme sollen sich mit API-Key bei einem Channel anmelden und Events automatisch gepusht bekommen — mit Beispiel-Code zum Kopieren und bidirektionalem Monitoring.
+
+**Architektur — neuer 4. Schnittstellen-Typ `subscription` (Pub/Sub):**
+- Backend: Spalten `api_key_hash` + `api_key_prefix` auf `alarm_interfaces`. Neue Tabelle `alarm_subscriptions` (id, interface_id, callback_url, secret, last_success_at, last_attempt_at, last_error, fail_count, revoked_at). Migration `016_alarm_subscriptions`.
+- Drittsystem registriert sich mit `X-API-Key` an `POST /api/integrations/subscriptions/<channel>/register` mit `{callback_url, name?}` → bekommt `id` + `secret` zurück (einmalig). Listen + Unsubscribe stehen am gleichen Pfad.
+- Beim Verstoß rendert der Dispatcher das Payload einmal und pusht parallel an alle aktiven Subscriber. Jeder Push hat einen `X-FlightArc-Signature: sha256=<hmac>`-Header — Empfänger verifiziert mit dem `secret`.
+- Admin-Tab „Abonnenten" im InterfaceEditor: API-Key generieren / rotieren (alter Key wird sofort ungültig), Subscriber-Liste mit Last-Success / Fehlerzähler / Test-Push pro Subscriber, Admin-Override-Revoke.
+
+**Templates** (Phase 3):
+- `services/alarm_templates.py` — 6 vorgegebene Vorlagen: Alamos FE2 (mit JSON-UTF-8-Header und units[].address), Slack (text + blocks), Discord (embed), MS Teams (Adaptive Card), Generic (vendor-neutral mit Bearer-Auth) und Subscription-Starter.
+- `GET /api/admin/interfaces/templates` + `POST /api/admin/interfaces/from-template` — neue Schnittstelle wird deaktiviert angelegt, der Admin trägt URL/Auth nach.
+- Frontend: `TemplatePicker`-Modal mit Karten-Layout, Kategorie-Badges (Alarmierung/Chat/Allgemein) und Typ-Badges. Im InterfacesManager neuer „Aus Vorlage…"-Button.
+- Drag-and-Drop von JSON-Dateien direkt auf die Schnittstellen-Liste (zusätzlich zum Click-Import).
+
+**Beispiel-Code im UI** (neue Anforderung):
+- `GET /api/admin/interfaces/<id>/usage-examples` generiert pro Schnittstellen-Typ fertige Snippets:
+  - **Pull-In**: curl, Python (requests), JavaScript (fetch) — alle mit `X-Service-Token`
+  - **Subscription**: 4 Schritte (Registrieren in curl + Python, Empfangshandler in Flask mit HMAC-Verifikation, Listen, Unsubscribe) + Express.js-Empfangshandler
+  - **Webhook**: Express.js-Empfangshandler mit optionaler Signatur-Verifikation
+- Pre-rendered URLs nutzen `request.host_url` — Beispiele zeigen die echte öffentliche URL der Installation.
+- Frontend: neuer Tab „Beispiele" im InterfaceEditor mit Sprach-Badges, Copy-Button mit Bestätigungs-Feedback.
+
+**Stats + bidirektionales Monitoring** (Phase 4):
+- `GET /api/admin/interfaces/<id>/stats` — 24h Total/Success/Rate, letzte Lieferung, 7-Tage Daily-Buckets, Subscriber-Count (für subscription), letzter Pull-Zeitpunkt aus `ServiceToken.last_used_at` (für pull_in).
+- `InterfaceStatsBadge`-Komponente in den Schnittstellen-Karten: kompakte Stats („47/50", „zuletzt 12s"), 7-Tage-Sparkline mit gradient-fill (Anteil grün=success vs. rot=failed pro Tag), Live-Refresh.
+- Pro Subscriber: eigener Health-Dot (grün wenn last_success und fail_count==0, rot wenn fail_count≥3), Last-Attempt + Last-Error.
+
+**Mobile-Polish** (Phase 4): PayloadBuilder-3-Spalten-Layout wird auf `useIsMobile` zu 1-Spalte gestackt. Touch-Targets in den neuen UIs auf 32-44px.
+
+**API-Key-Rotation**: `POST /api/admin/interfaces/<id>/api-key/rotate` regeneriert den Channel-Key, alter Key wird sofort beim ersten Use 401-blockiert. Admin sieht den neuen Key einmalig mit Copy-Button.
+
+**Tests**: 366 Backend-pytest grün (53 alarm-spezifisch, 18 neu). 10 Playwright-E2E grün (Templates, Subscription-Lifecycle, Usage-Examples, Stats). Live verifiziert gegen httpbin.org (Channel-Anlage, Drittsystem-Registrierung, signierter Push, Listing aus Drittsystem-Sicht).
+
+**Hinweis:** Auf Phase-4-Pull-Out-Response-Mapping bewusst verzichtet — bringt geringen Wert in einem Push-orientierten System, kann später nachgereicht werden falls relevant.
+
+**Dateien:** `backend/{models.py,migrations.py,routes/alarm_routes.py,services/{alarm_dispatcher,alarm_templates}.py,tests/{conftest,test_alarms}.py}`, `frontend/src/{api.ts,components/HelpPage.tsx,components/admin/{InterfacesManager,InterfaceEditor,TemplatePicker,InterfaceStatsBadge,InterfaceSubscribersTab,InterfaceExamplesTab}.tsx,components/admin/payloadBuilder/PayloadBuilder.tsx}`, `frontend/e2e/interfaces.spec.ts`, `CONVERSATION-LOG.md`, `manifest.json`.
 
 ### 2026-04-25 - Alarmierung Phase 2: Drag-and-Drop JSON-Builder
 **Anlass:** Phase 1 lieferte einen funktionierenden JSON-Texteditor mit Variablen-Picker. Der User wollte explizit „mit drag and drop machen können" — Phase 2 setzt das mit `@dnd-kit/core` um.

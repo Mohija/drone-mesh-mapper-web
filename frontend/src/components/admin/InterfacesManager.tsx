@@ -10,11 +10,14 @@ import {
 } from '../../api';
 import InterfaceEditor from './InterfaceEditor';
 import AlarmDeliveryLog from './AlarmDeliveryLog';
+import TemplatePicker from './TemplatePicker';
+import InterfaceStatsBadge from './InterfaceStatsBadge';
 
 const TYPE_LABEL: Record<string, string> = {
   webhook: 'Webhook (Push)',
   pull_out: 'Pull-Out (FlightArc pollt)',
   pull_in: 'Pull-In (Extern pollt)',
+  subscription: 'Subscription (Pub/Sub)',
 };
 
 export default function InterfacesManager() {
@@ -23,9 +26,12 @@ export default function InterfacesManager() {
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<AlarmInterface | null>(null);
   const [creating, setCreating] = useState(false);
+  const [pickingTemplate, setPickingTemplate] = useState(false);
   const [pullTokenInfo, setPullTokenInfo] = useState<{ name: string; token: string } | null>(null);
+  const [apiKeyInfo, setApiKeyInfo] = useState<{ name: string; key: string } | null>(null);
   const [testResult, setTestResult] = useState<{ id: string; ok: boolean; status?: number; body?: string; error?: string } | null>(null);
   const [showLogFor, setShowLogFor] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
 
   async function reload() {
     setLoading(true);
@@ -86,13 +92,46 @@ export default function InterfacesManager() {
     if (saved.pullToken) {
       setPullTokenInfo({ name: saved.name, token: saved.pullToken });
     }
+    if ((saved as AlarmInterface & { apiKey?: string }).apiKey) {
+      setApiKeyInfo({ name: saved.name, key: (saved as AlarmInterface & { apiKey: string }).apiKey });
+    }
     setEditing(null);
     setCreating(false);
     reload();
   }
 
+  function onTemplateCreated(saved: AlarmInterface) {
+    setPickingTemplate(false);
+    if ((saved as AlarmInterface & { apiKey?: string }).apiKey) {
+      setApiKeyInfo({ name: saved.name, key: (saved as AlarmInterface & { apiKey: string }).apiKey });
+    }
+    if (saved.pullToken) {
+      setPullTokenInfo({ name: saved.name, token: saved.pullToken });
+    }
+    // Open the new interface in the editor so the admin can wire URL/auth.
+    setEditing(saved);
+    reload();
+  }
+
   return (
-    <div style={{ maxWidth: 1100 }}>
+    <div
+      style={{
+        maxWidth: 1100,
+        position: 'relative',
+        outline: dragOver ? '3px dashed var(--accent)' : 'none',
+        outlineOffset: -8,
+        borderRadius: 12,
+      }}
+      onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={async (e) => {
+        e.preventDefault();
+        setDragOver(false);
+        const file = e.dataTransfer.files?.[0];
+        if (file && /\.json$/i.test(file.name)) await handleImport(file);
+        else if (file) alert('Nur .json-Dateien werden akzeptiert');
+      }}
+    >
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 24, gap: 12, flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 22 }}>Schnittstellen</h1>
@@ -101,6 +140,10 @@ export default function InterfacesManager() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button onClick={() => setPickingTemplate(true)} style={{
+            padding: '10px 16px', background: 'var(--bg-tertiary)', border: '1px solid var(--border)',
+            borderRadius: 8, color: 'var(--text-primary)', cursor: 'pointer', fontSize: 13,
+          }}>Aus Vorlage…</button>
           <label style={{
             padding: '10px 16px', background: 'var(--bg-tertiary)', border: '1px solid var(--border)',
             borderRadius: 8, color: 'var(--text-primary)', cursor: 'pointer', fontSize: 13,
@@ -117,29 +160,20 @@ export default function InterfacesManager() {
       </header>
 
       {pullTokenInfo && (
-        <div style={{
-          padding: 16, marginBottom: 16, background: 'rgba(0,212,170,0.10)',
-          border: '1px solid var(--accent)', borderRadius: 8,
-        }}>
-          <p style={{ margin: '0 0 8px', fontWeight: 600 }}>Pull-In-Token für „{pullTokenInfo.name}"</p>
-          <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--text-secondary)' }}>
-            Dieser Token wird <strong>nur einmal</strong> angezeigt. Kopiere ihn jetzt in das Drittsystem.
-          </p>
-          <code style={{
-            display: 'block', padding: 10, background: 'var(--bg-primary)',
-            border: '1px solid var(--border)', borderRadius: 6, fontSize: 12,
-            wordBreak: 'break-all',
-          }}>{pullTokenInfo.token}</code>
-          <button onClick={() => navigator.clipboard.writeText(pullTokenInfo.token)} style={{
-            marginTop: 8, padding: '6px 12px', background: 'var(--bg-tertiary)',
-            border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, cursor: 'pointer',
-          }}>Kopieren</button>
-          <button onClick={() => setPullTokenInfo(null)} style={{
-            marginTop: 8, marginLeft: 8, padding: '6px 12px', background: 'transparent',
-            border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, cursor: 'pointer',
-            color: 'var(--text-secondary)',
-          }}>Verstanden</button>
-        </div>
+        <SecretBanner
+          title={`Pull-In-Token für „${pullTokenInfo.name}"`}
+          help="Dieser Token wird nur einmal angezeigt. Kopiere ihn jetzt in das Drittsystem."
+          secret={pullTokenInfo.token}
+          onClose={() => setPullTokenInfo(null)}
+        />
+      )}
+      {apiKeyInfo && (
+        <SecretBanner
+          title={`Channel-API-Key für „${apiKeyInfo.name}"`}
+          help="Drittsysteme nutzen diesen Key, um sich am Channel zu registrieren (X-API-Key). Wird nur einmal angezeigt — bei Verlust kann der Key rotiert werden."
+          secret={apiKeyInfo.key}
+          onClose={() => setApiKeyInfo(null)}
+        />
       )}
 
       {loading && <p style={{ color: 'var(--text-muted)' }}>Lädt…</p>}
@@ -185,6 +219,7 @@ export default function InterfacesManager() {
                     {iface.description}
                   </p>
                 )}
+                <InterfaceStatsBadge interfaceId={iface.id} interfaceType={iface.interfaceType} />
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {iface.interfaceType !== 'pull_in' && (
@@ -230,6 +265,43 @@ export default function InterfacesManager() {
           onSaved={onSaved}
         />
       )}
+
+      {pickingTemplate && (
+        <TemplatePicker
+          onClose={() => setPickingTemplate(false)}
+          onCreated={onTemplateCreated}
+        />
+      )}
+    </div>
+  );
+}
+
+function SecretBanner({ title, help, secret, onClose }: {
+  title: string; help: string; secret: string; onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div style={{
+      padding: 16, marginBottom: 16, background: 'rgba(0,212,170,0.10)',
+      border: '1px solid var(--accent)', borderRadius: 8,
+    }}>
+      <p style={{ margin: '0 0 8px', fontWeight: 600 }}>{title}</p>
+      <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--text-secondary)' }}>{help}</p>
+      <code style={{
+        display: 'block', padding: 10, background: 'var(--bg-primary)',
+        border: '1px solid var(--border)', borderRadius: 6, fontSize: 12,
+        wordBreak: 'break-all',
+      }}>{secret}</code>
+      <button onClick={async () => { await navigator.clipboard.writeText(secret); setCopied(true); setTimeout(() => setCopied(false), 1500); }} style={{
+        marginTop: 8, padding: '6px 12px', background: 'var(--bg-tertiary)',
+        border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, cursor: 'pointer',
+        minHeight: 36,
+      }}>{copied ? '✓ Kopiert' : 'Kopieren'}</button>
+      <button onClick={onClose} style={{
+        marginTop: 8, marginLeft: 8, padding: '6px 12px', background: 'transparent',
+        border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, cursor: 'pointer',
+        color: 'var(--text-secondary)', minHeight: 36,
+      }}>Verstanden</button>
     </div>
   );
 }

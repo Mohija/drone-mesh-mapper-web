@@ -1408,7 +1408,7 @@ export interface AlarmInterface {
   tenantId: string;
   name: string;
   description: string | null;
-  interfaceType: 'webhook' | 'pull_out' | 'pull_in';
+  interfaceType: 'webhook' | 'pull_out' | 'pull_in' | 'subscription';
   enabled: boolean;
   url: string | null;
   httpMethod: string;
@@ -1420,11 +1420,14 @@ export interface AlarmInterface {
   authConfig: AlarmAuthConfig;
   pullIntervalSeconds: number | null;
   serviceTokenId: string | null;
+  apiKeyPrefix: string | null;
+  hasApiKey: boolean;
   payloadTemplate: unknown;
   createdAt: number;
   updatedAt: number;
   createdBy: string | null;
   pullToken?: string;  // returned only on creation of pull_in interface
+  apiKey?: string;     // returned only on create/rotate of subscription channel
 }
 
 export interface AlarmInterfaceListResponse {
@@ -1616,6 +1619,115 @@ export async function listAlarmDeliveries(opts?: {
   if (opts?.status) params.set('status', opts.status);
   const url = `${API_BASE}/admin/alarm-deliveries${params.toString() ? `?${params}` : ''}`;
   const res = await authFetch(url);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+// ─── Alarm Templates / Subscriptions / Stats / Examples (Phase 3-5) ─────
+
+export interface AlarmTemplate {
+  id: string;
+  label: string;
+  description: string;
+  category: string;
+  interfaceType: AlarmInterface['interfaceType'];
+  httpMethod: string;
+  extraHeaders: Record<string, string>;
+  authType: AlarmInterface['authType'];
+  payloadTemplate: unknown;
+}
+
+export async function listAlarmTemplates(): Promise<{ items: AlarmTemplate[] }> {
+  const res = await authFetch(`${API_BASE}/admin/interfaces/templates`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function createInterfaceFromTemplate(templateId: string, name?: string): Promise<AlarmInterface> {
+  const res = await authFetch(`${API_BASE}/admin/interfaces/from-template`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ templateId, name }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `API error: ${res.status}`);
+  }
+  return res.json();
+}
+
+export interface AlarmSubscription {
+  id: string;
+  interfaceId: string;
+  name: string | null;
+  callbackUrl: string;
+  createdAt: number;
+  lastSuccessAt: number | null;
+  lastAttemptAt: number | null;
+  lastError: string | null;
+  failCount: number;
+  revokedAt: number | null;
+  secret?: string;  // returned ONCE on initial register response
+}
+
+export async function listInterfaceSubscriptions(interfaceId: string): Promise<{ items: AlarmSubscription[] }> {
+  const res = await authFetch(`${API_BASE}/admin/interfaces/${interfaceId}/subscriptions`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function revokeInterfaceSubscription(interfaceId: string, subId: string): Promise<void> {
+  const res = await authFetch(`${API_BASE}/admin/interfaces/${interfaceId}/subscriptions/${subId}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+}
+
+export async function testInterfaceSubscription(interfaceId: string, subId: string): Promise<{ ok: boolean; status?: number; error?: string }> {
+  const res = await authFetch(`${API_BASE}/admin/interfaces/${interfaceId}/subscriptions/${subId}/test`, { method: 'POST' });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function rotateInterfaceApiKey(interfaceId: string): Promise<{ apiKey: string; apiKeyPrefix: string }> {
+  const res = await authFetch(`${API_BASE}/admin/interfaces/${interfaceId}/api-key/rotate`, { method: 'POST' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `API error: ${res.status}`);
+  }
+  return res.json();
+}
+
+export interface InterfaceStats {
+  interfaceId: string;
+  last24hTotal: number;
+  last24hSuccess: number;
+  last24hSuccessRate: number | null;
+  lastDeliveryAt: number | null;
+  lastDeliveryStatus: string | null;
+  daily: { dayOffset: number; total: number; success: number; failed: number }[];
+  activeSubscribers?: number;
+  lastPullAt?: number | null;
+}
+
+export async function fetchInterfaceStats(interfaceId: string): Promise<InterfaceStats> {
+  const res = await authFetch(`${API_BASE}/admin/interfaces/${interfaceId}/stats`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export interface UsageExample {
+  label: string;
+  language: string;
+  code: string;
+}
+
+export interface UsageExamples {
+  oneShot: UsageExample[];
+  subscribe: UsageExample[];
+  webhook: UsageExample[];
+}
+
+export async function fetchInterfaceUsageExamples(interfaceId: string): Promise<UsageExamples> {
+  const res = await authFetch(`${API_BASE}/admin/interfaces/${interfaceId}/usage-examples`);
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }

@@ -382,7 +382,11 @@ def _build_violation_context(violation, drone: dict | None, zone: dict | None,
 
 def dispatch_violation_event(app, tenant_id: str, trigger_type: str,
                              violation, drone: dict | None, zone: dict | None) -> None:
-    """Find all enabled rules matching tenant/zone/trigger and fire them."""
+    """Find all enabled rules matching tenant/zone/trigger and fire them.
+
+    Supports both `webhook` (single fixed target) and `subscription`
+    (broadcast to all registered subscribers) interface types.
+    """
     from models import AlarmRule, Tenant
 
     tenant = Tenant.query.get(tenant_id)
@@ -404,8 +408,6 @@ def dispatch_violation_event(app, tenant_id: str, trigger_type: str,
             continue
         if not rule.interface or not rule.interface.enabled:
             continue
-        if rule.interface.interface_type != "webhook":
-            continue
         # Filter check
         f = rule.filters or {}
         if f.get("drone_source") and f["drone_source"] != drone_source:
@@ -413,8 +415,14 @@ def dispatch_violation_event(app, tenant_id: str, trigger_type: str,
         min_alt = f.get("min_altitude")
         if min_alt is not None and (drone or {}).get("altitude", 0) < min_alt:
             continue
-        _dispatch_async(app, rule.interface_id, copy.deepcopy(ctx),
-                        trigger_type, rule.id, getattr(violation, "id", None))
+
+        if rule.interface.interface_type == "webhook":
+            _dispatch_async(app, rule.interface_id, copy.deepcopy(ctx),
+                            trigger_type, rule.id, getattr(violation, "id", None))
+        elif rule.interface.interface_type == "subscription":
+            _dispatch_subscription_async(app, rule.interface_id, copy.deepcopy(ctx),
+                                         trigger_type, rule.id, getattr(violation, "id", None))
+        # pull_out / pull_in do not push on violations.
 
 
 # ---------------------------------------------------------------------------
@@ -473,3 +481,305 @@ def start_pull_out_worker(app, *, tick_seconds: int = 30) -> threading.Thread:
 
 def stop_pull_out_worker() -> None:
     _pull_out_stop.set()
+
+
+# ---------------------------------------------------------------------------
+# Subscription broadcast
+# ---------------------------------------------------------------------------
+
+import hmac as _hmac
+
+
+def _push_to_subscriber(interface, subscription, payload: dict, *,
+                        trigger_type: str, rule_id: str | None,
+                        violation_id: str | None) -> dict:
+    """One HTTP POST to a single subscriber's callback URL, signed with
+    HMAC-SHA256(secret, body). Records an AlarmDelivery row keyed to the
+    interface (subscription id is embedded in the trigger_type for filtering).
+    """
+    from database import db
+    from models import AlarmDelivery
+
+    body = json.dumps(payload, separators=(",", ":"), default=str).encode()
+    sig = _hmac.new(subscription.secret.encode(), body, hashlib.sha256).hexdigest()
+    headers = {
+        "Content-Type": "application/json",
+        "X-FlightArc-Signature": f"sha256={sig}",
+        "X-FlightArc-Subscription-Id": subscription.id,
+    }
+
+    delivery = AlarmDelivery(
+        tenant_id=interface.tenant_id,
+        rule_id=rule_id,
+        interface_id=interface.id,
+        violation_id=violation_id,
+        trigger_type=f"{trigger_type}/sub:{subscription.id}",
+        status="pending",
+        request_payload=payload,
+        started_at=time.time(),
+    )
+    db.session.add(delivery)
+    db.session.commit()
+
+    subscription.last_attempt_at = time.time()
+    try:
+        resp = requests.post(
+            subscription.callback_url,
+            data=body, headers=headers,
+            timeout=interface.timeout_seconds or 10,
+        )
+        delivery.http_status = resp.status_code
+        delivery.response_status = resp.status_code
+        delivery.response_body = _truncate(resp.text)
+        delivery.completed_at = time.time()
+        if 200 <= resp.status_code < 300:
+            delivery.status = "success"
+            subscription.last_success_at = time.time()
+            subscription.last_error = None
+            subscription.fail_count = 0
+            db.session.commit()
+            return {"ok": True, "status": resp.status_code}
+        delivery.status = "failed"
+        delivery.error = f"HTTP {resp.status_code}"
+        subscription.last_error = delivery.error
+        subscription.fail_count += 1
+        db.session.commit()
+        return {"ok": False, "status": resp.status_code}
+    except requests.RequestException as exc:
+        delivery.status = "failed"
+        delivery.error = f"{exc.__class__.__name__}: {exc}"
+        delivery.completed_at = time.time()
+        subscription.last_error = delivery.error
+        subscription.fail_count += 1
+        db.session.commit()
+        return {"ok": False, "error": str(exc)}
+
+
+def _dispatch_subscription_async(app, interface_id: str, ctx: dict, trigger_type: str,
+                                  rule_id: str | None, violation_id: str | None) -> None:
+    """Render once, fan out to every active subscriber on this channel."""
+    def _run():
+        with app.app_context():
+            from models import AlarmInterface, AlarmSubscription
+            iface = AlarmInterface.query.get(interface_id)
+            if not iface or not iface.enabled:
+                return
+            subs = AlarmSubscription.query.filter_by(interface_id=iface.id, revoked_at=None).all()
+            if not subs:
+                return
+            payload = render_payload(iface.payload_template or {}, ctx)
+            for sub in subs:
+                try:
+                    _push_to_subscriber(iface, sub, payload,
+                                        trigger_type=trigger_type,
+                                        rule_id=rule_id, violation_id=violation_id)
+                except Exception as exc:
+                    logger.exception("subscription push crashed sub=%s: %s", sub.id, exc)
+    _executor.submit(_run)
+
+
+def push_subscription_test(interface, ctx: dict | None = None) -> list[dict]:
+    """Synchronous variant for the admin „Test"-Knopf — pushes once to every
+    active subscriber and returns a per-subscriber result list."""
+    from models import AlarmSubscription
+    if ctx is None:
+        ctx = build_example_context()
+        ctx["trigger"] = "manual_test"
+    subs = AlarmSubscription.query.filter_by(interface_id=interface.id, revoked_at=None).all()
+    payload = render_payload(interface.payload_template or {}, ctx)
+    out = []
+    for sub in subs:
+        result = _push_to_subscriber(interface, sub, payload,
+                                     trigger_type="manual_test",
+                                     rule_id=None, violation_id=None)
+        out.append({"subscriptionId": sub.id, "name": sub.name,
+                    "callbackUrl": sub.callback_url, **result})
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Stats — 24h success rate, 7d trend, last delivery
+# ---------------------------------------------------------------------------
+
+def build_interface_stats(interface_id: str, tenant_id: str) -> dict:
+    """24h success/total counts, last delivery, 7d daily breakdown.
+
+    Cheap query: scans alarm_deliveries by interface_id within the last 7 days.
+    Pull-In stats come from ServiceToken.last_used_at (tracked elsewhere).
+    """
+    from models import AlarmDelivery, AlarmInterface, AlarmSubscription, ServiceToken
+
+    iface = AlarmInterface.query.filter_by(id=interface_id, tenant_id=tenant_id).first()
+    if not iface:
+        return {}
+
+    now = time.time()
+    cutoff_24h = now - 24 * 3600
+    cutoff_7d = now - 7 * 86400
+
+    rows = (AlarmDelivery.query
+            .filter_by(interface_id=interface_id, tenant_id=tenant_id)
+            .filter(AlarmDelivery.started_at >= cutoff_7d)
+            .all())
+
+    last24 = [r for r in rows if r.started_at >= cutoff_24h]
+    success24 = sum(1 for r in last24 if r.status == "success")
+
+    # 7d daily buckets (today is bucket 6 = last)
+    daily: list[dict] = []
+    for i in range(7):
+        bucket_start = now - (6 - i) * 86400 - (now % 86400)
+        bucket_end = bucket_start + 86400
+        in_bucket = [r for r in rows if bucket_start <= r.started_at < bucket_end]
+        ok = sum(1 for r in in_bucket if r.status == "success")
+        daily.append({
+            "dayOffset": -(6 - i),
+            "total": len(in_bucket),
+            "success": ok,
+            "failed": len(in_bucket) - ok,
+        })
+
+    last_delivery = max(rows, key=lambda r: r.started_at, default=None)
+
+    out: dict = {
+        "interfaceId": interface_id,
+        "last24hTotal": len(last24),
+        "last24hSuccess": success24,
+        "last24hSuccessRate": (success24 / len(last24)) if last24 else None,
+        "lastDeliveryAt": last_delivery.started_at if last_delivery else None,
+        "lastDeliveryStatus": last_delivery.status if last_delivery else None,
+        "daily": daily,
+    }
+
+    if iface.interface_type == "subscription":
+        active_subs = AlarmSubscription.query.filter_by(
+            interface_id=interface_id, revoked_at=None
+        ).count()
+        out["activeSubscribers"] = active_subs
+
+    if iface.interface_type == "pull_in" and iface.service_token_id:
+        st = ServiceToken.query.get(iface.service_token_id)
+        if st:
+            out["lastPullAt"] = st.last_used_at
+
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Usage examples — ready-to-copy snippets shown in the admin UI
+# ---------------------------------------------------------------------------
+
+def build_usage_examples(interface, *, request_origin: str) -> dict:
+    """Return curl / python / JS snippets per interface type.
+
+    `request_origin` is e.g. "https://hub.dasilvafelix.de" — taken from the
+    incoming request so the examples reflect the actual public URL.
+    """
+    base = request_origin.rstrip("/")
+    examples: dict[str, list[dict]] = {"oneShot": [], "subscribe": [], "webhook": []}
+
+    if interface.interface_type == "pull_in":
+        url = f"{base}/api/integrations/violations"
+        examples["oneShot"] = [
+            {"label": "curl",
+             "language": "bash",
+             "code": (
+                f"curl -H 'X-Service-Token: <DEIN_TOKEN>' \\\n"
+                f"     '{url}'"
+             )},
+            {"label": "Python (requests)",
+             "language": "python",
+             "code": (
+                "import requests\n"
+                f"r = requests.get('{url}',\n"
+                "    headers={'X-Service-Token': '<DEIN_TOKEN>'}, timeout=10)\n"
+                "for v in r.json()['active']:\n"
+                "    print(v['drone_id'], v['zone_name'])"
+             )},
+            {"label": "JavaScript (fetch)",
+             "language": "javascript",
+             "code": (
+                f"const res = await fetch('{url}', {{\n"
+                f"  headers: {{ 'X-Service-Token': '<DEIN_TOKEN>' }}\n"
+                f"}});\n"
+                f"const data = await res.json();\n"
+                f"console.log(data.active);"
+             )},
+        ]
+
+    if interface.interface_type == "subscription":
+        register_url = f"{base}/api/integrations/subscriptions/{interface.id}/register"
+        list_url = f"{base}/api/integrations/subscriptions/{interface.id}"
+        examples["subscribe"] = [
+            {"label": "1. Registrieren (curl)",
+             "language": "bash",
+             "code": (
+                f"curl -X POST '{register_url}' \\\n"
+                f"     -H 'X-API-Key: <KANAL_API_KEY>' \\\n"
+                f"     -H 'Content-Type: application/json' \\\n"
+                f"     -d '{{\"callback_url\": \"https://meinservice.example.com/flightarc-events\", \"name\": \"Mein Service\"}}'"
+             )},
+            {"label": "1. Registrieren (Python)",
+             "language": "python",
+             "code": (
+                "import requests\n"
+                f"r = requests.post('{register_url}',\n"
+                "    headers={'X-API-Key': '<KANAL_API_KEY>'},\n"
+                "    json={'callback_url': 'https://meinservice.example.com/flightarc-events',\n"
+                "          'name': 'Mein Service'})\n"
+                "sub = r.json()  # enthält id + secret — dauerhaft speichern!\n"
+                "print(sub['id'], sub['secret'])"
+             )},
+            {"label": "2. Empfangen + Signatur prüfen (Flask)",
+             "language": "python",
+             "code": (
+                "import hmac, hashlib\n"
+                "from flask import Flask, request, abort\n"
+                "app = Flask(__name__)\n"
+                "SECRET = '<bei_registrierung_erhaltenes_secret>'\n\n"
+                "@app.post('/flightarc-events')\n"
+                "def recv():\n"
+                "    sig = request.headers.get('X-FlightArc-Signature', '').replace('sha256=', '')\n"
+                "    expected = hmac.new(SECRET.encode(), request.data, hashlib.sha256).hexdigest()\n"
+                "    if not hmac.compare_digest(sig, expected):\n"
+                "        abort(401)\n"
+                "    print(request.json)\n"
+                "    return '', 204"
+             )},
+            {"label": "3. Eigene Subscriptions auflisten",
+             "language": "bash",
+             "code": (
+                f"curl -H 'X-API-Key: <KANAL_API_KEY>' \\\n"
+                f"     '{list_url}'"
+             )},
+            {"label": "4. Abmelden",
+             "language": "bash",
+             "code": (
+                f"curl -X DELETE -H 'X-API-Key: <KANAL_API_KEY>' \\\n"
+                f"     '{base}/api/integrations/subscriptions/{interface.id}/<SUBSCRIPTION_ID>'"
+             )},
+        ]
+
+    if interface.interface_type in ("webhook", "subscription"):
+        # Show what the receiving service will see in their callback handler
+        examples["webhook"] = [
+            {"label": "Beispiel-Empfangshandler (Express.js)",
+             "language": "javascript",
+             "code": (
+                "const crypto = require('crypto');\n"
+                "const SECRET = '<bei_registrierung_erhaltenes_secret>';  // nur subscription\n\n"
+                "app.post('/flightarc-events', express.raw({ type: 'application/json' }), (req, res) => {\n"
+                "  const sig = (req.headers['x-flightarc-signature'] || '').replace('sha256=', '');\n"
+                "  const expected = crypto.createHmac('sha256', SECRET).update(req.body).digest('hex');\n"
+                "  if (sig && !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {\n"
+                "    return res.sendStatus(401);\n"
+                "  }\n"
+                "  const event = JSON.parse(req.body);\n"
+                "  console.log(event);\n"
+                "  res.sendStatus(204);\n"
+                "});"
+             )},
+        ]
+
+    return examples
+

@@ -248,6 +248,28 @@ MIGRATIONS: list[dict[str, Any]] = [
             "CREATE INDEX IF NOT EXISTS idx_alarm_deliveries_started ON alarm_deliveries(started_at)",
         ],
     },
+    {
+        "version": "016_alarm_subscriptions",
+        "description": "Subscription-typed interfaces: api_key on alarm_interfaces, alarm_subscriptions table",
+        "statements": [
+            "ALTER TABLE alarm_interfaces ADD COLUMN api_key_hash VARCHAR(64)",
+            "ALTER TABLE alarm_interfaces ADD COLUMN api_key_prefix VARCHAR(12)",
+            """CREATE TABLE IF NOT EXISTS alarm_subscriptions (
+                id VARCHAR(8) PRIMARY KEY,
+                interface_id VARCHAR(8) NOT NULL REFERENCES alarm_interfaces(id) ON DELETE CASCADE,
+                name VARCHAR(100),
+                callback_url VARCHAR(500) NOT NULL,
+                secret VARCHAR(64) NOT NULL,
+                created_at REAL NOT NULL,
+                last_success_at REAL,
+                last_attempt_at REAL,
+                last_error TEXT,
+                fail_count INTEGER DEFAULT 0 NOT NULL,
+                revoked_at REAL
+            )""",
+            "CREATE INDEX IF NOT EXISTS idx_alarm_subs_interface ON alarm_subscriptions(interface_id)",
+        ],
+    },
 ]
 
 

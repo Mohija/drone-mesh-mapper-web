@@ -573,7 +573,7 @@ class AlarmInterface(db.Model):
     """
     __tablename__ = "alarm_interfaces"
 
-    VALID_TYPES = {"webhook", "pull_out", "pull_in"}
+    VALID_TYPES = {"webhook", "pull_out", "pull_in", "subscription"}
     VALID_AUTH_TYPES = {"none", "basic", "bearer", "api_key_header", "api_key_query"}
 
     id = db.Column(db.String(8), primary_key=True, default=_uuid8)
@@ -599,6 +599,11 @@ class AlarmInterface(db.Model):
     pull_interval_seconds = db.Column(db.Integer, default=60, nullable=True)  # pull_out only
     service_token_id = db.Column(db.String(8), db.ForeignKey("service_tokens.id", ondelete="SET NULL"), nullable=True)  # pull_in only
 
+    # Subscription behaviour: third parties register their callback URL with
+    # this api_key, then receive every event broadcast on this channel.
+    api_key_hash = db.Column(db.String(64), nullable=True)        # sha256 of raw key
+    api_key_prefix = db.Column(db.String(12), nullable=True)      # for UI identification
+
     # Payload template — JSON tree where string leaves can contain {{mustache}} tokens.
     # Renders against a context dict {drone, zone, violation, tenant, system}.
     payload_template = db.Column(JSON, nullable=True)
@@ -609,6 +614,7 @@ class AlarmInterface(db.Model):
 
     rules = db.relationship("AlarmRule", backref="interface", cascade="all, delete-orphan", lazy=True)
     deliveries = db.relationship("AlarmDelivery", backref="interface", cascade="all, delete-orphan", lazy=True)
+    subscriptions = db.relationship("AlarmSubscription", backref="interface", cascade="all, delete-orphan", lazy=True)
 
     def to_dict(self, *, reveal_secrets: bool = False, raw_pull_token: str | None = None):
         from services.alarm_dispatcher import decrypt_auth_config
@@ -632,11 +638,51 @@ class AlarmInterface(db.Model):
             "authConfig": auth_config,
             "pullIntervalSeconds": self.pull_interval_seconds,
             "serviceTokenId": self.service_token_id,
+            "apiKeyPrefix": self.api_key_prefix,
+            "hasApiKey": bool(self.api_key_hash),
             "payloadTemplate": self.payload_template,
             "createdAt": self.created_at,
             "updatedAt": self.updated_at,
             "createdBy": self.created_by,
             **({"pullToken": raw_pull_token} if raw_pull_token else {}),
+        }
+
+
+class AlarmSubscription(db.Model):
+    """One subscriber on a `subscription`-typed interface.
+
+    The third party registers a callback URL using the channel's api_key and
+    receives every event published on the channel. We sign every push with
+    the per-subscription `secret` (HMAC-SHA256 in the X-FlightArc-Signature
+    header) so the receiver can verify it actually came from us.
+    """
+    __tablename__ = "alarm_subscriptions"
+
+    id = db.Column(db.String(8), primary_key=True, default=_uuid8)
+    interface_id = db.Column(db.String(8), db.ForeignKey("alarm_interfaces.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = db.Column(db.String(100), nullable=True)
+    callback_url = db.Column(db.String(500), nullable=False)
+    secret = db.Column(db.String(64), nullable=False)              # raw hex; we never display it after registration
+    created_at = db.Column(db.Float, default=_now, nullable=False)
+    last_success_at = db.Column(db.Float, nullable=True)
+    last_attempt_at = db.Column(db.Float, nullable=True)
+    last_error = db.Column(db.Text, nullable=True)
+    fail_count = db.Column(db.Integer, default=0, nullable=False)
+    revoked_at = db.Column(db.Float, nullable=True)
+
+    def to_dict(self, *, include_secret: bool = False):
+        return {
+            "id": self.id,
+            "interfaceId": self.interface_id,
+            "name": self.name,
+            "callbackUrl": self.callback_url,
+            "createdAt": self.created_at,
+            "lastSuccessAt": self.last_success_at,
+            "lastAttemptAt": self.last_attempt_at,
+            "lastError": self.last_error,
+            "failCount": self.fail_count,
+            "revokedAt": self.revoked_at,
+            **({"secret": self.secret} if include_secret else {}),
         }
 
 

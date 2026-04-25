@@ -109,6 +109,94 @@ test.describe('Alarm Interfaces — API + UI smoke', () => {
     await expect(page.locator('h1:has-text("Alarmverwaltung")')).toBeVisible({ timeout: 10000 });
   });
 
+  test('Templates: list endpoint returns curated entries', async ({ request }) => {
+    const res = await request.get(`${API}/api/admin/interfaces/templates`, { headers: authHeaders });
+    expect(res.status()).toBe(200);
+    const body = await res.json();
+    const ids = body.items.map((t: { id: string }) => t.id);
+    expect(ids).toContain('alamos_fe2');
+    expect(ids).toContain('slack_webhook');
+    expect(ids).toContain('subscription_starter');
+  });
+
+  test('Subscription channel: create + register + signed push', async ({ request }) => {
+    const uid = Date.now().toString(36);
+    // Create channel
+    const create = await request.post(`${API}/api/admin/interfaces`, {
+      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+      data: {
+        name: `E2E-Sub-${uid}`,
+        interfaceType: 'subscription',
+        authType: 'none',
+        payloadTemplate: { event: '{{trigger}}' },
+        enabled: true,
+      },
+    });
+    expect(create.status()).toBe(201);
+    const channel = await create.json();
+    expect(channel.apiKey).toMatch(/^flightarc_chan_/);
+
+    // Register a subscriber
+    const reg = await request.post(`${API}/api/integrations/subscriptions/${channel.id}/register`, {
+      headers: { 'X-API-Key': channel.apiKey, 'Content-Type': 'application/json' },
+      data: { callback_url: 'https://httpbin.org/post', name: 'E2E-Sub' },
+    });
+    expect(reg.status()).toBe(201);
+    const sub = await reg.json();
+    expect(sub.secret).toBeTruthy();
+
+    // Bad key rejected
+    const bad = await request.post(`${API}/api/integrations/subscriptions/${channel.id}/register`, {
+      headers: { 'X-API-Key': 'wrong', 'Content-Type': 'application/json' },
+      data: { callback_url: 'https://httpbin.org/post' },
+    });
+    expect(bad.status()).toBe(401);
+
+    // Admin sees the subscriber
+    const list = await request.get(`${API}/api/admin/interfaces/${channel.id}/subscriptions`,
+      { headers: authHeaders });
+    expect(list.status()).toBe(200);
+    expect((await list.json()).items.length).toBe(1);
+
+    await request.delete(`${API}/api/admin/interfaces/${channel.id}`, { headers: authHeaders });
+  });
+
+  test('Usage examples: contains language-tagged code snippets', async ({ request }) => {
+    const create = await request.post(`${API}/api/admin/interfaces`, {
+      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+      data: {
+        name: `E2E-Examples-${Date.now().toString(36)}`,
+        interfaceType: 'subscription',
+        authType: 'none',
+        payloadTemplate: {},
+      },
+    });
+    const id = (await create.json()).id;
+    const res = await request.get(`${API}/api/admin/interfaces/${id}/usage-examples`,
+      { headers: authHeaders });
+    expect(res.status()).toBe(200);
+    const body = await res.json();
+    expect(body.subscribe.length).toBeGreaterThan(0);
+    expect(body.webhook.length).toBeGreaterThan(0);
+    const langs = body.subscribe.map((s: { language: string }) => s.language);
+    expect(new Set(langs)).toEqual(new Set(['bash', 'python']));
+    await request.delete(`${API}/api/admin/interfaces/${id}`, { headers: authHeaders });
+  });
+
+  test('Stats endpoint returns 7d daily buckets', async ({ request }) => {
+    const create = await request.post(`${API}/api/admin/interfaces`, {
+      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+      data: { name: `E2E-Stats-${Date.now().toString(36)}`, interfaceType: 'webhook',
+              url: 'https://httpbin.org/post', authType: 'none', payloadTemplate: {} },
+    });
+    const id = (await create.json()).id;
+    const res = await request.get(`${API}/api/admin/interfaces/${id}/stats`, { headers: authHeaders });
+    const body = await res.json();
+    expect(body.daily.length).toBe(7);
+    expect(body.last24hTotal).toBe(0);
+    await request.delete(`${API}/api/admin/interfaces/${id}`, { headers: authHeaders });
+  });
+
   test('UI: payload builder mode toggle renders DnD palette', async ({ page }) => {
     await page.goto(`${API}/login`);
     await page.fill('[data-testid="login-username"]', 'admin');

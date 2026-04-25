@@ -1336,19 +1336,60 @@ function SectionInterfaces() {
         beschreibt, <em>wohin</em> die Daten gehen und <em>wie sie aufgebaut sind</em>. Welche Zone
         welche Schnittstelle auslöst, regelt die <strong>Alarmverwaltung</strong>.
       </p>
-      <h3>Drei Typen</h3>
+      <h3>Vier Typen</h3>
       <ul>
         <li><strong>Webhook (Push)</strong> — FlightArc sendet bei Verstößen einen HTTP-Request mit
           dem von dir konfigurierten Payload. Klassischer Anwendungsfall: Slack-Webhook,
           Teams-Webhook, Alarmserver einer Leitstelle.</li>
         <li><strong>Pull-Out</strong> — FlightArc fragt periodisch eine externe URL ab
-          (Konfigurations-Polling, Liveness-Check). Phase 1 macht nur einen Request alle X Sekunden
-          und protokolliert den Status.</li>
+          (Konfigurations-Polling, Liveness-Check).</li>
         <li><strong>Pull-In</strong> — Das Drittsystem holt sich Verstöße bei FlightArc ab. Beim
           Speichern wird einmalig ein Service-Token angezeigt, den du im Drittsystem als
-          <code>X-Service-Token</code>-Header hinterlegst. Endpoint: <code>/api/integrations/violations</code>.
-          Liefert aktive plus die letzten 24 h beendeten Verstöße.</li>
+          <code>X-Service-Token</code>-Header hinterlegst. Endpoint:
+          <code>/api/integrations/violations</code>. Liefert aktive plus die letzten 24 h
+          beendeten Verstöße.</li>
+        <li><strong>Subscription (Pub/Sub)</strong> — der flexibelste Typ: beim Speichern wird
+          ein <strong>API-Key</strong> erzeugt. Beliebig viele Drittsysteme können sich am
+          Channel registrieren (POST <code>/api/integrations/subscriptions/&lt;id&gt;/register</code>
+          mit <code>X-API-Key</code>-Header und Callback-URL). FlightArc pusht jedes Event
+          automatisch an alle aktiven Subscriber, jeder Push wird mit
+          HMAC-SHA256 (<code>X-FlightArc-Signature</code>) signiert. Subscriber können sich
+          selbst wieder abmelden, der Admin sieht alle aktiven Subscriber im Tab
+          „Abonnenten" mit Last-Success / Fehlerzähler / Test-Push pro Subscriber.</li>
       </ul>
+      <h3>Vorlagen</h3>
+      <p>
+        Über den Knopf <strong>Aus Vorlage…</strong> oben rechts in der Schnittstellen-Liste
+        kannst du eine vorgefertigte Konfiguration in einem Klick anlegen. Aktuell verfügbar:
+        Alamos FE2 (Externe Schnittstelle), Slack-Webhook, Discord-Webhook,
+        MS Teams Adaptive Card, Generic-JSON, Subscription-Starter. Die neue
+        Schnittstelle wird deaktiviert angelegt — URL und Auth-Daten musst du noch ergänzen.
+      </p>
+      <h3>Beispiel-Code zum Kopieren</h3>
+      <p>
+        Im Tab <strong>Beispiele</strong> einer Schnittstelle generiert FlightArc fertige
+        Code-Snippets passend zum Typ — curl, Python (requests / Flask) und JavaScript
+        (fetch / Express) — die du mit einem Klick kopieren kannst. Bei Subscriptions
+        sind sowohl die Registrierung als auch ein Empfangs-Handler mit
+        Signatur-Verifikation enthalten.
+      </p>
+      <h3>Health-Monitoring</h3>
+      <p>
+        In jeder Schnittstellen-Karte zeigen wir kompakte Stats: 24h-Erfolgsrate als
+        Bruch (z.B. „47/50"), letzte Lieferung mit Zeit-Differenz und Status,
+        Subscriber-Anzahl bei Subscription-Channels, letzter Pull-Zeitpunkt bei Pull-In.
+        Daneben eine 7-Tage-Sparkline (grün = erfolgreich, rot = fehlgeschlagen).
+        Bei Subscriptions hat zusätzlich jeder Subscriber einen eigenen Health-Indikator
+        und einen <strong>Test-Push</strong>-Knopf — falls eine Callback-URL stirbt, kannst
+        du sie als Admin direkt revoken, ohne den ganzen Channel anfassen zu müssen.
+      </p>
+      <h3>Drag-and-Drop-Import</h3>
+      <p>
+        Eine zuvor exportierte Schnittstelle kannst du per Drag-and-Drop einer JSON-Datei
+        direkt auf die Schnittstellen-Liste fallen lassen — der Importer öffnet die
+        gestrichelte Drop-Zone visuell sobald eine Datei darüber schwebt. Geheimnisse
+        sind in Exports nicht enthalten und müssen nach dem Import erneut hinterlegt werden.
+      </p>
       <h3>Authentifizierung</h3>
       <p>
         Pro Schnittstelle wählbar: <strong>Bearer-Token</strong>, <strong>Basic Auth</strong>,

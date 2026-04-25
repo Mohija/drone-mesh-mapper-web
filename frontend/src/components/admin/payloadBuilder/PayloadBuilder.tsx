@@ -20,6 +20,7 @@ import {
   updateObjectEntry,
 } from './types';
 import type { VariablePoolEntry } from '../../../api';
+import { useIsMobile } from '../../../useIsMobile';
 
 interface Props {
   value: unknown;                                  // the JSON template the editor binds to
@@ -53,6 +54,7 @@ export default function PayloadBuilder({ value, onChange, variables, exampleCont
   const [tree, setTree] = useState<PayloadNode>(() => fromJson(value));
   const [search, setSearch] = useState('');
   const [activeDrag, setActiveDrag] = useState<DragData | null>(null);
+  const isMobile = useIsMobile();
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -113,7 +115,8 @@ export default function PayloadBuilder({ value, onChange, variables, exampleCont
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div style={{
-        display: 'grid', gap: 12, gridTemplateColumns: '220px 1fr 280px',
+        display: 'grid', gap: 12,
+        gridTemplateColumns: isMobile ? '1fr' : '220px 1fr 280px',
         minHeight: 360,
       }}>
         {/* Variable palette */}
