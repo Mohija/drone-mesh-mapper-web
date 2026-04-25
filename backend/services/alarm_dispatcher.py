@@ -252,6 +252,91 @@ def _truncate(text: str, limit: int = _RESPONSE_BODY_LIMIT) -> str:
     return text[:limit] + f"\n…[truncated, original {len(text)} bytes]"
 
 
+def _resolve_json_path(body_text: str, path: str) -> tuple[bool, object]:
+    """Look up a dotted path in a JSON body. Returns (found, value).
+
+    Supports simple dot notation: `data.acknowledged`, `result.0.status`.
+    Numeric segments index into arrays. Errors return (False, None) so the
+    caller can decide what to do.
+    """
+    try:
+        node: object = json.loads(body_text or "null")
+    except (json.JSONDecodeError, ValueError):
+        return False, None
+    for seg in path.split("."):
+        if seg == "":
+            continue
+        if isinstance(node, list):
+            try:
+                idx = int(seg)
+                node = node[idx]
+            except (ValueError, IndexError):
+                return False, None
+        elif isinstance(node, dict):
+            if seg not in node:
+                return False, None
+            node = node[seg]
+        else:
+            return False, None
+    return True, node
+
+
+def evaluate_response_mapping(mapping: dict | None, http_status: int | None,
+                              body_text: str) -> dict:
+    """Apply a user-defined success rule to an HTTP response.
+
+    Mapping shape (all optional):
+      {
+        "status_codes": [200, 204],          # success requires one of these
+        "json_path": "acknowledged",          # nested key (dot notation)
+        "expected_value": true,               # exact-equality match
+        "fail_on_path": "error",              # if present + truthy → failure
+      }
+
+    The default (no mapping) is "any 2xx → success".
+
+    Returns: {"ok": bool, "reason": str, "extracted": value-or-None}
+    """
+    base_ok = http_status is not None and 200 <= http_status < 300
+    if not mapping:
+        return {"ok": base_ok, "reason": f"HTTP {http_status}", "extracted": None}
+
+    # Status-code allowlist takes precedence over the default 2xx range
+    codes = mapping.get("status_codes")
+    status_ok = (http_status in codes) if isinstance(codes, list) and codes else base_ok
+    if not status_ok:
+        return {"ok": False, "reason": f"HTTP {http_status} not in {codes or '[200..299]'}",
+                "extracted": None}
+
+    # Optional fail-on-path: presence of a truthy value flips us to failure
+    fail_path = mapping.get("fail_on_path")
+    if isinstance(fail_path, str) and fail_path:
+        found, val = _resolve_json_path(body_text, fail_path)
+        if found and val:
+            return {"ok": False, "reason": f"fail_on_path matched: {fail_path}={val!r}",
+                    "extracted": val}
+
+    # Optional expected value at json_path
+    json_path = mapping.get("json_path")
+    if isinstance(json_path, str) and json_path:
+        found, val = _resolve_json_path(body_text, json_path)
+        if "expected_value" in mapping:
+            expected = mapping["expected_value"]
+            if not found:
+                return {"ok": False, "reason": f"json_path missing: {json_path}",
+                        "extracted": None}
+            if val != expected:
+                return {"ok": False, "reason": f"json_path {json_path}={val!r}, expected {expected!r}",
+                        "extracted": val}
+            return {"ok": True, "reason": f"json_path {json_path}={val!r} matched",
+                    "extracted": val}
+        # No expected_value → just record the extracted value, status decides success
+        return {"ok": True, "reason": f"HTTP {http_status} (extracted {json_path}={val!r})",
+                "extracted": val}
+
+    return {"ok": True, "reason": f"HTTP {http_status}", "extracted": None}
+
+
 def send_request(interface, ctx: dict, *, trigger_type: str, rule_id: str | None,
                  violation_id: str | None) -> dict:
     """Send one HTTP request, log delivery, retry up to retry_max times.
@@ -302,16 +387,32 @@ def send_request(interface, ctx: dict, *, trigger_type: str, rule_id: str | None
             delivery.response_status = resp.status_code
             delivery.response_body = _truncate(resp.text)
             delivery.completed_at = time.time()
-            if 200 <= resp.status_code < 300:
+
+            # Apply user-defined response mapping (pull_out only — webhook
+            # uses raw HTTP status). Mapping is None for non-pull-out flows.
+            if interface.interface_type == "pull_out" and interface.response_mapping:
+                evaluated = evaluate_response_mapping(
+                    interface.response_mapping, resp.status_code, resp.text or ""
+                )
+            else:
+                evaluated = {
+                    "ok": 200 <= resp.status_code < 300,
+                    "reason": f"HTTP {resp.status_code}",
+                    "extracted": None,
+                }
+
+            if evaluated["ok"]:
                 delivery.status = "success"
                 db.session.commit()
-                logger.info("alarm dispatch ok interface=%s status=%s attempt=%s",
-                            interface.id, resp.status_code, attempt)
-                return {"ok": True, "status": resp.status_code, "body": delivery.response_body}
+                logger.info("alarm dispatch ok interface=%s status=%s attempt=%s reason=%s",
+                            interface.id, resp.status_code, attempt, evaluated["reason"])
+                return {"ok": True, "status": resp.status_code, "body": delivery.response_body,
+                        "extracted": evaluated.get("extracted")}
             delivery.status = "failed" if attempt >= interface.retry_max else "retrying"
-            delivery.error = f"HTTP {resp.status_code}"
+            delivery.error = evaluated["reason"]
             db.session.commit()
-            last_result = {"ok": False, "status": resp.status_code, "body": delivery.response_body}
+            last_result = {"ok": False, "status": resp.status_code, "body": delivery.response_body,
+                           "reason": evaluated["reason"]}
         except requests.RequestException as exc:
             delivery.status = "failed" if attempt >= interface.retry_max else "retrying"
             delivery.error = f"{exc.__class__.__name__}: {exc}"
@@ -512,8 +613,9 @@ def _push_to_subscriber(interface, subscription, payload: dict, *,
         tenant_id=interface.tenant_id,
         rule_id=rule_id,
         interface_id=interface.id,
+        subscription_id=subscription.id,
         violation_id=violation_id,
-        trigger_type=f"{trigger_type}/sub:{subscription.id}",
+        trigger_type=trigger_type,
         status="pending",
         request_payload=payload,
         started_at=time.time(),
@@ -705,6 +807,54 @@ def build_usage_examples(interface, *, request_origin: str) -> dict:
                 f"const data = await res.json();\n"
                 f"console.log(data.active);"
              )},
+            {"label": "Go (net/http)",
+             "language": "go",
+             "code": (
+                "package main\n\n"
+                "import (\n"
+                "    \"encoding/json\"\n"
+                "    \"fmt\"\n"
+                "    \"net/http\"\n"
+                ")\n\n"
+                "func main() {\n"
+                f"    req, _ := http.NewRequest(\"GET\", \"{url}\", nil)\n"
+                "    req.Header.Set(\"X-Service-Token\", \"<DEIN_TOKEN>\")\n"
+                "    resp, err := http.DefaultClient.Do(req)\n"
+                "    if err != nil { panic(err) }\n"
+                "    defer resp.Body.Close()\n"
+                "    var data struct{ Active []map[string]any `json:\"active\"` }\n"
+                "    json.NewDecoder(resp.Body).Decode(&data)\n"
+                "    for _, v := range data.Active {\n"
+                "        fmt.Println(v[\"drone_id\"], v[\"zone_name\"])\n"
+                "    }\n"
+                "}"
+             )},
+            {"label": "Rust (reqwest)",
+             "language": "rust",
+             "code": (
+                "use reqwest::blocking::Client;\n"
+                "use serde_json::Value;\n\n"
+                "fn main() -> Result<(), Box<dyn std::error::Error>> {\n"
+                f"    let body: Value = Client::new().get(\"{url}\")\n"
+                "        .header(\"X-Service-Token\", \"<DEIN_TOKEN>\")\n"
+                "        .send()?.json()?;\n"
+                "    for v in body[\"active\"].as_array().unwrap() {\n"
+                "        println!(\"{} {}\", v[\"drone_id\"], v[\"zone_name\"]);\n"
+                "    }\n"
+                "    Ok(())\n"
+                "}"
+             )},
+            {"label": "Ruby (Net::HTTP)",
+             "language": "ruby",
+             "code": (
+                "require 'net/http'\n"
+                "require 'json'\n\n"
+                f"uri = URI('{url}')\n"
+                "req = Net::HTTP::Get.new(uri)\n"
+                "req['X-Service-Token'] = '<DEIN_TOKEN>'\n"
+                "res = Net::HTTP.start(uri.hostname, uri.port, use_ssl: uri.scheme == 'https') { |h| h.request(req) }\n"
+                "JSON.parse(res.body)['active'].each { |v| puts \"#{v['drone_id']} #{v['zone_name']}\" }"
+             )},
         ]
 
     if interface.interface_type == "subscription":
@@ -758,12 +908,71 @@ def build_usage_examples(interface, *, request_origin: str) -> dict:
                 f"curl -X DELETE -H 'X-API-Key: <KANAL_API_KEY>' \\\n"
                 f"     '{base}/api/integrations/subscriptions/{interface.id}/<SUBSCRIPTION_ID>'"
              )},
+            {"label": "Registrieren (Go)",
+             "language": "go",
+             "code": (
+                "package main\n\n"
+                "import (\n"
+                "    \"bytes\"\n"
+                "    \"encoding/json\"\n"
+                "    \"fmt\"\n"
+                "    \"net/http\"\n"
+                ")\n\n"
+                "func main() {\n"
+                "    body, _ := json.Marshal(map[string]string{\n"
+                "        \"callback_url\": \"https://meinservice.example.com/flightarc-events\",\n"
+                "        \"name\":         \"Mein Service\",\n"
+                "    })\n"
+                f"    req, _ := http.NewRequest(\"POST\", \"{register_url}\", bytes.NewReader(body))\n"
+                "    req.Header.Set(\"X-API-Key\", \"<KANAL_API_KEY>\")\n"
+                "    req.Header.Set(\"Content-Type\", \"application/json\")\n"
+                "    resp, err := http.DefaultClient.Do(req)\n"
+                "    if err != nil { panic(err) }\n"
+                "    defer resp.Body.Close()\n"
+                "    var sub struct{ Id, Secret string }\n"
+                "    json.NewDecoder(resp.Body).Decode(&sub)\n"
+                "    fmt.Println(\"Subscription:\", sub.Id, \"Secret:\", sub.Secret)\n"
+                "}"
+             )},
+            {"label": "Registrieren (Rust)",
+             "language": "rust",
+             "code": (
+                "use reqwest::blocking::Client;\n"
+                "use serde_json::{json, Value};\n\n"
+                "fn main() -> Result<(), Box<dyn std::error::Error>> {\n"
+                f"    let res: Value = Client::new().post(\"{register_url}\")\n"
+                "        .header(\"X-API-Key\", \"<KANAL_API_KEY>\")\n"
+                "        .json(&json!({\n"
+                "            \"callback_url\": \"https://meinservice.example.com/flightarc-events\",\n"
+                "            \"name\": \"Mein Service\"\n"
+                "        }))\n"
+                "        .send()?.json()?;\n"
+                "    println!(\"id={} secret={}\", res[\"id\"], res[\"secret\"]);\n"
+                "    Ok(())\n"
+                "}"
+             )},
+            {"label": "Registrieren (Ruby)",
+             "language": "ruby",
+             "code": (
+                "require 'net/http'\n"
+                "require 'json'\n\n"
+                f"uri = URI('{register_url}')\n"
+                "req = Net::HTTP::Post.new(uri, 'X-API-Key' => '<KANAL_API_KEY>',\n"
+                "                                'Content-Type' => 'application/json')\n"
+                "req.body = { callback_url: 'https://meinservice.example.com/flightarc-events',\n"
+                "             name: 'Mein Service' }.to_json\n"
+                "res = Net::HTTP.start(uri.hostname, uri.port, use_ssl: uri.scheme == 'https') { |h| h.request(req) }\n"
+                "sub = JSON.parse(res.body)\n"
+                "puts \"id=#{sub['id']} secret=#{sub['secret']}\""
+             )},
         ]
 
     if interface.interface_type in ("webhook", "subscription"):
-        # Show what the receiving service will see in their callback handler
+        # Show what the receiving service will see in their callback handler.
+        # Subscriptions sign with HMAC-SHA256 using the per-subscription secret;
+        # plain webhooks have no signature so the verification block is optional.
         examples["webhook"] = [
-            {"label": "Beispiel-Empfangshandler (Express.js)",
+            {"label": "Empfangshandler (Express.js)",
              "language": "javascript",
              "code": (
                 "const crypto = require('crypto');\n"
@@ -778,6 +987,75 @@ def build_usage_examples(interface, *, request_origin: str) -> dict:
                 "  console.log(event);\n"
                 "  res.sendStatus(204);\n"
                 "});"
+             )},
+            {"label": "Empfangshandler (Go net/http)",
+             "language": "go",
+             "code": (
+                "package main\n\n"
+                "import (\n"
+                "    \"crypto/hmac\"\n"
+                "    \"crypto/sha256\"\n"
+                "    \"encoding/hex\"\n"
+                "    \"io\"\n"
+                "    \"net/http\"\n"
+                "    \"strings\"\n"
+                ")\n\n"
+                "const Secret = \"<bei_registrierung_erhaltenes_secret>\"\n\n"
+                "func handler(w http.ResponseWriter, r *http.Request) {\n"
+                "    body, _ := io.ReadAll(r.Body)\n"
+                "    sig := strings.TrimPrefix(r.Header.Get(\"X-FlightArc-Signature\"), \"sha256=\")\n"
+                "    mac := hmac.New(sha256.New, []byte(Secret))\n"
+                "    mac.Write(body)\n"
+                "    if !hmac.Equal([]byte(sig), []byte(hex.EncodeToString(mac.Sum(nil)))) {\n"
+                "        w.WriteHeader(http.StatusUnauthorized); return\n"
+                "    }\n"
+                "    // body enthält JSON-Event\n"
+                "    w.WriteHeader(http.StatusNoContent)\n"
+                "}\n\n"
+                "func main() {\n"
+                "    http.HandleFunc(\"/flightarc-events\", handler)\n"
+                "    http.ListenAndServe(\":8080\", nil)\n"
+                "}"
+             )},
+            {"label": "Empfangshandler (Rust axum)",
+             "language": "rust",
+             "code": (
+                "use axum::{routing::post, Router, http::HeaderMap, body::Bytes};\n"
+                "use hmac::{Hmac, Mac};\n"
+                "use sha2::Sha256;\n\n"
+                "const SECRET: &[u8] = b\"<bei_registrierung_erhaltenes_secret>\";\n\n"
+                "async fn recv(headers: HeaderMap, body: Bytes) -> axum::http::StatusCode {\n"
+                "    let sig = headers.get(\"x-flightarc-signature\")\n"
+                "        .and_then(|h| h.to_str().ok())\n"
+                "        .map(|s| s.trim_start_matches(\"sha256=\")).unwrap_or(\"\");\n"
+                "    let mut mac = <Hmac<Sha256>>::new_from_slice(SECRET).unwrap();\n"
+                "    mac.update(&body);\n"
+                "    let expected = hex::encode(mac.finalize().into_bytes());\n"
+                "    if sig != expected { return axum::http::StatusCode::UNAUTHORIZED; }\n"
+                "    // body enthält JSON-Event\n"
+                "    axum::http::StatusCode::NO_CONTENT\n"
+                "}\n\n"
+                "#[tokio::main]\n"
+                "async fn main() {\n"
+                "    let app = Router::new().route(\"/flightarc-events\", post(recv));\n"
+                "    let listener = tokio::net::TcpListener::bind(\"0.0.0.0:8080\").await.unwrap();\n"
+                "    axum::serve(listener, app).await.unwrap();\n"
+                "}"
+             )},
+            {"label": "Empfangshandler (Ruby Sinatra)",
+             "language": "ruby",
+             "code": (
+                "require 'sinatra'\n"
+                "require 'openssl'\n\n"
+                "SECRET = '<bei_registrierung_erhaltenes_secret>'\n\n"
+                "post '/flightarc-events' do\n"
+                "  body = request.body.read\n"
+                "  sig = (request.env['HTTP_X_FLIGHTARC_SIGNATURE'] || '').sub('sha256=', '')\n"
+                "  expected = OpenSSL::HMAC.hexdigest('SHA256', SECRET, body)\n"
+                "  halt 401 unless Rack::Utils.secure_compare(sig, expected)\n"
+                "  # body enthält JSON-Event\n"
+                "  status 204\n"
+                "end"
              )},
         ]
 

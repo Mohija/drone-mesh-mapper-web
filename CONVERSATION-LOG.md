@@ -2,7 +2,7 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-04-25 (Alarmierung Phase 3+4+5: Templates, Subscription-Pub/Sub, Beispiel-Code, Health-Stats)
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-04-25 (Alarmierung Phase 6: Multi-Sprachen, Per-Sub-Log, Pull-Out-Mapping, Pentest-Hardening)
 - **Typ:** Projekt | **Status:** Development
 
 ## Offene Aufgaben
@@ -21,12 +21,41 @@
 - [x] Alarmierung Phase 1: Schnittstellen-Editor + Alarmverwaltung (Webhook-Push, Pull-Out, Pull-In, Auth-Methoden, JSON-Template-Builder, Lieferungs-Log)
 - [x] Alarmierung Phase 2: Drag-and-Drop JSON-Builder mit @dnd-kit (Tree-Editor, Variable-Palette, Live-Preview, Toggle Builder/Raw)
 - [x] Alarmierung Phase 3+4+5: Templates (6), Subscription-Channel (Pub/Sub mit API-Key + HMAC), Beispiel-Code (curl/Python/JS), Stats + 7d-Sparkline, bidirektionales Monitoring, Mobile-Layout, Drag-Drop-Import
+- [x] Alarmierung Phase 6: Multi-Sprachen (Go/Rust/Ruby), pro-Subscriber-Lieferungs-Log, Pull-Out-Response-Mapping (JSON-Path, Fehler-Pfad), Pentest-Hardening (SSRF, Timing, Sub-Cap, Rate-Limit)
 - [ ] WebSocket-Integration für echte Push-Updates statt Polling
 - [ ] ESP 8266 MicroPython-Anpassung
 - [ ] Integration mit echtem drone-mesh-mapper Hardware-Setup
 - [ ] Docker Deployment Package
 
 ## Änderungshistorie
+
+### 2026-04-25 - Alarmierung Phase 6: Multi-Sprachen, Per-Sub-Log, Pull-Out-Mapping, Pentest-Hardening
+**Anlass:** User wollte nach Phase 5 alle vier offenen Punkte zusammen umgesetzt haben — mehr Sprachen, granulare Subscriber-Logs, intelligente Pull-Out-Antwort-Auswertung, plus expliziten Pentest-Pass auf das Subscription-Modell.
+
+**Multi-Sprachen-Snippets** (Punkt 1):
+- `services/alarm_dispatcher.build_usage_examples` um Go (net/http), Rust (reqwest + axum), Ruby (Net::HTTP + Sinatra) erweitert für alle drei Sektionen (oneShot / subscribe / webhook).
+- Frontend: keine Änderung nötig — der `language`-Tag wird bereits durchgereicht und im Code-Block-Header gerendert. Sechs Sprachen pro relevanter Sektion.
+
+**Per-Subscriber-Lieferungs-Log** (Punkt 2):
+- Migration `017_alarm_subscription_link`: Spalte `subscription_id` auf `alarm_deliveries` + Index. Dispatcher setzt sie beim Push (statt vorher den Subscriber-ID nur in `trigger_type` zu hängen).
+- Neuer Endpoint `GET /api/admin/interfaces/<id>/subscriptions/<sid>/deliveries` mit `tenant_admin`-Role.
+- Frontend: jeder Subscriber im Tab „Abonnenten" hat einen „Lieferungen anzeigen"-Knopf, der inline die letzten 30 Versuche des Subscribers mit Status, Trigger, HTTP-Code, Response-Body zeigt.
+
+**Pull-Out-Response-Mapping** (Punkt 3):
+- Migration `018_alarm_response_mapping`: Spalte `response_mapping` (JSON) auf `alarm_interfaces`.
+- `services/alarm_dispatcher.evaluate_response_mapping(mapping, status, body)` — Status-Code-Allowlist, JSON-Pfad mit Punkt-Notation und Array-Index, `expected_value`-Vergleich, `fail_on_path` (truthy → Fehler). Default ohne Mapping: 2xx = success.
+- `send_request` nutzt das Mapping nur für `pull_out`. Lieferung speichert die exakte Begründung als `error`/`reason` ("json_path acknowledged=False, expected True").
+- Frontend: `ResponseMappingEditor` als `<fieldset>` im Verbindung-Tab des `InterfaceEditor`, sichtbar nur für `interfaceType === 'pull_out'`. Vier Felder: Status-Codes (kommagetrennt), JSON-Pfad, erwarteter Wert (JSON-Literal-Parser mit String-Fallback), Fehler-Pfad.
+
+**Pentest-Pass** (Punkt 4) — drei kritische Findings, alle gefixt:
+- **SSRF in `callback_url`**: vorher nur Schema-Check (`http://` / `https://`). Drittsystem konnte `http://127.0.0.1:6379/`, `http://169.254.169.254/...`, `http://10.0.0.5/...` registrieren → FlightArc-Server hätte interne Services angerufen. **Fix:** `_is_callback_url_safe` nutzt `socket.getaddrinfo` + `ipaddress.ip_address` und blockt loopback / private / link-local / multicast / reserved / unspecified. ENV-Override `FLIGHTARC_ALLOW_PRIVATE_CALLBACKS=1` für Test-/Dev-Setups.
+- **Timing-Attacke beim API-Key-Vergleich**: `==` auf Hex-String (selbst nach SHA-256) leakt Prefix-Länge. **Fix:** `hmac.compare_digest`.
+- **Kein Subscriber-Limit**: kompromittierter API-Key → unbegrenzte Subscriber → DB- und Push-DoS. **Fix:** `_MAX_SUBSCRIBERS_PER_CHANNEL = 50` Hard-Cap, 409 bei Überlauf. Plus Sliding-Window Rate-Limit `_REGISTER_RATE_PER_CHANNEL_PER_MIN = 20` mit 429.
+- Findings sind als projektübergreifende Regel in `~/.claude/rules/gotchas.md` (neuer Block „Subscription / Webhook-Push-Endpoints") dokumentiert.
+
+**Tests:** 387 Backend-pytest grün (74 alarm-spezifisch, +21 neu): TestSSRFProtection (4), TestApiKeyTimingConstantCompare (2), TestSubscriberCap (1), TestRegisterRateLimit (1), TestPerSubscriptionDeliveries (2), TestResponseMapping (8), TestUsageExamplesLanguages (3). 10/10 E2E grün. Live-verifiziert: SSRF-Block für 127.0.0.1 und 169.254.169.254 mit korrekter Fehlermeldung, öffentliche URL passes.
+
+**Dateien:** `backend/{models.py,migrations.py,routes/alarm_routes.py,services/alarm_dispatcher.py,tests/{conftest,test_alarms}.py}`, `frontend/src/{api.ts,components/HelpPage.tsx,components/admin/{InterfaceEditor,InterfaceSubscribersTab}.tsx}`, `frontend/e2e/interfaces.spec.ts`, `~/.claude/rules/gotchas.md`, `CONVERSATION-LOG.md`, `manifest.json`.
 
 ### 2026-04-25 - Alarmierung Phase 3+4+5: Templates, Subscription, Beispiel-Code, Health-Stats
 **Anlass:** User wollte Phase 3 (Templates) und Phase 4 (Stats + Mobile) zusammen, plus eine **neue Anforderung**: Drittsysteme sollen sich mit API-Key bei einem Channel anmelden und Events automatisch gepusht bekommen — mit Beispiel-Code zum Kopieren und bidirektionalem Monitoring.

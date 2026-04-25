@@ -1403,6 +1403,13 @@ export interface AlarmAuthConfig {
   value?: string;
 }
 
+export interface ResponseMapping {
+  status_codes?: number[];
+  json_path?: string;
+  expected_value?: unknown;
+  fail_on_path?: string;
+}
+
 export interface AlarmInterface {
   id: string;
   tenantId: string;
@@ -1423,6 +1430,7 @@ export interface AlarmInterface {
   apiKeyPrefix: string | null;
   hasApiKey: boolean;
   payloadTemplate: unknown;
+  responseMapping: ResponseMapping | null;
   createdAt: number;
   updatedAt: number;
   createdBy: string | null;
@@ -1728,6 +1736,17 @@ export interface UsageExamples {
 
 export async function fetchInterfaceUsageExamples(interfaceId: string): Promise<UsageExamples> {
   const res = await authFetch(`${API_BASE}/admin/interfaces/${interfaceId}/usage-examples`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function listSubscriptionDeliveries(
+  interfaceId: string,
+  subscriptionId: string,
+  opts?: { limit?: number }
+): Promise<{ items: AlarmDelivery[] }> {
+  const qs = opts?.limit ? `?limit=${opts.limit}` : '';
+  const res = await authFetch(`${API_BASE}/admin/interfaces/${interfaceId}/subscriptions/${subscriptionId}/deliveries${qs}`);
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }

@@ -8,10 +8,15 @@ Two blueprints:
 from __future__ import annotations
 
 import hashlib
+import hmac
+import ipaddress
 import json
 import logging
+import os
 import secrets
+import socket
 import time
+from urllib.parse import urlparse
 
 from flask import Blueprint, g, jsonify, request, current_app
 
@@ -111,6 +116,11 @@ def _apply_interface_fields(iface: AlarmInterface, data: dict, *, is_create: boo
         iface.pull_interval_seconds = None if v in (None, "") else max(15, min(86400, int(v)))
     if "payloadTemplate" in data:
         iface.payload_template = data.get("payloadTemplate")
+    if "responseMapping" in data:
+        rm = data.get("responseMapping")
+        if rm is not None and not isinstance(rm, dict):
+            raise ValueError("responseMapping muss ein Objekt oder null sein")
+        iface.response_mapping = rm
 
 
 # ---------------------------------------------------------------------------
@@ -179,7 +189,12 @@ def _generate_api_key(iface: AlarmInterface) -> str:
 
 def _interface_for_api_key(channel_id: str, raw_key: str) -> AlarmInterface | None:
     """Look up + scope-check a channel by raw API key. Returns the interface
-    if the key matches and the channel is a subscription type, else None."""
+    if the key matches and the channel is a subscription type, else None.
+
+    Uses `hmac.compare_digest` to keep the comparison timing-constant — the
+    raw `==` operator on hex strings leaks the prefix length to a careful
+    attacker, even when the inputs are SHA-256 hashes.
+    """
     if not raw_key:
         return None
     iface = AlarmInterface.query.filter_by(id=channel_id).first()
@@ -187,9 +202,82 @@ def _interface_for_api_key(channel_id: str, raw_key: str) -> AlarmInterface | No
         return None
     if not iface.api_key_hash:
         return None
-    if hashlib.sha256(raw_key.encode()).hexdigest() != iface.api_key_hash:
+    candidate = hashlib.sha256(raw_key.encode()).hexdigest()
+    if not hmac.compare_digest(candidate, iface.api_key_hash):
         return None
     return iface
+
+
+# ---------------------------------------------------------------------------
+# Subscription hardening: SSRF protection + per-channel cap
+# ---------------------------------------------------------------------------
+
+# Hosts a third-party may register as callback. The default policy refuses
+# loopback / link-local / private RFC 1918 / multicast / reserved ranges so a
+# subscription channel cannot be pivoted into FlightArc's intranet.
+# Override via env FLIGHTARC_ALLOW_PRIVATE_CALLBACKS=1 in dev/test setups.
+def _allow_private_callbacks() -> bool:
+    return os.environ.get("FLIGHTARC_ALLOW_PRIVATE_CALLBACKS", "").lower() in {"1", "true", "yes"}
+
+# Hard cap on subscribers per channel — prevents an attacker with a leaked
+# api_key from exhausting the DB / push fan-out budget. 50 is plenty for
+# real integrations (each Channel maps to one third-party org typically).
+_MAX_SUBSCRIBERS_PER_CHANNEL = 50
+
+# Per-channel registration anti-burst. Soft signal — pairs with the hard cap.
+_REGISTER_RATE_PER_CHANNEL_PER_MIN = 20
+
+
+def _is_callback_url_safe(callback_url: str) -> tuple[bool, str]:
+    """Validate a third-party-supplied callback URL against SSRF.
+
+    Rejects: non-http(s), missing host, hostnames that resolve only to
+    loopback / link-local / private / multicast / reserved IPs.
+    """
+    try:
+        parsed = urlparse(callback_url)
+    except ValueError:
+        return False, "callback_url ist ungültig"
+    if parsed.scheme not in ("http", "https"):
+        return False, "callback_url muss http(s) sein"
+    host = parsed.hostname
+    if not host:
+        return False, "callback_url ohne Host"
+    if _allow_private_callbacks():
+        return True, ""
+
+    # Resolve hostname; if any returned address is unsafe, refuse the entire URL.
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror:
+        return False, f"callback_url-Host '{host}' nicht auflösbar"
+
+    for family, _t, _p, _c, sockaddr in infos:
+        ip_str = sockaddr[0]
+        try:
+            ip = ipaddress.ip_address(ip_str)
+        except ValueError:
+            continue
+        if (ip.is_loopback or ip.is_private or ip.is_link_local
+                or ip.is_multicast or ip.is_reserved or ip.is_unspecified):
+            return False, f"callback_url-Host zeigt auf interne IP {ip_str}"
+    return True, ""
+
+
+_register_attempts: dict[str, list[float]] = {}
+
+
+def _check_register_rate(channel_id: str) -> bool:
+    """Returns True if the caller may proceed, False if over the rate limit."""
+    now = time.time()
+    cutoff = now - 60
+    bucket = [t for t in _register_attempts.get(channel_id, []) if t > cutoff]
+    if len(bucket) >= _REGISTER_RATE_PER_CHANNEL_PER_MIN:
+        _register_attempts[channel_id] = bucket
+        return False
+    bucket.append(now)
+    _register_attempts[channel_id] = bucket
+    return True
 
 
 def _create_pull_token(tid: str, label: str) -> tuple[str, ServiceToken]:
@@ -677,6 +765,27 @@ def admin_revoke_subscription(iid, sid):
     return jsonify({"ok": True})
 
 
+@alarm_bp.route("/interfaces/<iid>/subscriptions/<sid>/deliveries", methods=["GET"])
+@login_required
+@role_required("tenant_admin")
+def admin_subscription_deliveries(iid, sid):
+    """Per-subscriber delivery audit — useful for diagnosing one bad
+    callback without scrolling through the whole channel's log."""
+    tid = g.tenant_id
+    iface = AlarmInterface.query.filter_by(id=iid, tenant_id=tid).first()
+    if not iface:
+        return jsonify({"error": "Schnittstelle nicht gefunden"}), 404
+    sub = AlarmSubscription.query.filter_by(id=sid, interface_id=iid).first()
+    if not sub:
+        return jsonify({"error": "Abonnement nicht gefunden"}), 404
+    limit = min(200, int(request.args.get("limit", 50)))
+    items = (AlarmDelivery.query
+             .filter_by(tenant_id=tid, interface_id=iid, subscription_id=sid)
+             .order_by(AlarmDelivery.started_at.desc())
+             .limit(limit).all())
+    return jsonify({"items": [d.to_dict() for d in items]})
+
+
 @alarm_bp.route("/interfaces/<iid>/subscriptions/<sid>/test", methods=["POST"])
 @login_required
 @role_required("tenant_admin")
@@ -744,10 +853,31 @@ def integrations_subscribe(channel_id):
         return jsonify({"error": "Ungültiger API-Key oder Kanal"}), 401
     if not iface.enabled:
         return jsonify({"error": "Kanal ist deaktiviert"}), 403
+
+    # Anti-burst: cap registration attempts per channel per minute. Pairs
+    # with the per-channel subscriber cap below.
+    if not _check_register_rate(iface.id):
+        return jsonify({"error": "Zu viele Registrierungs-Versuche — bitte später erneut versuchen"}), 429
+
     data = request.get_json(silent=True) or {}
     callback_url = (data.get("callback_url") or "").strip()
-    if not callback_url or not (callback_url.startswith("http://") or callback_url.startswith("https://")):
+    if not callback_url:
         return jsonify({"error": "callback_url muss eine http(s)-URL sein"}), 400
+    ok, reason = _is_callback_url_safe(callback_url)
+    if not ok:
+        logger.warning("subscription register refused channel=%s url=%s reason=%s",
+                       iface.id, callback_url[:200], reason)
+        return jsonify({"error": reason}), 400
+
+    # Hard cap on active subscribers per channel
+    active_count = AlarmSubscription.query.filter_by(
+        interface_id=iface.id, revoked_at=None
+    ).count()
+    if active_count >= _MAX_SUBSCRIBERS_PER_CHANNEL:
+        return jsonify({
+            "error": f"Kanal-Limit erreicht ({_MAX_SUBSCRIBERS_PER_CHANNEL} Subscriber). "
+                     "Bitte alte Subscriber abmelden oder Admin-Hilfe anfragen."
+        }), 409
 
     name = (data.get("name") or "")[:100] or None
     secret = secrets.token_hex(24)         # raw — returned ONCE
@@ -757,6 +887,8 @@ def integrations_subscribe(channel_id):
     )
     db.session.add(sub)
     db.session.commit()
+    logger.info("subscription registered channel=%s sub=%s url=%s",
+                iface.id, sub.id, callback_url[:80])
     return jsonify(sub.to_dict(include_secret=True)), 201
 
 

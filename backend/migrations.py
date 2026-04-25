@@ -270,6 +270,21 @@ MIGRATIONS: list[dict[str, Any]] = [
             "CREATE INDEX IF NOT EXISTS idx_alarm_subs_interface ON alarm_subscriptions(interface_id)",
         ],
     },
+    {
+        "version": "017_alarm_subscription_link",
+        "description": "Per-subscriber delivery filtering — subscription_id on alarm_deliveries",
+        "statements": [
+            "ALTER TABLE alarm_deliveries ADD COLUMN subscription_id VARCHAR(8)",
+            "CREATE INDEX IF NOT EXISTS idx_alarm_deliveries_sub ON alarm_deliveries(subscription_id)",
+        ],
+    },
+    {
+        "version": "018_alarm_response_mapping",
+        "description": "Pull-out response evaluation rules — JSON column response_mapping on alarm_interfaces",
+        "statements": [
+            "ALTER TABLE alarm_interfaces ADD COLUMN response_mapping JSON",
+        ],
+    },
 ]
 
 

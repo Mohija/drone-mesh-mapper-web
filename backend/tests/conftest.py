@@ -20,6 +20,12 @@ _test_db_fd, _test_db_path = tempfile.mkstemp(prefix="flightarc-test-", suffix="
 os.close(_test_db_fd)
 os.environ["DATABASE_URL"] = f"sqlite:///{_test_db_path}"
 
+# Tests register subscriptions against example.com / httpbin.org but those
+# DNS resolutions are slow/unstable in CI; allow private/loopback callbacks
+# in tests so we can use example.com without pinging the internet, and the
+# SSRF-protection logic itself is unit-tested directly in test_alarms.py.
+os.environ.setdefault("FLIGHTARC_ALLOW_PRIVATE_CALLBACKS", "1")
+
 def _cleanup_test_db():
     for suffix in ("", "-wal", "-shm"):
         p = _test_db_path + suffix

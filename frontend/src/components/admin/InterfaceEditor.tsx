@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   AlarmInterface,
   AlarmAuthConfig,
+  ResponseMapping,
   createAlarmInterface,
   updateAlarmInterface,
   fetchVariablePool,
@@ -69,6 +70,7 @@ export default function InterfaceEditor({ existing, onClose, onSaved }: Props) {
   const [pullIntervalSeconds, setPullIntervalSeconds] = useState(existing?.pullIntervalSeconds ?? 60);
   const [authType, setAuthType] = useState<AlarmInterface['authType']>(existing?.authType || 'bearer');
   const [authConfig, setAuthConfig] = useState<AlarmAuthConfig>(existing?.authConfig || {});
+  const [responseMapping, setResponseMapping] = useState<ResponseMapping | null>(existing?.responseMapping || null);
   const [extraHeaders, setExtraHeaders] = useState<string>(JSON.stringify(existing?.extraHeaders || {}, null, 2));
   const [payloadJson, setPayloadJson] = useState<string>(
     JSON.stringify(existing?.payloadTemplate ?? SAMPLE_TEMPLATES.generic, null, 2)
@@ -137,6 +139,7 @@ export default function InterfaceEditor({ existing, onClose, onSaved }: Props) {
       authType,
       authConfig,
       payloadTemplate: parsedPayload,
+      responseMapping: interfaceType === 'pull_out' ? responseMapping : null,
     };
 
     setSubmitting(true);
@@ -260,6 +263,10 @@ export default function InterfaceEditor({ existing, onClose, onSaved }: Props) {
                           rows={3} style={{ ...inp, fontFamily: 'monospace', fontSize: 12, resize: 'vertical' }} />
                 {headersError && <small style={{ color: '#ef4444' }}>{headersError}</small>}
               </Field>
+
+              {interfaceType === 'pull_out' && (
+                <ResponseMappingEditor value={responseMapping} onChange={setResponseMapping} />
+              )}
             </div>
           )}
 
@@ -489,4 +496,111 @@ function modeBtn(active: boolean): React.CSSProperties {
     color: active ? 'var(--bg-primary)' : 'var(--text-muted)',
     border: 0, borderRadius: 4, cursor: 'pointer',
   };
+}
+
+
+function ResponseMappingEditor({ value, onChange }: {
+  value: ResponseMapping | null;
+  onChange: (v: ResponseMapping | null) => void;
+}) {
+  const enabled = !!value;
+  const v = value || {};
+
+  function update(patch: Partial<ResponseMapping>) {
+    onChange({ ...v, ...patch });
+  }
+  function clearKey(key: keyof ResponseMapping) {
+    const next = { ...v };
+    delete next[key];
+    onChange(Object.keys(next).length === 0 ? null : next);
+  }
+
+  return (
+    <fieldset style={{
+      border: '1px solid var(--border)', borderRadius: 8, padding: 12,
+      margin: '4px 0', background: 'var(--bg-primary)',
+    }}>
+      <legend style={{ padding: '0 6px', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>
+        Antwort-Auswertung (Pull-Out)
+      </legend>
+      <p style={{ margin: '0 0 10px', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+        Standardmäßig zählen 2xx-Antworten als Erfolg. Hier kannst du eine eigene
+        Bedingung formulieren — Status-Code-Allowlist, JSON-Feld, Fehler-Pfad. Die
+        Auswertung läuft serverseitig und füllt die Lieferungs-Statistiken
+        entsprechend.
+      </p>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, marginBottom: 10 }}>
+        <input type="checkbox" checked={enabled}
+               onChange={e => onChange(e.target.checked ? {} : null)} />
+        Antwort-Auswertung aktivieren
+      </label>
+      {enabled && (
+        <div style={{ display: 'grid', gap: 8 }}>
+          <label style={{ display: 'grid', gap: 4 }}>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              Erfolgreiche Status-Codes (kommagetrennt, leer = 200–299)
+            </span>
+            <input
+              value={(v.status_codes || []).join(',')}
+              placeholder="200,202,204"
+              onChange={e => {
+                const codes = e.target.value.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+                if (codes.length === 0) clearKey('status_codes');
+                else update({ status_codes: codes });
+              }}
+              style={inp}
+            />
+          </label>
+          <label style={{ display: 'grid', gap: 4 }}>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              JSON-Pfad im Response-Body (Punkt-Notation, z.B. <code>data.acknowledged</code>)
+            </span>
+            <input
+              value={v.json_path || ''}
+              placeholder="acknowledged"
+              onChange={e => {
+                const val = e.target.value.trim();
+                if (!val) { clearKey('json_path'); clearKey('expected_value'); }
+                else update({ json_path: val });
+              }}
+              style={inp}
+            />
+          </label>
+          {v.json_path && (
+            <label style={{ display: 'grid', gap: 4 }}>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                Erwarteter Wert (JSON-Literal: <code>true</code>, <code>"ok"</code>, <code>42</code>)
+              </span>
+              <input
+                value={v.expected_value === undefined ? '' : JSON.stringify(v.expected_value)}
+                placeholder='true'
+                onChange={e => {
+                  const raw = e.target.value;
+                  if (raw === '') { clearKey('expected_value'); return; }
+                  try { update({ expected_value: JSON.parse(raw) }); }
+                  catch { update({ expected_value: raw }); }
+                }}
+                style={{ ...inp, fontFamily: 'monospace' }}
+              />
+            </label>
+          )}
+          <label style={{ display: 'grid', gap: 4 }}>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              Fehler-Pfad (wenn vorhanden &amp; truthy → Lieferung als Fehler markieren)
+            </span>
+            <input
+              value={v.fail_on_path || ''}
+              placeholder="error"
+              onChange={e => {
+                const val = e.target.value.trim();
+                if (!val) clearKey('fail_on_path');
+                else update({ fail_on_path: val });
+              }}
+              style={inp}
+            />
+          </label>
+        </div>
+      )}
+    </fieldset>
+  );
 }

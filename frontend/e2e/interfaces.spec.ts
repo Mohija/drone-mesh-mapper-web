@@ -178,8 +178,10 @@ test.describe('Alarm Interfaces — API + UI smoke', () => {
     const body = await res.json();
     expect(body.subscribe.length).toBeGreaterThan(0);
     expect(body.webhook.length).toBeGreaterThan(0);
-    const langs = body.subscribe.map((s: { language: string }) => s.language);
-    expect(new Set(langs)).toEqual(new Set(['bash', 'python']));
+    const subLangs = new Set(body.subscribe.map((s: { language: string }) => s.language));
+    for (const l of ['bash', 'python', 'go', 'rust', 'ruby']) expect(subLangs.has(l)).toBe(true);
+    const whLangs = new Set(body.webhook.map((s: { language: string }) => s.language));
+    for (const l of ['javascript', 'go', 'rust', 'ruby']) expect(whLangs.has(l)).toBe(true);
     await request.delete(`${API}/api/admin/interfaces/${id}`, { headers: authHeaders });
   });
 

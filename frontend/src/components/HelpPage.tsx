@@ -1368,10 +1368,39 @@ function SectionInterfaces() {
       <h3>Beispiel-Code zum Kopieren</h3>
       <p>
         Im Tab <strong>Beispiele</strong> einer Schnittstelle generiert FlightArc fertige
-        Code-Snippets passend zum Typ — curl, Python (requests / Flask) und JavaScript
-        (fetch / Express) — die du mit einem Klick kopieren kannst. Bei Subscriptions
-        sind sowohl die Registrierung als auch ein Empfangs-Handler mit
-        Signatur-Verifikation enthalten.
+        Code-Snippets in <strong>sechs Sprachen</strong> — curl/bash, Python (requests + Flask),
+        JavaScript (fetch + Express), Go (net/http + axum-Stil), Rust (reqwest + axum) und
+        Ruby (Net::HTTP + Sinatra). Jedes Snippet hat einen Copy-Button. Bei Subscriptions
+        sind sowohl Registrierung als auch ein Empfangs-Handler mit timing-konstanter
+        Signatur-Verifikation enthalten — übernimmst du den Code 1:1, ist der HMAC-Check
+        bereits korrekt umgesetzt.
+      </p>
+      <h3>Pull-Out: Antwort-Auswertung</h3>
+      <p>
+        Bei Pull-Out-Schnittstellen erlaubt der <strong>Antwort-Auswertung</strong>-Block
+        (im Verbindung-Tab) eine eigene Erfolgs-Bedingung jenseits von „2xx zählt als OK".
+        Du kannst:
+      </p>
+      <ul>
+        <li>eine <strong>Status-Code-Allowlist</strong> festlegen (z.B. nur 202),</li>
+        <li>einen <strong>JSON-Pfad</strong> (Punkt-Notation, auch Array-Index per
+          <code>results.0.status</code>) auswerten und mit einem <strong>erwarteten Wert</strong>
+          (JSON-Literal: <code>true</code>, <code>"ok"</code>, <code>42</code>) vergleichen,</li>
+        <li>einen <strong>Fehler-Pfad</strong> definieren — wenn der bei einer Antwort
+          truthy ist, wird die Lieferung trotz HTTP 200 als Fehler markiert.</li>
+      </ul>
+      <p>
+        Die Auswertung läuft serverseitig nach jedem Poll und füllt das Lieferungs-Log
+        mit der konkreten Begründung („json_path acknowledged=False, expected True").
+      </p>
+      <h3>Pro-Subscriber-Lieferungs-Log</h3>
+      <p>
+        Im Tab <strong>Abonnenten</strong> kann jeder Subscriber separat aufgeklappt
+        werden — der Knopf <strong>Lieferungen anzeigen</strong> zeigt die letzten 30
+        Push-Versuche dieses einen Subscribers mit Status, Trigger, HTTP-Code,
+        Zeitstempel und expandierbarem Response-Body. Hilft dabei, eine einzelne
+        tote Callback-URL zu diagnostizieren, ohne durch das ganze Channel-Log
+        zu scrollen.
       </p>
       <h3>Health-Monitoring</h3>
       <p>

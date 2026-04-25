@@ -608,6 +608,11 @@ class AlarmInterface(db.Model):
     # Renders against a context dict {drone, zone, violation, tenant, system}.
     payload_template = db.Column(JSON, nullable=True)
 
+    # Pull-out response evaluation. Optional JSON describing how to interpret
+    # the remote system's response so we can mark a poll as success/failed
+    # beyond plain HTTP status. See services/alarm_dispatcher.evaluate_response_mapping.
+    response_mapping = db.Column(JSON, nullable=True)
+
     created_at = db.Column(db.Float, default=_now, nullable=False)
     updated_at = db.Column(db.Float, default=_now, onupdate=_now, nullable=False)
     created_by = db.Column(db.String(100), nullable=True)
@@ -641,6 +646,7 @@ class AlarmInterface(db.Model):
             "apiKeyPrefix": self.api_key_prefix,
             "hasApiKey": bool(self.api_key_hash),
             "payloadTemplate": self.payload_template,
+            "responseMapping": self.response_mapping,
             "createdAt": self.created_at,
             "updatedAt": self.updated_at,
             "createdBy": self.created_by,
@@ -730,6 +736,7 @@ class AlarmDelivery(db.Model):
     tenant_id = db.Column(db.String(8), db.ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     rule_id = db.Column(db.String(8), db.ForeignKey("alarm_rules.id", ondelete="SET NULL"), nullable=True)
     interface_id = db.Column(db.String(8), db.ForeignKey("alarm_interfaces.id", ondelete="CASCADE"), nullable=False)
+    subscription_id = db.Column(db.String(8), nullable=True)     # set when this row was a subscription push
     violation_id = db.Column(db.String(8), nullable=True)        # FK target may have been deleted by retention
     trigger_type = db.Column(db.String(30), nullable=True)       # e.g. violation_start | pull_out_check | manual_test
     attempt = db.Column(db.Integer, default=1, nullable=False)
@@ -748,6 +755,7 @@ class AlarmDelivery(db.Model):
             "tenantId": self.tenant_id,
             "ruleId": self.rule_id,
             "interfaceId": self.interface_id,
+            "subscriptionId": self.subscription_id,
             "violationId": self.violation_id,
             "triggerType": self.trigger_type,
             "attempt": self.attempt,

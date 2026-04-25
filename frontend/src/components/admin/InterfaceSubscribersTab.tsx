@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
-  AlarmSubscription, listInterfaceSubscriptions,
+  AlarmSubscription, AlarmDelivery,
+  listInterfaceSubscriptions, listSubscriptionDeliveries,
   revokeInterfaceSubscription, testInterfaceSubscription,
   rotateInterfaceApiKey, AlarmInterface,
 } from '../../api';
@@ -17,6 +18,7 @@ export default function InterfaceSubscribersTab({ iface, onApiKeyRotated }: Prop
   const [newKey, setNewKey] = useState<string | null>(null);
   const [testing, setTesting] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ id: string; ok: boolean; status?: number; error?: string } | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   async function reload() {
     setLoading(true);
@@ -147,10 +149,16 @@ export default function InterfaceSubscribersTab({ iface, onApiKeyRotated }: Prop
                     <button onClick={() => handleTest(sub)} disabled={testing === sub.id} style={miniBtn}>
                       {testing === sub.id ? 'Sendet…' : 'Test-Push'}
                     </button>
+                    <button onClick={() => setExpanded(expanded === sub.id ? null : sub.id)} style={miniBtn}>
+                      {expanded === sub.id ? 'Lieferungen ausblenden' : 'Lieferungen anzeigen'}
+                    </button>
                     <button onClick={() => handleRevoke(sub)} style={{ ...miniBtn, color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)' }}>
                       Entfernen
                     </button>
                   </div>
+                  {expanded === sub.id && (
+                    <SubscriberDeliveries interfaceId={iface.id} subscriptionId={sub.id} />
+                  )}
                   {testResult && testResult.id === sub.id && (
                     <div style={{
                       padding: 6, fontSize: 10, borderRadius: 4,
@@ -177,3 +185,62 @@ const miniBtn: React.CSSProperties = {
   border: '1px solid var(--border)', borderRadius: 4,
   color: 'var(--text-primary)', cursor: 'pointer', minHeight: 28,
 };
+
+
+function SubscriberDeliveries({ interfaceId, subscriptionId }: {
+  interfaceId: string; subscriptionId: string;
+}) {
+  const [items, setItems] = useState<AlarmDelivery[] | null>(null);
+  const [openRow, setOpenRow] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancel = false;
+    listSubscriptionDeliveries(interfaceId, subscriptionId, { limit: 30 })
+      .then(r => { if (!cancel) setItems(r.items); })
+      .catch(() => { if (!cancel) setItems([]); });
+    return () => { cancel = true; };
+  }, [interfaceId, subscriptionId]);
+
+  if (items === null) {
+    return <p style={{ margin: 0, fontSize: 10, color: 'var(--text-muted)' }}>Lädt Lieferungen…</p>;
+  }
+  if (items.length === 0) {
+    return <p style={{ margin: 0, fontSize: 10, color: 'var(--text-muted)' }}>Noch keine Lieferungen für diesen Subscriber.</p>;
+  }
+  return (
+    <div style={{ display: 'grid', gap: 3, marginTop: 4 }}>
+      {items.map(d => {
+        const color = d.status === 'success' ? 'var(--accent)'
+                    : d.status === 'failed' ? '#ef4444' : 'var(--text-muted)';
+        return (
+          <div key={d.id} style={{
+            padding: '4px 8px', background: 'var(--bg-secondary)',
+            border: '1px solid var(--border)', borderRadius: 3, fontSize: 10,
+            cursor: 'pointer',
+          }} onClick={() => setOpenRow(openRow === d.id ? null : d.id)}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+              <span style={{ color, fontWeight: 600 }}>{d.status.toUpperCase()}</span>
+              <span style={{ color: 'var(--text-muted)' }}>
+                {d.triggerType}{d.attempt > 1 ? ` (Versuch ${d.attempt})` : ''}
+                {d.httpStatus != null && ` • HTTP ${d.httpStatus}`}
+              </span>
+              <span style={{ color: 'var(--text-muted)' }}>
+                {new Date(d.startedAt * 1000).toLocaleString()}
+              </span>
+            </div>
+            {openRow === d.id && (
+              <div style={{ marginTop: 4, paddingTop: 4, borderTop: '1px solid var(--border)' }}>
+                {d.error && <p style={{ margin: '0 0 4px', color: '#ef4444' }}>{d.error}</p>}
+                {d.responseBody && (
+                  <pre style={{ margin: '4px 0 0', maxHeight: 120, overflow: 'auto', fontSize: 9 }}>
+                    {d.responseBody}
+                  </pre>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
