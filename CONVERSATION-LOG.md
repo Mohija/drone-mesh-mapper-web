@@ -2,7 +2,7 @@
 > Automatisch gepflegtes Log aller Änderungen
 
 ## Metadaten
-- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-04-24 (Redesign + UX-Polish: Space Grotesk / Signal Cyan, Health-Panel, Planner-DnD, Auto-Refresh)
+- **Erstellt:** 2026-03-04 | **Letzte Änderung:** 2026-04-25 (Doku-Sweep: README.md auf aktuellen Funktionsumfang gehoben)
 - **Typ:** Projekt | **Status:** Development
 
 ## Offene Aufgaben
@@ -24,6 +24,23 @@
 - [ ] Docker Deployment Package
 
 ## Änderungshistorie
+
+### 2026-04-25 - Doku-Sweep: README.md auf aktuellen Funktionsumfang gehoben
+**Anlass:** README.md zeigte nur 4 API-Endpunkte und v1.0.0-Feature-Liste, obwohl manifest.json bei v1.9.0 steht und Backend tatsächlich 80+ Endpunkte hat (Receivers, Zones, Violations, Trails, Admin, Logs, Audit, Service-Tokens, Addressbook).
+
+**Erweitert:**
+- Feature-Liste komplett überarbeitet — eigene Abschnitte für Karte, Datenquellen, Flugzonen, Hardware-Empfänger, Multi-Mandant, Verwaltung, Frontend.
+- API-Übersicht in Architektur-Block: alle Endpunkte gruppiert (Auth, Drohnen, Empfänger, Zonen, Verstöße, Trails, Geo/NoFly, Settings, Adressbuch, Verwaltung).
+- Frontend-Routen-Tabelle (alle 9 Admin-Tabs + 6 Public-Pages).
+- Hintergrund-Jobs-Tabelle (Simulator 2 s, Retention 1 h, Violation-Throttle 2 s/Tenant).
+- Push-Mechanismus dokumentiert (HTTP-Polling + Versionszähler, kein WebSocket — Reverse-Proxy-Kompatibilität).
+- Datenmodelle-Tabelle (12 SQLAlchemy-Modelle mit Zweck).
+- Tech-Stack aktualisiert: ESP8266 entfernt, ESP32-S3-GPS hinzugefügt, Firmware v1.6.3 referenziert.
+- Tests-Block: pytest, Vitest, Playwright (~100+ Tests in 11 Spec-Dateien) mit Befehlen.
+- Firmware-Build-Befehle für PlatformIO.
+- `JWT_SECRET` und `DATABASE_URL` zu Umgebungsvariablen-Tabelle.
+
+**Dateien:** `README.md`, `CONVERSATION-LOG.md`, `manifest.json` (lastModified).
 
 ### 2026-04-24 - PlanningTab: Drag-and-Drop + Doppelklick-Remove für Polygon-Punkte (5953e6a)
 **Änderungen:**
